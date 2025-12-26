@@ -58,6 +58,13 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 - **Instance Comparison** - Side-by-side comparison of metrics across instances
 - **Scheduled Reports** - Automated daily/weekly email reports with top queries and recommendations
 
+### Data Control & Schema Management
+- **Logical Replication** - Publication browser, subscription status, replication origins, and statistics
+- **Change Data Capture** - Table change activity tracking (INSERT/UPDATE/DELETE rates), high-churn table identification, WAL generation estimates
+- **Data Lineage** - Foreign key relationship display, view dependencies, function dependencies
+- **Event Triggers** - DDL event trigger monitoring (CREATE, ALTER, DROP events)
+- **Table Partitioning** - Partition tree visualisation, size distribution analysis, orphan partition detection, imbalance warnings
+
 ## Technology Stack
 
 - **Quarkus 3.16.3** + **Java 21**
@@ -274,6 +281,10 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 | `/comparison` | Side-by-side instance comparison |
 | `/bookmarks` | Query bookmarks and annotations |
 | `/audit-log` | Admin action audit log |
+| `/logical-replication` | Publications, subscriptions, and replication origins |
+| `/cdc` | Change data capture dashboard with table activity |
+| `/data-lineage` | Foreign keys, views, and function dependencies |
+| `/partitions` | Table partitioning insights and health |
 | `/about` | Application and PostgreSQL server info |
 | `/incident-report/export` | Download point-in-time incident report |
 | `/api/v1/*` | REST API for metrics (JSON) |

@@ -15,8 +15,12 @@ import com.bovinemagnet.pgconsole.model.TableStats;
 import com.bovinemagnet.pgconsole.model.WaitEventSummary;
 import com.bovinemagnet.pgconsole.service.AuditService;
 import com.bovinemagnet.pgconsole.service.BookmarkService;
+import com.bovinemagnet.pgconsole.service.ChangeDataCaptureService;
 import com.bovinemagnet.pgconsole.service.ComparisonService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.LogicalReplicationService;
+import com.bovinemagnet.pgconsole.service.PartitioningService;
+import com.bovinemagnet.pgconsole.service.SchemaChangeService;
 import com.bovinemagnet.pgconsole.service.IncidentReportService;
 import com.bovinemagnet.pgconsole.service.IndexAdvisorService;
 import com.bovinemagnet.pgconsole.service.InfrastructureService;
@@ -123,6 +127,18 @@ public class DashboardResource {
     Template comparison;
 
     @Inject
+    Template logicalReplication;
+
+    @Inject
+    Template cdc;
+
+    @Inject
+    Template dataLineage;
+
+    @Inject
+    Template partitions;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -163,6 +179,18 @@ public class DashboardResource {
 
     @Inject
     ComparisonService comparisonService;
+
+    @Inject
+    LogicalReplicationService logicalReplicationService;
+
+    @Inject
+    ChangeDataCaptureService changeDataCaptureService;
+
+    @Inject
+    SchemaChangeService schemaChangeService;
+
+    @Inject
+    PartitioningService partitioningService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -444,6 +472,82 @@ public class DashboardResource {
         var commonQueries = comparisonService.findCommonQueries(instanceIds, 20);
         return comparison.data("comparisons", comparisons)
                          .data("commonQueries", commonQueries)
+                         .data("instances", dataSourceManager.getInstanceInfoList())
+                         .data("currentInstance", instance)
+                         .data("securityEnabled", config.security().enabled());
+    }
+
+    // --- Phase 8: Change Data Control & Schema Management ---
+
+    @GET
+    @Path("/logical-replication")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance logicalReplication(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var publications = logicalReplicationService.getPublications(instance);
+        var subscriptions = logicalReplicationService.getSubscriptions(instance);
+        var origins = logicalReplicationService.getReplicationOrigins(instance);
+        var subscriptionStats = logicalReplicationService.getSubscriptionStats(instance);
+        var summary = logicalReplicationService.getSummary(instance);
+        return logicalReplication.data("publications", publications)
+                                 .data("subscriptions", subscriptions)
+                                 .data("origins", origins)
+                                 .data("subscriptionStats", subscriptionStats)
+                                 .data("summary", summary)
+                                 .data("instances", dataSourceManager.getInstanceInfoList())
+                                 .data("currentInstance", instance)
+                                 .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/cdc")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance cdc(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var activities = changeDataCaptureService.getTableChangeActivity(instance);
+        var highChurnTables = changeDataCaptureService.getHighChurnTables(instance, 10);
+        var walEstimates = changeDataCaptureService.getWalGenerationByTable(instance);
+        var summary = changeDataCaptureService.getSummary(instance);
+        return cdc.data("activities", activities)
+                  .data("highChurnTables", highChurnTables)
+                  .data("walEstimates", walEstimates)
+                  .data("summary", summary)
+                  .data("instances", dataSourceManager.getInstanceInfoList())
+                  .data("currentInstance", instance)
+                  .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/data-lineage")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance dataLineage(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var eventTriggers = schemaChangeService.getEventTriggers(instance);
+        var foreignKeys = schemaChangeService.getForeignKeyRelationships(instance);
+        var viewDependencies = schemaChangeService.getViewDependencies(instance);
+        var functionDependencies = schemaChangeService.getFunctionDependencies(instance);
+        var summary = schemaChangeService.getSummary(instance);
+        return dataLineage.data("eventTriggers", eventTriggers)
+                          .data("foreignKeys", foreignKeys)
+                          .data("viewDependencies", viewDependencies)
+                          .data("functionDependencies", functionDependencies)
+                          .data("summary", summary)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/partitions")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance partitions(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var partitionedTables = partitioningService.getPartitionedTables(instance);
+        var orphanPartitions = partitioningService.getOrphanPartitions(instance);
+        var summary = partitioningService.getSummary(instance);
+        return partitions.data("partitionedTables", partitionedTables)
+                         .data("orphanPartitions", orphanPartitions)
+                         .data("summary", summary)
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled());

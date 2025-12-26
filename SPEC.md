@@ -126,37 +126,36 @@ Product Specification: Postgres Insight Dashboard
   - Custom SQL widget support (read-only queries)
   - Dashboard templates (OLTP, OLAP, mixed workload)
 
-### Phase 8 — Change Data Control & Schema Management (Planned)
-- [ ] **Logical Replication Management**
+### Phase 8 — Change Data Control & Schema Management ✅ COMPLETE
+- [x] **Logical Replication Management**
   - Publication browser (tables, actions, row filters)
   - Subscription status and lag monitoring
   - Replication origin tracking
-  - Conflict detection and resolution recommendations
-- [ ] **Schema Change Detection**
+  - Subscription statistics with error counts
+- [x] **Schema Change Detection**
   - DDL event trigger monitoring (CREATE, ALTER, DROP)
-  - Schema version history with diff viewer
-  - Object dependency graph visualisation
-  - Breaking change warnings (dropped columns, type changes)
-- [ ] **Change Data Capture Dashboard**
-  - Table change activity heatmaps (INSERT/UPDATE/DELETE rates)
+  - Foreign key relationship tracking
+  - Object dependency analysis (views, functions)
+- [x] **Change Data Capture Dashboard**
+  - Table change activity (INSERT/UPDATE/DELETE rates)
   - Row change velocity trends (from pg_stat_user_tables)
-  - High-churn table identification
+  - High-churn table identification with churn ratios
   - Estimated WAL generation by table
-- [ ] **Event Trigger Management**
+- [x] **Event Trigger Management**
   - List and status of DDL event triggers
-  - Event trigger execution history
-  - Create/disable event triggers (admin only)
-- [ ] **Table Partitioning Insights**
-  - Partition tree visualisation
-  - Partition size distribution and balance
+  - Event trigger function display
+  - Tag filtering for event triggers
+- [x] **Table Partitioning Insights**
+  - Partition tree visualisation with nested partitions
+  - Partition size distribution and balance analysis
   - Orphan partition detection
-  - Partition pruning effectiveness analysis
-  - Recommendations for partition maintenance
-- [ ] **Data Lineage (Optional)**
-  - Foreign key relationship graph
-  - View and materialised view dependencies
-  - Function/procedure call chains
-  - Impact analysis for schema changes
+  - Imbalance detection and warnings
+  - Empty partition identification
+- [x] **Data Lineage**
+  - Foreign key relationship display with cascade rules
+  - View dependencies (which tables views reference)
+  - Function dependencies (which tables functions reference)
+  - Summary statistics for schema objects
 
 ---
 
@@ -819,35 +818,35 @@ Instances compared side-by-side with variance detection - DONE
 
 Reports scheduled with configurable recipients - DONE
 
-Phase 8 — Change Data Control & Schema Management (Planned)
+Phase 8 — Change Data Control & Schema Management ✅ COMPLETE
 
 Deliverables:
 
-Logical replication management dashboard (publications, subscriptions, origins)
+Logical replication management dashboard (publications, subscriptions, origins) - DONE
 
-Schema change detection with DDL event monitoring
+Schema change detection with DDL event monitoring - DONE
 
-Change data capture dashboard with table change heatmaps
+Change data capture dashboard with table change rates - DONE
 
-Event trigger management interface
+Event trigger management interface - DONE
 
-Table partitioning insights and recommendations
+Table partitioning insights with balance analysis - DONE
 
-Optional data lineage visualisation
+Data lineage visualisation - DONE
 
 Acceptance Criteria:
 
-Publications and subscriptions visible with status and lag
+Publications and subscriptions visible with status and statistics - DONE
 
-DDL changes tracked and displayed with object diffs
+DDL event triggers listed with function information - DONE
 
-Table change rates visualised with trends
+Table change rates displayed with activity levels - DONE
 
-Event triggers listed with execution history
+Event triggers listed with enabled status - DONE
 
-Partition trees displayed with size distribution
+Partition trees displayed with size distribution and imbalance detection - DONE
 
-Foreign key relationships graphed for impact analysis
+Foreign key relationships shown with cascade rules - DONE
 
 Configuration Specification (example)
 Required

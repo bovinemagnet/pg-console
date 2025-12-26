@@ -1,0 +1,229 @@
+{#include base}
+{#title}Change Data Capture - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/cdc?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Change Data Capture</h1>
+        <p class="text-muted">Table change activity, row velocities, and WAL generation estimates</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">Inserts</span>
+                <h3 class="mb-0">{summary.formatCount(summary.totalInserts)}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Updates</span>
+                <h3 class="mb-0">{summary.formatCount(summary.totalUpdates)}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Deletes</span>
+                <h3 class="mb-0">{summary.formatCount(summary.totalDeletes)}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">HOT Updates</span>
+                <h3 class="mb-0">{summary.formatCount(summary.totalHotUpdates)}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Tables</span>
+                <h3 class="mb-0">{summary.tableCount}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">High Activity</span>
+                <h3 class="mb-0">{summary.highActivityTables}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- High Churn Tables -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">High Churn Tables</h5>
+                <small class="text-muted">Tables with highest modification rates</small>
+            </div>
+            <div class="card-body p-0">
+                {#if highChurnTables.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No high-churn tables detected</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th class="text-end">Total Changes</th>
+                                <th class="text-end">Inserts</th>
+                                <th class="text-end">Updates</th>
+                                <th class="text-end">Deletes</th>
+                                <th class="text-end">Live Tuples</th>
+                                <th class="text-end">Churn Ratio</th>
+                                <th class="text-end">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for table in highChurnTables}
+                            <tr>
+                                <td><strong>{table.fullName}</strong></td>
+                                <td class="text-end"><span class="badge bg-primary">{table.totalChangesFormatted}</span></td>
+                                <td class="text-end text-success">{table.inserts}</td>
+                                <td class="text-end text-warning">{table.updates}</td>
+                                <td class="text-end text-danger">{table.deletes}</td>
+                                <td class="text-end">{table.liveTuples}</td>
+                                <td class="text-end"><code>{table.churnRatioFormatted}</code></td>
+                                <td class="text-end">{table.tableSize}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Table Change Activity -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Table Change Activity</h5>
+                <small class="text-muted">Sorted by total changes since stats reset</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th>Activity</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">INS</th>
+                                <th class="text-end">UPD</th>
+                                <th class="text-end">DEL</th>
+                                <th class="text-end">HOT %</th>
+                                <th class="text-end">Dead</th>
+                                <th class="text-end">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for activity in activities}
+                            <tr>
+                                <td><strong>{activity.fullName}</strong></td>
+                                <td><span class="badge {activity.activityCssClass}">{activity.activityLevel}</span></td>
+                                <td class="text-end">{activity.totalChanges}</td>
+                                <td class="text-end text-success">{activity.inserts}</td>
+                                <td class="text-end text-warning">{activity.updates}</td>
+                                <td class="text-end text-danger">{activity.deletes}</td>
+                                <td class="text-end">
+                                    <span class="{#if activity.hotUpdateRatio > 80}text-success{#else if activity.hotUpdateRatio < 50}text-warning{/if}">
+                                        {activity.hotUpdateRatioFormatted}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    {#if activity.deadTuples > 0}
+                                    <span class="text-muted">{activity.deadTuples}</span>
+                                    {#else}
+                                    0
+                                    {/if}
+                                </td>
+                                <td class="text-end">{activity.tableSize}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estimated WAL Generation -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Estimated WAL Generation by Table</h5>
+                <small class="text-muted">Approximate WAL bytes based on change counts and row sizes</small>
+            </div>
+            <div class="card-body p-0">
+                {#if walEstimates.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No WAL generation data available</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th class="text-end">Total Changes</th>
+                                <th class="text-end">Avg Row Size</th>
+                                <th class="text-end">Est. WAL</th>
+                                <th>Distribution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for est in walEstimates}
+                            <tr>
+                                <td><strong>{est.fullName}</strong></td>
+                                <td class="text-end">{est.totalChanges}</td>
+                                <td class="text-end">{est.avgRowSize} bytes</td>
+                                <td class="text-end"><strong>{est.estimatedWalFormatted}</strong></td>
+                                <td>
+                                    <div class="progress" style="height: 6px; width: 100px;">
+                                        <div class="progress-bar bg-success" style="width: {#if est.inserts > 0}{(est.inserts * 100 / est.totalChanges)}{#else}0{/if}%"></div>
+                                        <div class="progress-bar bg-warning" style="width: {#if est.updates > 0}{(est.updates * 100 / est.totalChanges)}{#else}0{/if}%"></div>
+                                        <div class="progress-bar bg-danger" style="width: {#if est.deletes > 0}{(est.deletes * 100 / est.totalChanges)}{#else}0{/if}%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+            <div class="card-footer small text-muted">
+                <span class="badge bg-success">INS</span>
+                <span class="badge bg-warning text-dark">UPD</span>
+                <span class="badge bg-danger">DEL</span>
+                - WAL estimates are approximations based on tuple changes and average row sizes.
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

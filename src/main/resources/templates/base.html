@@ -159,6 +159,17 @@
                             <li><a class="dropdown-item" href="/audit-log?instance={currentInstance ?: 'default'}">Audit Log</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="dataControlDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Data Control
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="dataControlDropdown">
+                            <li><a class="dropdown-item" href="/logical-replication?instance={currentInstance ?: 'default'}">Logical Replication</a></li>
+                            <li><a class="dropdown-item" href="/cdc?instance={currentInstance ?: 'default'}">Change Data Capture</a></li>
+                            <li><a class="dropdown-item" href="/data-lineage?instance={currentInstance ?: 'default'}">Data Lineage</a></li>
+                            <li><a class="dropdown-item" href="/partitions?instance={currentInstance ?: 'default'}">Partitions</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}">About</a>
                     </li>
