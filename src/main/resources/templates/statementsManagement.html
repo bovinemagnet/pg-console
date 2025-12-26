@@ -1,0 +1,210 @@
+{#include base}
+{#title}Statements Management - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/statements-management?instance={currentInstance ?: 'default'}&window={windowHours}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>pg_stat_statements Management</h1>
+        <p class="text-muted">Query baseline comparisons and top movers report</p>
+    </div>
+</div>
+
+{#if !summary.extensionAvailable}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning">
+            <h4>pg_stat_statements Extension Not Available</h4>
+            <p class="mb-0">
+                The pg_stat_statements extension is not installed or not loaded.
+                Please ensure it's configured in <code>shared_preload_libraries</code> and created with
+                <code>CREATE EXTENSION pg_stat_statements</code>.
+            </p>
+        </div>
+    </div>
+</div>
+{#else}
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Tracked Queries</span>
+                <h2 class="mb-0">{summary.totalQueries}</h2>
+                <small class="text-muted">unique statements</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Total Calls</span>
+                <h2 class="mb-0">{summary.totalCallsFormatted}</h2>
+                <small class="text-muted">query executions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Total Exec Time</span>
+                <h2 class="mb-0">{summary.totalExecTimeFormatted}</h2>
+                <small class="text-muted">cumulative</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Stats Since</span>
+                <h4 class="mb-0">{summary.lastResetFormatted}</h4>
+                <small class="text-muted">last reset</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Window Selector -->
+<div class="row mb-3">
+    <div class="col-auto">
+        <span class="text-muted me-2">Compare periods:</span>
+        <div class="btn-group" role="group">
+            <a href="/statements-management?instance={currentInstance}&window=6"
+               class="btn btn-outline-secondary {#if windowHours == 6}active{/if}">6h</a>
+            <a href="/statements-management?instance={currentInstance}&window=12"
+               class="btn btn-outline-secondary {#if windowHours == 12}active{/if}">12h</a>
+            <a href="/statements-management?instance={currentInstance}&window=24"
+               class="btn btn-outline-secondary {#if windowHours == 24}active{/if}">24h</a>
+            <a href="/statements-management?instance={currentInstance}&window=48"
+               class="btn btn-outline-secondary {#if windowHours == 48}active{/if}">48h</a>
+        </div>
+    </div>
+</div>
+
+<!-- Top Movers Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Top Movers (Last {windowHours}h vs Previous {windowHours}h)</h5>
+                <span class="badge bg-info">{topMovers.size} queries</span>
+            </div>
+            <div class="card-body p-0">
+                {#if topMovers.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h4>No Significant Changes Detected</h4>
+                    <p class="mb-0">
+                        All queries are performing within stable thresholds.
+                        This requires historical data from the sampling service.
+                    </p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Query</th>
+                                <th class="text-end">Prev. Time</th>
+                                <th class="text-end">Curr. Time</th>
+                                <th class="text-end">Time Change</th>
+                                <th class="text-end">Calls Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for mover in topMovers}
+                            <tr class="{#if mover.significantIncrease}table-danger{/if}{#if mover.significantDecrease}table-success{/if}">
+                                <td>
+                                    <span class="badge {mover.movementTypeCssClass}">{mover.movementTypeDisplay}</span>
+                                </td>
+                                <td class="query-preview">
+                                    <a href="/slow-queries/{mover.queryId}?instance={currentInstance}">
+                                        {mover.queryPreview}
+                                    </a>
+                                    <span class="query-full">{mover.queryText}</span>
+                                </td>
+                                <td class="text-end">
+                                    {#if mover.movementType.name() == 'NEW_QUERY'}
+                                    <small class="text-muted">—</small>
+                                    {#else}
+                                    <small>{mover.previousTotalTimeFormatted}</small>
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    {#if mover.movementType.name() == 'REMOVED'}
+                                    <small class="text-muted">—</small>
+                                    {#else}
+                                    <strong>{mover.currentTotalTimeFormatted}</strong>
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    {#if mover.movementType.name() == 'INCREASED'}
+                                    <span class="text-danger">{mover.totalTimeChangeFormatted}</span>
+                                    {#else if mover.movementType.name() == 'DECREASED'}
+                                    <span class="text-success">{mover.totalTimeChangeFormatted}</span>
+                                    {#else}
+                                    <span class="text-muted">{mover.totalTimeChangeFormatted}</span>
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    <small class="text-muted">{mover.callsChangeFormatted}</small>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reference Section -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Query Baselines</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Movement Types</h6>
+                        <dl class="mb-0">
+                            <dt><span class="badge bg-success">New</span></dt>
+                            <dd class="text-muted small">Query appeared in current period but not previous</dd>
+                            <dt><span class="badge bg-secondary">Removed</span></dt>
+                            <dd class="text-muted small">Query was in previous period but not current</dd>
+                            <dt><span class="badge bg-danger">Increased</span></dt>
+                            <dd class="text-muted small">Query execution time increased significantly (&gt;10%)</dd>
+                            <dt><span class="badge bg-info">Decreased</span></dt>
+                            <dd class="text-muted small">Query execution time decreased significantly (&gt;10%)</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Tips for Analysis</h6>
+                        <ul class="text-muted small mb-0">
+                            <li><strong>New queries</strong> - Check if expected, may indicate new code paths</li>
+                            <li><strong>Increased time</strong> - Investigate query plans, data growth, or missing indexes</li>
+                            <li><strong>Decreased time</strong> - May indicate successful optimisation or reduced load</li>
+                            <li><strong>Removed queries</strong> - May indicate removed code or changed behaviour</li>
+                        </ul>
+                        <hr>
+                        <p class="text-muted small mb-0">
+                            <strong>Note:</strong> Baseline comparisons require the history sampler to be enabled.
+                            Queries need multiple samples in each period for reliable comparison.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{/if}
+
+</div>
+
+{/include}

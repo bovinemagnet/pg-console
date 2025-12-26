@@ -1,0 +1,183 @@
+{#include base}
+{#title}Table Maintenance - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/table-maintenance?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Table Maintenance</h1>
+        <p class="text-muted">Vacuum, analyse, and bloat recommendations for your tables</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Need Vacuum</span>
+                <h2 class="mb-0">{summary.tablesNeedingVacuum}</h2>
+                <small class="text-muted">tables with &gt;10% dead tuples</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Never Analysed</span>
+                <h2 class="mb-0">{summary.tablesNeverAnalysed}</h2>
+                <small class="text-muted">tables lacking statistics</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Analyse Overdue</span>
+                <h2 class="mb-0">{summary.tablesAnalyseOverdue}</h2>
+                <small class="text-muted">not analysed in 7+ days</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Dead Tuples</span>
+                <h2 class="mb-0">{summary.totalDeadTuplesFormatted}</h2>
+                <small class="text-muted">total across {summary.totalTables} tables</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Maintenance Recommendations</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if recommendations.isEmpty()}
+                <div class="p-4 text-center text-success">
+                    <h4>No Maintenance Required</h4>
+                    <p class="mb-0">All tables appear to be well-maintained</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Action</th>
+                                <th>Table</th>
+                                <th class="text-end">Dead Tuples</th>
+                                <th class="text-end">Size</th>
+                                <th>Last Vacuum</th>
+                                <th>Last Analyse</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for rec in recommendations}
+                            <tr>
+                                <td>
+                                    <span class="badge {rec.severityCssClass}">{rec.severity}</span>
+                                </td>
+                                <td>
+                                    <span class="badge {rec.typeCssClass}">{rec.typeDisplay}</span>
+                                </td>
+                                <td>
+                                    <strong>{rec.fullTableName}</strong>
+                                </td>
+                                <td class="text-end">
+                                    {#if rec.deadTuples > 0}
+                                    <span class="text-danger">{rec.deadTuples}</span>
+                                    <br><small class="text-muted">{rec.deadTupleRatioFormatted}</small>
+                                    {#else}
+                                    <small class="text-muted">—</small>
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    {rec.tableSize}
+                                    {#if rec.estimatedBloatPercent > 0}
+                                    <br><small class="text-danger">~{rec.estimatedBloatPercentFormatted} bloat</small>
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#if rec.neverVacuumed}
+                                    <span class="text-warning">Never</span>
+                                    {#else}
+                                    {rec.lastVacuumDisplay}
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#if rec.neverAnalysed}
+                                    <span class="text-warning">Never</span>
+                                    {#else}
+                                    {rec.lastAnalyseDisplay}
+                                    {/if}
+                                </td>
+                                <td>
+                                    <small class="text-muted">{rec.rationale}</small>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reference Section -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Table Maintenance</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Maintenance Actions</h6>
+                        <dl class="mb-0">
+                            <dt><span class="badge bg-warning text-dark">Vacuum</span></dt>
+                            <dd class="text-muted small">Reclaims storage from deleted/updated rows. Non-blocking.</dd>
+                            <dt><span class="badge bg-info">Analyse</span></dt>
+                            <dd class="text-muted small">Updates statistics for query planner. Non-blocking.</dd>
+                            <dt><span class="badge bg-danger">Vacuum Full</span></dt>
+                            <dd class="text-muted small">Compacts table. Requires exclusive lock. Use for high bloat.</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Quick Commands</h6>
+                        <pre class="small mb-2"><code>-- Vacuum a specific table
+VACUUM VERBOSE schema.tablename;
+
+-- Analyse a specific table
+ANALYSE VERBOSE schema.tablename;
+
+-- Vacuum and analyse together
+VACUUM ANALYSE schema.tablename;
+
+-- Vacuum full (requires downtime)
+VACUUM FULL VERBOSE schema.tablename;</code></pre>
+                    </div>
+                </div>
+                <hr>
+                <p class="text-muted small mb-0">
+                    <strong>Note:</strong> PostgreSQL's autovacuum should handle most maintenance automatically.
+                    If you see many recommendations here, consider tuning autovacuum parameters.
+                    Dead tuples are normal during updates/deletes but should not accumulate excessively.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}
