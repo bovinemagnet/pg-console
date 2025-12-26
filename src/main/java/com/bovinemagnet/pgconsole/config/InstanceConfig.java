@@ -60,6 +60,13 @@ public interface InstanceConfig {
     SecurityConfig security();
 
     /**
+     * Alerting configuration.
+     *
+     * @return alerting configuration
+     */
+    AlertingConfig alerting();
+
+    /**
      * Properties for a specific instance.
      */
     interface InstanceProperties {
@@ -123,5 +130,98 @@ public interface InstanceConfig {
          */
         @WithDefault("false")
         boolean enabled();
+    }
+
+    /**
+     * Alerting configuration.
+     */
+    interface AlertingConfig {
+        /**
+         * Enable or disable alerting.
+         *
+         * @return true if alerting is enabled
+         */
+        @WithDefault("false")
+        boolean enabled();
+
+        /**
+         * Webhook URL for sending alerts.
+         * If set, alerts will be sent as JSON POST requests.
+         *
+         * @return optional webhook URL
+         */
+        @WithName("webhook-url")
+        Optional<String> webhookUrl();
+
+        /**
+         * Email address for sending alerts.
+         * Requires SMTP configuration in Quarkus mailer.
+         *
+         * @return optional email address
+         */
+        @WithName("email-to")
+        Optional<String> emailTo();
+
+        /**
+         * Threshold configuration for alerts.
+         *
+         * @return threshold configuration
+         */
+        ThresholdsConfig thresholds();
+
+        /**
+         * Minimum interval between alerts of the same type (in seconds).
+         * Prevents alert storms.
+         *
+         * @return cooldown period in seconds
+         */
+        @WithName("cooldown-seconds")
+        @WithDefault("300")
+        int cooldownSeconds();
+    }
+
+    /**
+     * Threshold configuration for triggering alerts.
+     */
+    interface ThresholdsConfig {
+        /**
+         * Connection usage percentage threshold.
+         * Alert when connections exceed this percentage of max.
+         *
+         * @return threshold percentage (0-100)
+         */
+        @WithName("connection-percent")
+        @WithDefault("90")
+        int connectionPercent();
+
+        /**
+         * Blocked queries threshold.
+         * Alert when this many queries are blocked.
+         *
+         * @return number of blocked queries
+         */
+        @WithName("blocked-queries")
+        @WithDefault("5")
+        int blockedQueries();
+
+        /**
+         * Long-running query threshold in seconds.
+         * Alert when any query runs longer than this.
+         *
+         * @return threshold in seconds
+         */
+        @WithName("long-query-seconds")
+        @WithDefault("300")
+        int longQuerySeconds();
+
+        /**
+         * Cache hit ratio threshold.
+         * Alert when cache hit ratio drops below this percentage.
+         *
+         * @return threshold percentage (0-100)
+         */
+        @WithName("cache-hit-ratio")
+        @WithDefault("90")
+        int cacheHitRatio();
     }
 }

@@ -5,12 +5,18 @@ import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
+import com.bovinemagnet.pgconsole.model.ExplainPlan;
+import com.bovinemagnet.pgconsole.model.IncidentReport;
 import com.bovinemagnet.pgconsole.model.LockInfo;
 import com.bovinemagnet.pgconsole.model.OverviewStats;
+import com.bovinemagnet.pgconsole.model.QueryFingerprint;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import com.bovinemagnet.pgconsole.model.TableStats;
+import com.bovinemagnet.pgconsole.model.WaitEventSummary;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.IncidentReportService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
+import com.bovinemagnet.pgconsole.service.QueryFingerprintService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -78,6 +84,9 @@ public class DashboardResource {
     Template databaseDetail;
 
     @Inject
+    Template waitEvents;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -85,6 +94,12 @@ public class DashboardResource {
 
     @Inject
     DataSourceManager dataSourceManager;
+
+    @Inject
+    QueryFingerprintService fingerprintService;
+
+    @Inject
+    IncidentReportService incidentReportService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -114,7 +129,8 @@ public class DashboardResource {
     public TemplateInstance slowQueries(
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("sortBy") String sortBy,
-            @QueryParam("order") String order) {
+            @QueryParam("order") String order,
+            @QueryParam("view") @DefaultValue("individual") String view) {
 
         List<SlowQuery> queries = postgresService.getSlowQueries(
             instance,
@@ -122,12 +138,21 @@ public class DashboardResource {
             order != null ? order : "desc"
         );
 
-        return slowQueries.data("queries", queries)
+        TemplateInstance template = slowQueries.data("queries", queries)
                          .data("sortBy", sortBy != null ? sortBy : "totalTime")
                          .data("order", order != null ? order : "desc")
+                         .data("view", view)
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled());
+
+        // Add grouped data if viewing grouped
+        if ("grouped".equals(view)) {
+            List<QueryFingerprint> fingerprints = fingerprintService.groupQueriesSortedByTotalTime(queries);
+            template = template.data("fingerprints", fingerprints);
+        }
+
+        return template;
     }
 
     @GET
@@ -196,6 +221,20 @@ public class DashboardResource {
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
                     .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/wait-events")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance waitEvents(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        List<WaitEventSummary> typeSummaries = postgresService.getWaitEventTypeSummary(instance);
+        List<WaitEventSummary> waitEventList = postgresService.getWaitEventSummary(instance);
+        return waitEvents.data("typeSummaries", typeSummaries)
+                        .data("waitEvents", waitEventList)
+                        .data("instances", dataSourceManager.getInstanceInfoList())
+                        .data("currentInstance", instance)
+                        .data("securityEnabled", config.security().enabled());
     }
 
     @GET
@@ -281,6 +320,63 @@ public class DashboardResource {
         }
     }
 
+    // --- Explain Plan ---
+
+    /**
+     * Generates an EXPLAIN plan for a query.
+     * Returns HTML fragment for htmx to insert into the page.
+     */
+    @POST
+    @Path("/api/explain")
+    @Produces(MediaType.TEXT_HTML)
+    public Response explainQuery(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("query") String query,
+            @QueryParam("analyse") @DefaultValue("false") boolean analyse,
+            @QueryParam("buffers") @DefaultValue("false") boolean buffers) {
+
+        if (query == null || query.trim().isEmpty()) {
+            return Response.ok("<div class=\"alert alert-warning\">No query provided</div>").build();
+        }
+
+        ExplainPlan plan = postgresService.explainQuery(instance, query, analyse, buffers);
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"card\">");
+        html.append("<div class=\"card-header d-flex justify-content-between align-items-center\">");
+        html.append("<h5 class=\"mb-0\">").append(plan.getOptionsDescription()).append(" Plan</h5>");
+        html.append("<small class=\"text-muted\">Generated: ").append(plan.getGeneratedAtFormatted()).append("</small>");
+        html.append("</div>");
+        html.append("<div class=\"card-body\">");
+
+        if (plan.hasError()) {
+            html.append("<div class=\"alert alert-danger mb-0\">");
+            html.append("<strong>Error:</strong> ").append(escapeHtml(plan.getError()));
+            html.append("</div>");
+        } else {
+            html.append("<pre class=\"mb-0\" style=\"white-space: pre-wrap; font-size: 0.85em;\">");
+            html.append(escapeHtml(plan.getPlanText()));
+            html.append("</pre>");
+        }
+
+        html.append("</div></div>");
+
+        return Response.ok(html.toString()).build();
+    }
+
+    /**
+     * Escapes HTML special characters.
+     */
+    private String escapeHtml(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;");
+    }
+
     // --- CSV Export ---
 
     /**
@@ -327,6 +423,30 @@ public class DashboardResource {
         String filename = String.format("slow-queries-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
+                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .build();
+    }
+
+    // --- Incident Report ---
+
+    /**
+     * Captures and exports an incident report as a text file.
+     * Contains a point-in-time snapshot of the database state.
+     */
+    @GET
+    @Path("/incident-report/export")
+    @Produces("text/plain")
+    public Response exportIncidentReport(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("description") String description) {
+
+        IncidentReport report = incidentReportService.captureReport(instance, description);
+        String reportText = incidentReportService.formatAsText(report);
+
+        String filename = String.format("incident-report-%s-%s.txt",
+            instance, report.getFilenameTimestamp());
+
+        return Response.ok(reportText)
                       .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                       .build();
     }

@@ -34,6 +34,12 @@ public class MetricsSamplerService {
     @Inject
     InstanceConfig config;
 
+    @Inject
+    PostgresService postgresService;
+
+    @Inject
+    AlertingService alertingService;
+
     /**
      * Samples system metrics every minute (configurable via cron).
      * Iterates over all configured instances.
@@ -51,6 +57,17 @@ public class MetricsSamplerService {
                 sampleSystemMetrics(instanceId);
                 sampleQueryMetrics(instanceId);
                 sampleDatabaseMetrics(instanceId);
+
+                // Check alerting thresholds
+                if (config.alerting().enabled()) {
+                    try {
+                        var stats = postgresService.getOverviewStats(instanceId);
+                        alertingService.checkAndAlert(instanceId, stats);
+                    } catch (Exception e) {
+                        LOG.debugf("Failed to check alerts for instance %s: %s", instanceId, e.getMessage());
+                    }
+                }
+
                 LOG.debugf("Metrics sampling completed for instance: %s", instanceId);
             } catch (Exception e) {
                 LOG.errorf("Failed to sample metrics for instance %s: %s", instanceId, e.getMessage());

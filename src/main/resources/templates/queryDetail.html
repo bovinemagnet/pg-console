@@ -29,14 +29,43 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Query Text</h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="copyQuery()" id="copyBtn">
-                    Copy Query
-                </button>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyQuery()" id="copyBtn">
+                        Copy Query
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Explain
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(false, false)">
+                                EXPLAIN (plan only)
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(true, false)">
+                                EXPLAIN ANALYZE
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(true, true)">
+                                EXPLAIN ANALYZE BUFFERS
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
             <div class="card-body">
                 <pre class="mb-0" id="queryText" style="white-space: pre-wrap; font-size: 0.9em;">{query.query}</pre>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Explain Plan Result -->
+<div class="row mb-4">
+    <div class="col" id="explain-result">
+        <!-- Explain plan will be loaded here -->
     </div>
 </div>
 
@@ -207,6 +236,33 @@ function copyQuery() {
             btn.classList.remove('btn-success');
             btn.classList.add('btn-outline-secondary');
         }, 2000);
+    });
+}
+
+function runExplain(analyse, buffers) {
+    const queryText = document.getElementById('queryText').textContent;
+    const resultDiv = document.getElementById('explain-result');
+    const instance = '{currentInstance ?: 'default'}';
+
+    // Show loading indicator
+    resultDiv.innerHTML = '<div class="card"><div class="card-body text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 mb-0">Generating execution plan...</p></div></div>';
+
+    // Build the URL with proper encoding
+    const params = new URLSearchParams();
+    params.append('instance', instance);
+    params.append('query', queryText);
+    params.append('analyse', analyse);
+    params.append('buffers', buffers);
+
+    fetch('/api/explain?' + params.toString(), {
+        method: 'POST'
+    })
+    .then(response => response.text())
+    .then(html => {
+        resultDiv.innerHTML = html;
+    })
+    .catch(error => {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Failed to generate explain plan: ' + error.message + '</div>';
     });
 }
 </script>

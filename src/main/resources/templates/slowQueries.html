@@ -1,21 +1,129 @@
 {#include base}
 {#title}Slow Queries - PostgreSQL Console{/title}
 
-<div id="refreshable-content" hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}&view={view ?: 'individual'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">
         <h1>Slow Queries</h1>
         <p class="text-muted">Data from pg_stat_statements extension</p>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex gap-2 align-items-center">
+        <!-- View Toggle -->
+        <div class="btn-group" role="group" aria-label="View toggle">
+            <a href="/slow-queries?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}&view=individual"
+               class="btn btn-outline-secondary {#if view != 'grouped'}active{/if}">
+                Individual
+            </a>
+            <a href="/slow-queries?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}&view=grouped"
+               class="btn btn-outline-secondary {#if view == 'grouped'}active{/if}">
+                Grouped
+            </a>
+        </div>
         <a href="/slow-queries/export?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}"
            class="btn btn-outline-secondary">
-            📥 Export CSV
+            Export CSV
         </a>
     </div>
 </div>
 
+{#if view == 'grouped'}
+<!-- Grouped View -->
+<div class="row">
+    <div class="col-12">
+        {#if fingerprints.isEmpty()}
+        <div class="alert alert-warning">
+            <strong>No data available.</strong> The pg_stat_statements extension may not be installed or enabled.
+            <br><small>Enable it with: <code>CREATE EXTENSION pg_stat_statements;</code></small>
+        </div>
+        {#else}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Query Groups by Fingerprint</h5>
+                <small class="text-muted">Similar queries grouped together by their normalised structure</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Normalised Query</th>
+                                <th class="text-end">Instances</th>
+                                <th class="text-end">Total Calls</th>
+                                <th class="text-end">Total Time</th>
+                                <th class="text-end">Avg Mean Time</th>
+                                <th class="text-end">Total Rows</th>
+                                <th>Fingerprint</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for fp in fingerprints}
+                            <tr>
+                                <td class="query-preview">
+                                    {fp.shortNormalisedQuery}
+                                    <div class="query-full">{fp.normalisedQuery}</div>
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge bg-secondary">{fp.instanceCount}</span>
+                                </td>
+                                <td class="text-end">{fp.totalCalls}</td>
+                                <td class="text-end">{fp.totalTimeFormatted}</td>
+                                <td class="text-end">{fp.avgMeanTimeFormatted}</td>
+                                <td class="text-end">{fp.totalRows}</td>
+                                <td>
+                                    <code class="small text-muted">{fp.fingerprint}</code>
+                                </td>
+                            </tr>
+                            {#if fp.instanceCount > 1}
+                            <tr class="table-secondary">
+                                <td colspan="7" class="p-0">
+                                    <details class="m-2">
+                                        <summary class="text-muted small" style="cursor: pointer;">
+                                            Show {fp.instanceCount} individual queries
+                                        </summary>
+                                        <table class="table table-sm table-bordered mt-2 mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Query</th>
+                                                    <th>Calls</th>
+                                                    <th>Total Time</th>
+                                                    <th>Mean Time</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {#for q in fp.instances}
+                                                <tr>
+                                                    <td class="query-preview small">
+                                                        {q.shortQuery}
+                                                        <div class="query-full">{q.query}</div>
+                                                    </td>
+                                                    <td>{q.totalCalls}</td>
+                                                    <td>{q.totalTimeFormatted}</td>
+                                                    <td>{q.meanTimeFormatted}</td>
+                                                    <td>
+                                                        <a href="/slow-queries/{q.queryId}?instance={currentInstance ?: 'default'}"
+                                                           class="btn btn-sm btn-outline-primary">Details</a>
+                                                    </td>
+                                                </tr>
+                                                {/for}
+                                            </tbody>
+                                        </table>
+                                    </details>
+                                </td>
+                            </tr>
+                            {/if}
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+{#else}
+<!-- Individual View (default) -->
 <div class="row">
     <div class="col-12">
         {#if queries.isEmpty()}
@@ -29,57 +137,57 @@
                 <thead>
                     <tr>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=query&order={#if sortBy == 'query' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=query&order={#if sortBy == 'query' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Query
                             {#if sortBy == 'query'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=calls&order={#if sortBy == 'calls' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=calls&order={#if sortBy == 'calls' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Calls
                             {#if sortBy == 'calls'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=totalTime&order={#if sortBy == 'totalTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=totalTime&order={#if sortBy == 'totalTime' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Total Time
                             {#if sortBy == 'totalTime'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=meanTime&order={#if sortBy == 'meanTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=meanTime&order={#if sortBy == 'meanTime' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Mean Time
                             {#if sortBy == 'meanTime'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=maxTime&order={#if sortBy == 'maxTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=maxTime&order={#if sortBy == 'maxTime' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Max Time
                             {#if sortBy == 'maxTime'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=rows&order={#if sortBy == 'rows' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=rows&order={#if sortBy == 'rows' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Rows
                             {#if sortBy == 'rows'}
-                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
                         <th>Action</th>
@@ -108,6 +216,7 @@
         {/if}
     </div>
 </div>
+{/if}
 
 </div>
 

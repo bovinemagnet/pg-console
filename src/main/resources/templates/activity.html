@@ -8,6 +8,13 @@
         <h1>Current Activity</h1>
         <p class="text-muted">Active connections and running queries</p>
     </div>
+    <div class="col-auto">
+        <a href="/incident-report/export?instance={currentInstance ?: 'default'}"
+           class="btn btn-outline-danger"
+           title="Capture a point-in-time snapshot of database state">
+            Capture Incident Report
+        </a>
+    </div>
 </div>
 
 <div class="row">

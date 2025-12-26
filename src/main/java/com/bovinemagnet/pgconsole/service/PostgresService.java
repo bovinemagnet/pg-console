@@ -4,11 +4,13 @@ import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
+import com.bovinemagnet.pgconsole.model.ExplainPlan;
 import com.bovinemagnet.pgconsole.model.InstanceInfo;
 import com.bovinemagnet.pgconsole.model.LockInfo;
 import com.bovinemagnet.pgconsole.model.OverviewStats;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import com.bovinemagnet.pgconsole.model.TableStats;
+import com.bovinemagnet.pgconsole.model.WaitEventSummary;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -912,5 +914,198 @@ public class PostgresService {
         m.setDatabaseSizeBytes(rs.getLong("database_size_bytes"));
         m.setPgStatStatementsEnabled(rs.getBoolean("pg_stat_statements_enabled"));
         return m;
+    }
+
+    // ========== Wait Events ==========
+
+    /**
+     * Gets a summary of current wait events from pg_stat_activity.
+     *
+     * @param instanceName the instance to query
+     * @return list of wait event summaries
+     */
+    public List<WaitEventSummary> getWaitEventSummary(String instanceName) {
+        List<WaitEventSummary> summaries = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                wait_event_type,
+                wait_event,
+                COUNT(*) as session_count
+            FROM pg_stat_activity
+            WHERE pid != pg_backend_pid()
+            GROUP BY wait_event_type, wait_event
+            ORDER BY
+                CASE WHEN wait_event_type IS NULL THEN 0 ELSE 1 END,
+                wait_event_type,
+                session_count DESC
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                WaitEventSummary summary = new WaitEventSummary();
+                summary.setWaitEventType(rs.getString("wait_event_type"));
+                summary.setWaitEvent(rs.getString("wait_event"));
+                summary.setSessionCount(rs.getInt("session_count"));
+                summaries.add(summary);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get wait event summary for %s: %s", instanceName, e.getMessage());
+        }
+
+        return summaries;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public List<WaitEventSummary> getWaitEventSummary() {
+        return getWaitEventSummary("default");
+    }
+
+    /**
+     * Gets wait event totals grouped by wait_event_type.
+     *
+     * @param instanceName the instance to query
+     * @return list of wait event type summaries
+     */
+    public List<WaitEventSummary> getWaitEventTypeSummary(String instanceName) {
+        List<WaitEventSummary> summaries = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                wait_event_type,
+                COUNT(*) as session_count
+            FROM pg_stat_activity
+            WHERE pid != pg_backend_pid()
+            GROUP BY wait_event_type
+            ORDER BY
+                CASE WHEN wait_event_type IS NULL THEN 0 ELSE 1 END,
+                session_count DESC
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                WaitEventSummary summary = new WaitEventSummary();
+                summary.setWaitEventType(rs.getString("wait_event_type"));
+                summary.setSessionCount(rs.getInt("session_count"));
+                summaries.add(summary);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get wait event type summary for %s: %s", instanceName, e.getMessage());
+        }
+
+        return summaries;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public List<WaitEventSummary> getWaitEventTypeSummary() {
+        return getWaitEventTypeSummary("default");
+    }
+
+    // =============================================
+    // EXPLAIN Plan Methods
+    // =============================================
+
+    /**
+     * Generates an EXPLAIN plan for a query.
+     * Note: This only works for simple SELECT queries due to safety constraints.
+     * The query is NOT executed - only the plan is generated.
+     *
+     * @param instanceName the instance to query
+     * @param query the SQL query to explain
+     * @param analyse if true, use EXPLAIN ANALYZE (actually runs the query)
+     * @param buffers if true, include buffer usage information
+     * @return the explain plan result
+     */
+    public ExplainPlan explainQuery(String instanceName, String query, boolean analyse, boolean buffers) {
+        ExplainPlan plan = new ExplainPlan();
+        plan.setQuery(query);
+        plan.setAnalyse(analyse);
+        plan.setBuffers(buffers);
+
+        // Validate the query is safe to explain
+        String trimmedQuery = query.trim().toUpperCase();
+        if (!isExplainSafe(trimmedQuery)) {
+            plan.setError("Only SELECT, WITH, and VALUES queries can be explained for safety reasons.");
+            return plan;
+        }
+
+        // Build the EXPLAIN command
+        StringBuilder explainCmd = new StringBuilder("EXPLAIN ");
+        if (analyse || buffers) {
+            explainCmd.append("(");
+            if (analyse) {
+                explainCmd.append("ANALYZE");
+            }
+            if (buffers) {
+                if (analyse) explainCmd.append(", ");
+                explainCmd.append("BUFFERS");
+            }
+            explainCmd.append(") ");
+        }
+        explainCmd.append(query);
+
+        StringBuilder planText = new StringBuilder();
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(explainCmd.toString())) {
+
+            while (rs.next()) {
+                String line = rs.getString(1);
+                plan.addPlanLine(line);
+                if (planText.length() > 0) {
+                    planText.append("\n");
+                }
+                planText.append(line);
+            }
+            plan.setPlanText(planText.toString());
+
+        } catch (SQLException e) {
+            LOG.warnf("Failed to explain query for %s: %s", instanceName, e.getMessage());
+            plan.setError("Failed to generate explain plan: " + e.getMessage());
+        }
+
+        return plan;
+    }
+
+    /**
+     * Checks if a query is safe to run with EXPLAIN.
+     * Only allows SELECT, WITH (CTE), and VALUES statements.
+     */
+    private boolean isExplainSafe(String upperQuery) {
+        // Remove leading whitespace and check first keyword
+        String cleaned = upperQuery.replaceAll("^\\s+", "");
+
+        // Allow SELECT, WITH, and VALUES
+        if (cleaned.startsWith("SELECT") ||
+            cleaned.startsWith("WITH") ||
+            cleaned.startsWith("VALUES")) {
+            return true;
+        }
+
+        // Check for common DML that we should block
+        if (cleaned.startsWith("INSERT") ||
+            cleaned.startsWith("UPDATE") ||
+            cleaned.startsWith("DELETE") ||
+            cleaned.startsWith("DROP") ||
+            cleaned.startsWith("CREATE") ||
+            cleaned.startsWith("ALTER") ||
+            cleaned.startsWith("TRUNCATE")) {
+            return false;
+        }
+
+        // Default to false for safety
+        return false;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public ExplainPlan explainQuery(String query, boolean analyse, boolean buffers) {
+        return explainQuery("default", query, analyse, buffers);
     }
 }
