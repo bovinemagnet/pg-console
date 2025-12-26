@@ -1,0 +1,63 @@
+{#include base}
+{#title}PostgreSQL Insight Dashboard{/title}
+{#insert}
+<div class="row mt-4">
+    <div class="col-12">
+        <h1>PostgreSQL Insight Dashboard</h1>
+        <p class="lead">Lightweight, self-hosted PostgreSQL operational insight and performance monitoring</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <h5 class="card-title">Slow Queries</h5>
+                <p class="card-text">Monitor expensive and slow-running queries with pg_stat_statements</p>
+                <a href="/slow-queries" class="btn btn-primary">View Slow Queries</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <h5 class="card-title">Current Activity</h5>
+                <p class="card-text">View active connections, blocking queries, and long-running transactions</p>
+                <a href="/activity" class="btn btn-primary">View Activity</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <h5 class="card-title">Table Statistics</h5>
+                <p class="card-text">Analyze table/index usage and identify bloat indicators</p>
+                <a href="/tables" class="btn btn-primary">View Tables</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Features</h5>
+                <ul>
+                    <li>Real-time monitoring of slow and expensive queries</li>
+                    <li>Current activity tracking with blocking detection</li>
+                    <li>Connection and wait event analysis</li>
+                    <li>Table and index usage statistics</li>
+                    <li>Bloat indicators for database health</li>
+                    <li>Server-side rendered SVG sparklines for visualizations</li>
+                    <li>Sortable columns with htmx</li>
+                    <li>Hover to view full queries</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{/insert}
+{/include}

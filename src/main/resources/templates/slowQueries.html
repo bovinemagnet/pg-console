@@ -1,0 +1,100 @@
+{#include base}
+{#title}Slow Queries - PostgreSQL Console{/title}
+{#insert}
+<div class="row mt-4">
+    <div class="col-12">
+        <h1>Slow Queries</h1>
+        <p class="text-muted">Data from pg_stat_statements extension</p>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        {#if queries.isEmpty()}
+        <div class="alert alert-warning">
+            <strong>No data available.</strong> The pg_stat_statements extension may not be installed or enabled.
+            <br><small>Enable it with: <code>CREATE EXTENSION pg_stat_statements;</code></small>
+        </div>
+        {#else}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=query&order={#if sortBy == 'query' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Query
+                            {#if sortBy == 'query'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=calls&order={#if sortBy == 'calls' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Calls
+                            {#if sortBy == 'calls'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=totalTime&order={#if sortBy == 'totalTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Total Time (ms)
+                            {#if sortBy == 'totalTime'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=meanTime&order={#if sortBy == 'meanTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Mean Time (ms)
+                            {#if sortBy == 'meanTime'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=maxTime&order={#if sortBy == 'maxTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Max Time (ms)
+                            {#if sortBy == 'maxTime'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                        <th class="sortable" 
+                            hx-get="/slow-queries?sortBy=rows&order={#if sortBy == 'rows' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-target="body"
+                            hx-swap="innerHTML">
+                            Rows
+                            {#if sortBy == 'rows'}
+                                <span class="sort-indicator">{#if order == 'asc'}▲{#else}▼{/if}</span>
+                            {/if}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for query in queries}
+                    <tr>
+                        <td class="query-preview">
+                            {query.shortQuery}
+                            <div class="query-full">{query.query}</div>
+                        </td>
+                        <td>{query.totalCalls}</td>
+                        <td>{query.totalTime}</td>
+                        <td>{query.meanTime}</td>
+                        <td>{query.maxTime}</td>
+                        <td>{query.rows}</td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+        {/if}
+    </div>
+</div>
+{/insert}
+{/include}
