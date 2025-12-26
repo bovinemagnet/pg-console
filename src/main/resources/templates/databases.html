@@ -1,7 +1,7 @@
 {#include base}
 {#title}Databases - PostgreSQL Console{/title}
 
-<div id="refreshable-content" hx-get="/databases" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/databases?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">
@@ -23,7 +23,7 @@
         <div class="card h-100">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <a href="/databases/{db.datname}" class="text-decoration-none">{db.datname}</a>
+                    <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}" class="text-decoration-none">{db.datname}</a>
                     {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
                 </h6>
             </div>
@@ -51,7 +51,7 @@
                 </div>
             </div>
             <div class="card-footer">
-                <a href="/databases/{db.datname}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+                <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
             </div>
         </div>
     </div>
@@ -87,7 +87,7 @@
                             {#for db in databases}
                             <tr>
                                 <td>
-                                    <a href="/databases/{db.datname}"><code>{db.datname}</code></a>
+                                    <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}"><code>{db.datname}</code></a>
                                     {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
                                 </td>
                                 <td class="text-end">{db.databaseSize}</td>

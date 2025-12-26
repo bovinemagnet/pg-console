@@ -20,6 +20,20 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 - **pg_stat_statements Indicator** - Visual badge showing extension availability
 - **SVG Sparklines** - Inline trend charts showing historical metrics (connections, queries, cache hit ratio)
 
+### Multi-Instance Support
+- **Instance Selector** - Monitor multiple PostgreSQL instances from one dashboard
+- **Instance-aware History** - Historical metrics stored per instance
+
+### Security & Admin Actions
+- **HTTP Basic Authentication** - Optional security via Quarkus Elytron
+- **Role-based Access** - Admin role required for dangerous actions
+- **Cancel Query** - Cancel running queries (admin only)
+- **Terminate Connection** - Force-terminate backend connections (admin only)
+- **Confirmation Dialogs** - Dangerous actions require confirmation
+
+### Data Export
+- **CSV Export** - Download slow queries as CSV files
+
 ## Technology Stack
 
 - **Quarkus 3.16.3** + **Java 21**
@@ -78,6 +92,8 @@ export POSTGRES_PASSWORD=your-password
 | `PG_CONSOLE_HISTORY_INTERVAL` | Sampling interval in seconds | `60` |
 | `PG_CONSOLE_HISTORY_RETENTION` | Days to retain history data | `7` |
 | `PG_CONSOLE_HISTORY_TOP_QUERIES` | Number of top queries to sample | `50` |
+| `PG_CONSOLE_INSTANCES` | Comma-separated list of instance names | `default` |
+| `PG_CONSOLE_SECURITY_ENABLED` | Enable HTTP Basic authentication | `false` |
 
 ### Database Filter
 
@@ -116,6 +132,59 @@ export PG_CONSOLE_HISTORY_RETENTION=14
 ```
 
 History data is stored in a `pgconsole` schema created automatically via Flyway migrations.
+
+### Multi-Instance Configuration
+
+Monitor multiple PostgreSQL instances from a single dashboard:
+
+```properties
+# application.properties or environment variables
+
+# List of instance names
+pg-console.instances=default,production,staging
+
+# Display names for instances (optional)
+pg-console.instance.production.display-name=Production DB
+pg-console.instance.staging.display-name=Staging DB
+
+# Named datasources for additional instances
+quarkus.datasource.production.db-kind=postgresql
+quarkus.datasource.production.jdbc.url=${POSTGRES_PRODUCTION_URL}
+quarkus.datasource.production.username=${POSTGRES_PRODUCTION_USER}
+quarkus.datasource.production.password=${POSTGRES_PRODUCTION_PASSWORD}
+
+quarkus.datasource.staging.db-kind=postgresql
+quarkus.datasource.staging.jdbc.url=${POSTGRES_STAGING_URL}
+quarkus.datasource.staging.username=${POSTGRES_STAGING_USER}
+quarkus.datasource.staging.password=${POSTGRES_STAGING_PASSWORD}
+```
+
+When multiple instances are configured, an instance selector appears in the navigation bar.
+
+### Security Configuration
+
+Enable HTTP Basic authentication to protect the dashboard:
+
+```bash
+# Enable security
+export PG_CONSOLE_SECURITY_ENABLED=true
+```
+
+Users and roles are configured in properties files:
+
+**`users.properties`:**
+```properties
+admin=admin
+viewer=viewer
+```
+
+**`roles.properties`:**
+```properties
+admin=admin,viewer
+viewer=viewer
+```
+
+The `admin` role is required for dangerous actions like cancelling queries or terminating connections. Update the default credentials before deploying to production.
 
 ## PostgreSQL Setup
 

@@ -1,0 +1,127 @@
+package com.bovinemagnet.pgconsole.config;
+
+import io.smallrye.config.ConfigMapping;
+import io.smallrye.config.WithDefault;
+import io.smallrye.config.WithName;
+
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Configuration mapping for pg-console application.
+ * <p>
+ * Includes instance configuration, history sampling, and security settings.
+ * <p>
+ * Configuration example:
+ * <pre>
+ * pg-console.instances=default,production,staging
+ * pg-console.instance.production.display-name=Production DB
+ * pg-console.history.enabled=true
+ * pg-console.history.interval-seconds=60
+ * pg-console.security.enabled=false
+ * </pre>
+ *
+ * @author Paul Snow
+ * @version 0.0.0
+ */
+@ConfigMapping(prefix = "pg-console")
+public interface InstanceConfig {
+
+    /**
+     * Comma-separated list of instance names.
+     * The "default" instance uses the unnamed Quarkus datasource.
+     * Other instances use named datasources matching the instance name.
+     *
+     * @return comma-separated instance names
+     */
+    @WithDefault("default")
+    String instances();
+
+    /**
+     * Per-instance configuration properties.
+     *
+     * @return map of instance name to properties
+     */
+    @WithName("instance")
+    Map<String, InstanceProperties> instanceProperties();
+
+    /**
+     * History sampling configuration.
+     *
+     * @return history configuration
+     */
+    HistoryConfig history();
+
+    /**
+     * Security configuration.
+     *
+     * @return security configuration
+     */
+    SecurityConfig security();
+
+    /**
+     * Properties for a specific instance.
+     */
+    interface InstanceProperties {
+        /**
+         * Display name shown in the UI.
+         * Defaults to the instance name if not specified.
+         *
+         * @return display name
+         */
+        Optional<String> displayName();
+    }
+
+    /**
+     * History sampling configuration.
+     */
+    interface HistoryConfig {
+        /**
+         * Enable or disable history sampling.
+         *
+         * @return true if enabled
+         */
+        @WithDefault("true")
+        boolean enabled();
+
+        /**
+         * Sampling interval in seconds.
+         *
+         * @return interval seconds
+         */
+        @WithName("interval-seconds")
+        @WithDefault("60")
+        int intervalSeconds();
+
+        /**
+         * Number of days to retain history data.
+         *
+         * @return retention days
+         */
+        @WithName("retention-days")
+        @WithDefault("7")
+        int retentionDays();
+
+        /**
+         * Number of top queries to sample.
+         *
+         * @return number of queries
+         */
+        @WithName("top-queries")
+        @WithDefault("50")
+        int topQueries();
+    }
+
+    /**
+     * Security configuration.
+     */
+    interface SecurityConfig {
+        /**
+         * Enable or disable security (HTTP Basic auth).
+         *
+         * @return true if security is enabled
+         */
+        @WithDefault("false")
+        boolean enabled();
+    }
+}

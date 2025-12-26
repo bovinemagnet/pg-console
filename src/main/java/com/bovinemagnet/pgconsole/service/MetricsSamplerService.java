@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
 import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
@@ -7,15 +8,14 @@ import com.bovinemagnet.pgconsole.repository.HistoryRepository;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import javax.sql.DataSource;
 import java.sql.*;
 import java.time.Instant;
+import java.util.List;
 
 /**
- * Scheduled service for sampling PostgreSQL metrics.
+ * Scheduled service for sampling PostgreSQL metrics across all instances.
  *
  * @author Paul Snow
  * @version 0.0.0
@@ -26,37 +26,35 @@ public class MetricsSamplerService {
     private static final Logger LOG = Logger.getLogger(MetricsSamplerService.class);
 
     @Inject
-    DataSource dataSource;
+    DataSourceManager dataSourceManager;
 
     @Inject
     HistoryRepository historyRepository;
 
-    @ConfigProperty(name = "pg-console.history.enabled", defaultValue = "true")
-    boolean historyEnabled;
-
-    @ConfigProperty(name = "pg-console.history.top-queries", defaultValue = "50")
-    int topQueries;
-
-    @ConfigProperty(name = "pg-console.history.retention-days", defaultValue = "7")
-    int retentionDays;
+    @Inject
+    InstanceConfig config;
 
     /**
      * Samples system metrics every minute (configurable via cron).
+     * Iterates over all configured instances.
      */
     @Scheduled(every = "${pg-console.history.interval-seconds:60}s",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void sampleMetrics() {
-        if (!historyEnabled) {
+        if (!config.history().enabled()) {
             return;
         }
 
-        try {
-            sampleSystemMetrics();
-            sampleQueryMetrics();
-            sampleDatabaseMetrics();
-            LOG.debug("Metrics sampling completed successfully");
-        } catch (Exception e) {
-            LOG.error("Failed to sample metrics", e);
+        List<String> instances = dataSourceManager.getAvailableInstances();
+        for (String instanceId : instances) {
+            try {
+                sampleSystemMetrics(instanceId);
+                sampleQueryMetrics(instanceId);
+                sampleDatabaseMetrics(instanceId);
+                LOG.debugf("Metrics sampling completed for instance: %s", instanceId);
+            } catch (Exception e) {
+                LOG.errorf("Failed to sample metrics for instance %s: %s", instanceId, e.getMessage());
+            }
         }
     }
 
@@ -66,11 +64,12 @@ public class MetricsSamplerService {
     @Scheduled(cron = "0 0 3 * * ?",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void cleanupOldData() {
-        if (!historyEnabled) {
+        if (!config.history().enabled()) {
             return;
         }
 
         try {
+            int retentionDays = config.history().retentionDays();
             int deleted = historyRepository.deleteOldData(retentionDays);
             LOG.infof("Cleaned up %d old history records (retention: %d days)", deleted, retentionDays);
         } catch (Exception e) {
@@ -78,7 +77,7 @@ public class MetricsSamplerService {
         }
     }
 
-    private void sampleSystemMetrics() {
+    private void sampleSystemMetrics(String instanceId) {
         String sql = """
             SELECT
                 (SELECT count(*) FROM pg_stat_activity) as total_connections,
@@ -97,7 +96,7 @@ public class MetricsSamplerService {
                 (SELECT sum(pg_database_size(datname)) FROM pg_database WHERE datistemplate = false) as total_database_size_bytes
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -115,14 +114,14 @@ public class MetricsSamplerService {
                 metrics.setCacheHitRatio(getDoubleOrNull(rs, "cache_hit_ratio"));
                 metrics.setTotalDatabaseSizeBytes(getLongOrNull(rs, "total_database_size_bytes"));
 
-                historyRepository.saveSystemMetrics(metrics);
+                historyRepository.saveSystemMetrics(instanceId, metrics);
             }
         } catch (SQLException e) {
-            LOG.warn("Failed to sample system metrics: " + e.getMessage());
+            LOG.warnf("Failed to sample system metrics for %s: %s", instanceId, e.getMessage());
         }
     }
 
-    private void sampleQueryMetrics() {
+    private void sampleQueryMetrics(String instanceId) {
         String sql = """
             SELECT
                 md5(query) as query_id,
@@ -144,10 +143,10 @@ public class MetricsSamplerService {
             LIMIT ?
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, topQueries);
+            stmt.setInt(1, config.history().topQueries());
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -166,25 +165,15 @@ public class MetricsSamplerService {
                     metrics.setSharedBlksRead(getLongOrNull(rs, "shared_blks_read"));
                     metrics.setTempBlksWritten(getLongOrNull(rs, "temp_blks_written"));
 
-                    historyRepository.saveQueryMetrics(metrics);
+                    historyRepository.saveQueryMetrics(instanceId, metrics);
                 }
             }
         } catch (SQLException e) {
-            LOG.warn("Failed to sample query metrics: " + e.getMessage());
+            LOG.warnf("Failed to sample query metrics for %s: %s", instanceId, e.getMessage());
         }
     }
 
-    private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
-        double value = rs.getDouble(column);
-        return rs.wasNull() ? null : value;
-    }
-
-    private Long getLongOrNull(ResultSet rs, String column) throws SQLException {
-        long value = rs.getLong(column);
-        return rs.wasNull() ? null : value;
-    }
-
-    private void sampleDatabaseMetrics() {
+    private void sampleDatabaseMetrics(String instanceId) {
         String sql = """
             SELECT
                 d.datname,
@@ -211,7 +200,7 @@ public class MetricsSamplerService {
             WHERE db.datistemplate = false
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -236,10 +225,20 @@ public class MetricsSamplerService {
                 metrics.setTempBytes(getLongOrNull(rs, "temp_bytes"));
                 metrics.setDatabaseSizeBytes(getLongOrNull(rs, "database_size_bytes"));
 
-                historyRepository.saveDatabaseMetrics(metrics);
+                historyRepository.saveDatabaseMetrics(instanceId, metrics);
             }
         } catch (SQLException e) {
-            LOG.warn("Failed to sample database metrics: " + e.getMessage());
+            LOG.warnf("Failed to sample database metrics for %s: %s", instanceId, e.getMessage());
         }
+    }
+
+    private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
+        double value = rs.getDouble(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private Long getLongOrNull(ResultSet rs, String column) throws SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
     }
 }

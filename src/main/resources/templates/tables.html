@@ -1,7 +1,7 @@
 {#include base}
 {#title}Table Statistics - PostgreSQL Console{/title}
 
-<div id="refreshable-content" hx-get="/tables" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/tables?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">

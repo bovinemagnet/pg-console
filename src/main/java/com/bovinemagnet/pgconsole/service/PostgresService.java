@@ -4,6 +4,7 @@ import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
+import com.bovinemagnet.pgconsole.model.InstanceInfo;
 import com.bovinemagnet.pgconsole.model.LockInfo;
 import com.bovinemagnet.pgconsole.model.OverviewStats;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
@@ -11,6 +12,7 @@ import com.bovinemagnet.pgconsole.model.TableStats;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -21,14 +23,44 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Service for querying PostgreSQL statistics and metrics.
+ * Supports multiple database instances via DataSourceManager.
+ *
+ * @author Paul Snow
+ * @version 0.0.0
+ */
 @ApplicationScoped
 public class PostgresService {
 
+    private static final Logger LOG = Logger.getLogger(PostgresService.class);
+
     @Inject
-    DataSource dataSource;
+    DataSourceManager dataSourceManager;
 
     @ConfigProperty(name = "pg-console.databases")
     Optional<String> databaseFilter;
+
+    /**
+     * Gets the datasource for an instance.
+     */
+    private DataSource getDataSource(String instanceName) {
+        return dataSourceManager.getDataSource(instanceName);
+    }
+
+    /**
+     * Gets the list of configured instances.
+     */
+    public List<InstanceInfo> getInstanceList() {
+        return dataSourceManager.getInstanceInfoList();
+    }
+
+    /**
+     * Gets the list of available instance names.
+     */
+    public List<String> getAvailableInstances() {
+        return dataSourceManager.getAvailableInstances();
+    }
 
     /**
      * Returns the set of database names to monitor.
@@ -52,12 +84,14 @@ public class PostgresService {
         return filter.isEmpty() || filter.contains(dbName);
     }
 
-    public List<SlowQuery> getSlowQueries(String sortBy, String order) {
+    // ========== Slow Queries ==========
+
+    public List<SlowQuery> getSlowQueries(String instanceName, String sortBy, String order) {
         List<SlowQuery> queries = new ArrayList<>();
         String orderClause = getOrderClause(sortBy, order);
-        
+
         String sql = """
-            SELECT 
+            SELECT
                 md5(query) as queryid,
                 query,
                 calls as total_calls,
@@ -72,10 +106,10 @@ public class PostgresService {
             WHERE query NOT LIKE '%pg_stat_statements%'
             ORDER BY """ + " " + orderClause + " LIMIT 100";
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
+
             while (rs.next()) {
                 SlowQuery query = new SlowQuery();
                 query.setQueryId(rs.getString("queryid"));
@@ -91,11 +125,15 @@ public class PostgresService {
                 queries.add(query);
             }
         } catch (SQLException e) {
-            // If pg_stat_statements is not available, return empty list
-            System.err.println("Warning: Could not query pg_stat_statements: " + e.getMessage());
+            LOG.warnf("Could not query pg_stat_statements on %s: %s", instanceName, e.getMessage());
         }
-        
+
         return queries;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public List<SlowQuery> getSlowQueries(String sortBy, String order) {
+        return getSlowQueries("default", sortBy, order);
     }
 
     private String getOrderClause(String sortBy, String order) {
@@ -111,11 +149,75 @@ public class PostgresService {
         return column + " " + direction;
     }
 
-    public List<Activity> getCurrentActivity() {
-        List<Activity> activities = new ArrayList<>();
-        
+    public SlowQuery getSlowQueryById(String instanceName, String queryId) {
         String sql = """
-            SELECT 
+            SELECT
+                md5(query) as queryid,
+                query,
+                calls as total_calls,
+                total_exec_time as total_time,
+                mean_exec_time as mean_time,
+                min_exec_time as min_time,
+                max_exec_time as max_time,
+                stddev_exec_time as stddev_time,
+                rows,
+                shared_blks_hit,
+                shared_blks_read,
+                shared_blks_written,
+                temp_blks_read,
+                temp_blks_written,
+                'unknown' as user,
+                'current' as database
+            FROM pg_stat_statements
+            WHERE md5(query) = ?
+            LIMIT 1
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, queryId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    SlowQuery query = new SlowQuery();
+                    query.setQueryId(rs.getString("queryid"));
+                    query.setQuery(rs.getString("query"));
+                    query.setTotalCalls(rs.getLong("total_calls"));
+                    query.setTotalTime(rs.getDouble("total_time"));
+                    query.setMeanTime(rs.getDouble("mean_time"));
+                    query.setMinTime(rs.getDouble("min_time"));
+                    query.setMaxTime(rs.getDouble("max_time"));
+                    query.setStddevTime(rs.getDouble("stddev_time"));
+                    query.setRows(rs.getLong("rows"));
+                    query.setSharedBlksHit(rs.getLong("shared_blks_hit"));
+                    query.setSharedBlksRead(rs.getLong("shared_blks_read"));
+                    query.setSharedBlksWritten(rs.getLong("shared_blks_written"));
+                    query.setTempBlksRead(rs.getLong("temp_blks_read"));
+                    query.setTempBlksWritten(rs.getLong("temp_blks_written"));
+                    query.setUser(rs.getString("user"));
+                    query.setDatabase(rs.getString("database"));
+                    return query;
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Could not query pg_stat_statements on %s: %s", instanceName, e.getMessage());
+        }
+
+        return null;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public SlowQuery getSlowQueryById(String queryId) {
+        return getSlowQueryById("default", queryId);
+    }
+
+    // ========== Activity ==========
+
+    public List<Activity> getCurrentActivity(String instanceName) {
+        List<Activity> activities = new ArrayList<>();
+
+        String sql = """
+            SELECT
                 pid,
                 usename as user,
                 datname as database,
@@ -137,10 +239,10 @@ public class PostgresService {
             LIMIT 50
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
+
             while (rs.next()) {
                 Activity activity = new Activity();
                 activity.setPid(rs.getInt("pid"));
@@ -148,13 +250,13 @@ public class PostgresService {
                 activity.setDatabase(rs.getString("database"));
                 activity.setApplicationName(rs.getString("application_name"));
                 activity.setClientAddr(rs.getString("client_addr"));
-                activity.setBackendStart(rs.getTimestamp("backend_start") != null ? 
+                activity.setBackendStart(rs.getTimestamp("backend_start") != null ?
                     rs.getTimestamp("backend_start").toLocalDateTime() : null);
-                activity.setXactStart(rs.getTimestamp("xact_start") != null ? 
+                activity.setXactStart(rs.getTimestamp("xact_start") != null ?
                     rs.getTimestamp("xact_start").toLocalDateTime() : null);
-                activity.setQueryStart(rs.getTimestamp("query_start") != null ? 
+                activity.setQueryStart(rs.getTimestamp("query_start") != null ?
                     rs.getTimestamp("query_start").toLocalDateTime() : null);
-                activity.setStateChange(rs.getTimestamp("state_change") != null ? 
+                activity.setStateChange(rs.getTimestamp("state_change") != null ?
                     rs.getTimestamp("state_change").toLocalDateTime() : null);
                 activity.setState(rs.getString("state"));
                 activity.setWaitEventType(rs.getString("wait_event_type"));
@@ -165,17 +267,78 @@ public class PostgresService {
                 activities.add(activity);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query current activity", e);
+            throw new RuntimeException("Failed to query current activity on " + instanceName, e);
         }
-        
+
         return activities;
     }
 
-    public List<TableStats> getTableStats() {
+    /** Backward-compatible overload for default instance. */
+    public List<Activity> getCurrentActivity() {
+        return getCurrentActivity("default");
+    }
+
+    // ========== Cancel/Terminate Queries ==========
+
+    /**
+     * Cancels the current query running on a backend.
+     * Uses pg_cancel_backend() which is less aggressive than terminate.
+     *
+     * @param instanceName the instance to operate on
+     * @param pid the backend process ID
+     * @return true if the signal was sent successfully
+     */
+    public boolean cancelQuery(String instanceName, int pid) {
+        String sql = "SELECT pg_cancel_backend(?)";
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, pid);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    boolean result = rs.getBoolean(1);
+                    LOG.infof("Cancel query on %s pid %d: %s", instanceName, pid, result ? "success" : "failed");
+                    return result;
+                }
+            }
+        } catch (SQLException e) {
+            LOG.errorf("Failed to cancel backend %d on %s: %s", pid, instanceName, e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Terminates a backend process.
+     * Uses pg_terminate_backend() which forcefully disconnects the client.
+     *
+     * @param instanceName the instance to operate on
+     * @param pid the backend process ID
+     * @return true if the signal was sent successfully
+     */
+    public boolean terminateQuery(String instanceName, int pid) {
+        String sql = "SELECT pg_terminate_backend(?)";
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, pid);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    boolean result = rs.getBoolean(1);
+                    LOG.infof("Terminate backend on %s pid %d: %s", instanceName, pid, result ? "success" : "failed");
+                    return result;
+                }
+            }
+        } catch (SQLException e) {
+            LOG.errorf("Failed to terminate backend %d on %s: %s", pid, instanceName, e.getMessage());
+        }
+        return false;
+    }
+
+    // ========== Table Stats ==========
+
+    public List<TableStats> getTableStats(String instanceName) {
         List<TableStats> stats = new ArrayList<>();
-        
+
         String sql = """
-            SELECT 
+            SELECT
                 schemaname,
                 relname as tablename,
                 seq_scan,
@@ -193,10 +356,10 @@ public class PostgresService {
             LIMIT 50
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
+
             while (rs.next()) {
                 TableStats stat = new TableStats();
                 stat.setSchemaName(rs.getString("schemaname"));
@@ -213,13 +376,20 @@ public class PostgresService {
                 stats.add(stat);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query table stats", e);
+            throw new RuntimeException("Failed to query table stats on " + instanceName, e);
         }
 
         return stats;
     }
 
-    public DatabaseInfo getDatabaseInfo() {
+    /** Backward-compatible overload for default instance. */
+    public List<TableStats> getTableStats() {
+        return getTableStats("default");
+    }
+
+    // ========== Database Info ==========
+
+    public DatabaseInfo getDatabaseInfo(String instanceName) {
         DatabaseInfo info = new DatabaseInfo();
 
         String sql = """
@@ -231,7 +401,7 @@ public class PostgresService {
                 (SELECT pg_postmaster_start_time()::text) as server_start_time
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -243,7 +413,7 @@ public class PostgresService {
                 info.setServerStartTime(rs.getString("server_start_time"));
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query database info", e);
+            throw new RuntimeException("Failed to query database info on " + instanceName, e);
         }
 
         // Check for pg_stat_statements extension
@@ -251,7 +421,7 @@ public class PostgresService {
             SELECT extversion FROM pg_extension WHERE extname = 'pg_stat_statements'
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(extSql)) {
 
@@ -268,7 +438,14 @@ public class PostgresService {
         return info;
     }
 
-    public OverviewStats getOverviewStats() {
+    /** Backward-compatible overload for default instance. */
+    public DatabaseInfo getDatabaseInfo() {
+        return getDatabaseInfo("default");
+    }
+
+    // ========== Overview Stats ==========
+
+    public OverviewStats getOverviewStats(String instanceName) {
         OverviewStats stats = new OverviewStats();
 
         // Get connection counts and max connections
@@ -280,7 +457,7 @@ public class PostgresService {
                 (SELECT count(*) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0) as blocked_queries
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(connectionsSql)) {
 
@@ -291,7 +468,7 @@ public class PostgresService {
                 stats.setBlockedQueries(rs.getInt("blocked_queries"));
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query connection stats", e);
+            throw new RuntimeException("Failed to query connection stats on " + instanceName, e);
         }
 
         // Get longest running query duration
@@ -307,7 +484,7 @@ public class PostgresService {
                 ) as longest_duration
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(longestQuerySql)) {
 
@@ -328,7 +505,7 @@ public class PostgresService {
             WHERE datname = current_database()
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(cacheSql)) {
 
@@ -344,7 +521,7 @@ public class PostgresService {
             SELECT pg_size_pretty(pg_database_size(current_database())) as db_size
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sizeSql)) {
 
@@ -368,7 +545,7 @@ public class PostgresService {
             """;
 
         List<OverviewStats.TableSize> tables = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(tablesSql)) {
 
@@ -399,7 +576,7 @@ public class PostgresService {
             """;
 
         List<OverviewStats.IndexSize> indexes = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(indexesSql)) {
 
@@ -420,7 +597,14 @@ public class PostgresService {
         return stats;
     }
 
-    public List<BlockingTree> getBlockingTree() {
+    /** Backward-compatible overload for default instance. */
+    public OverviewStats getOverviewStats() {
+        return getOverviewStats("default");
+    }
+
+    // ========== Blocking Tree ==========
+
+    public List<BlockingTree> getBlockingTree(String instanceName) {
         List<BlockingTree> tree = new ArrayList<>();
 
         String sql = """
@@ -453,7 +637,7 @@ public class PostgresService {
             ORDER BY blocked.query_start
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -472,14 +656,20 @@ public class PostgresService {
                 tree.add(item);
             }
         } catch (SQLException e) {
-            // Return empty list on error
-            System.err.println("Warning: Could not query blocking tree: " + e.getMessage());
+            LOG.warnf("Could not query blocking tree on %s: %s", instanceName, e.getMessage());
         }
 
         return tree;
     }
 
-    public List<LockInfo> getLockInfo() {
+    /** Backward-compatible overload for default instance. */
+    public List<BlockingTree> getBlockingTree() {
+        return getBlockingTree("default");
+    }
+
+    // ========== Lock Info ==========
+
+    public List<LockInfo> getLockInfo(String instanceName) {
         List<LockInfo> locks = new ArrayList<>();
 
         String sql = """
@@ -504,7 +694,7 @@ public class PostgresService {
             LIMIT 100
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -524,70 +714,20 @@ public class PostgresService {
                 locks.add(lock);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query lock info", e);
+            throw new RuntimeException("Failed to query lock info on " + instanceName, e);
         }
 
         return locks;
     }
 
-    public SlowQuery getSlowQueryById(String queryId) {
-        String sql = """
-            SELECT
-                md5(query) as queryid,
-                query,
-                calls as total_calls,
-                total_exec_time as total_time,
-                mean_exec_time as mean_time,
-                min_exec_time as min_time,
-                max_exec_time as max_time,
-                stddev_exec_time as stddev_time,
-                rows,
-                shared_blks_hit,
-                shared_blks_read,
-                shared_blks_written,
-                temp_blks_read,
-                temp_blks_written,
-                'unknown' as user,
-                'current' as database
-            FROM pg_stat_statements
-            WHERE md5(query) = ?
-            LIMIT 1
-            """;
-
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, queryId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    SlowQuery query = new SlowQuery();
-                    query.setQueryId(rs.getString("queryid"));
-                    query.setQuery(rs.getString("query"));
-                    query.setTotalCalls(rs.getLong("total_calls"));
-                    query.setTotalTime(rs.getDouble("total_time"));
-                    query.setMeanTime(rs.getDouble("mean_time"));
-                    query.setMinTime(rs.getDouble("min_time"));
-                    query.setMaxTime(rs.getDouble("max_time"));
-                    query.setStddevTime(rs.getDouble("stddev_time"));
-                    query.setRows(rs.getLong("rows"));
-                    query.setSharedBlksHit(rs.getLong("shared_blks_hit"));
-                    query.setSharedBlksRead(rs.getLong("shared_blks_read"));
-                    query.setSharedBlksWritten(rs.getLong("shared_blks_written"));
-                    query.setTempBlksRead(rs.getLong("temp_blks_read"));
-                    query.setTempBlksWritten(rs.getLong("temp_blks_written"));
-                    query.setUser(rs.getString("user"));
-                    query.setDatabase(rs.getString("database"));
-                    return query;
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Warning: Could not query pg_stat_statements: " + e.getMessage());
-        }
-
-        return null;
+    /** Backward-compatible overload for default instance. */
+    public List<LockInfo> getLockInfo() {
+        return getLockInfo("default");
     }
 
-    public List<String> getDatabaseList() {
+    // ========== Database List ==========
+
+    public List<String> getDatabaseList(String instanceName) {
         List<String> databases = new ArrayList<>();
 
         String sql = """
@@ -597,7 +737,7 @@ public class PostgresService {
             ORDER BY datname
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -608,13 +748,20 @@ public class PostgresService {
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query database list", e);
+            throw new RuntimeException("Failed to query database list on " + instanceName, e);
         }
 
         return databases;
     }
 
-    public List<DatabaseMetrics> getAllDatabaseMetrics() {
+    /** Backward-compatible overload for default instance. */
+    public List<String> getDatabaseList() {
+        return getDatabaseList("default");
+    }
+
+    // ========== Database Metrics ==========
+
+    public List<DatabaseMetrics> getAllDatabaseMetrics(String instanceName) {
         List<DatabaseMetrics> metrics = new ArrayList<>();
 
         String sql = """
@@ -654,7 +801,7 @@ public class PostgresService {
             ORDER BY d.datname
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
@@ -665,13 +812,18 @@ public class PostgresService {
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query database metrics", e);
+            throw new RuntimeException("Failed to query database metrics on " + instanceName, e);
         }
 
         return metrics;
     }
 
-    public DatabaseMetrics getDatabaseMetrics(String databaseName) {
+    /** Backward-compatible overload for default instance. */
+    public List<DatabaseMetrics> getAllDatabaseMetrics() {
+        return getAllDatabaseMetrics("default");
+    }
+
+    public DatabaseMetrics getDatabaseMetrics(String instanceName, String databaseName) {
         String sql = """
             SELECT
                 d.datid,
@@ -707,7 +859,7 @@ public class PostgresService {
             WHERE d.datname = ?
             """;
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = getDataSource(instanceName).getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, databaseName);
@@ -717,10 +869,15 @@ public class PostgresService {
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to query database metrics for " + databaseName, e);
+            throw new RuntimeException("Failed to query database metrics for " + databaseName + " on " + instanceName, e);
         }
 
         return null;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public DatabaseMetrics getDatabaseMetrics(String databaseName) {
+        return getDatabaseMetrics("default", databaseName);
     }
 
     private DatabaseMetrics mapDatabaseMetrics(ResultSet rs) throws SQLException {

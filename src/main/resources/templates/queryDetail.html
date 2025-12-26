@@ -5,8 +5,8 @@
     <div class="col">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="/slow-queries">Slow Queries</a></li>
+                <li class="breadcrumb-item"><a href="/?instance={currentInstance ?: 'default'}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/slow-queries?instance={currentInstance ?: 'default'}">Slow Queries</a></li>
                 <li class="breadcrumb-item active" aria-current="page">Query Detail</li>
             </ol>
         </nav>
@@ -19,7 +19,7 @@
     <h4 class="alert-heading">Query Not Found</h4>
     <p class="mb-0">The requested query could not be found in pg_stat_statements. It may have been reset or the query ID is invalid.</p>
     <hr>
-    <a href="/slow-queries" class="btn btn-primary">Back to Slow Queries</a>
+    <a href="/slow-queries?instance={currentInstance ?: 'default'}" class="btn btn-primary">Back to Slow Queries</a>
 </div>
 {#else}
 

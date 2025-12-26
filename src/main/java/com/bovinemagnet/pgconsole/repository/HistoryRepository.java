@@ -15,6 +15,7 @@ import java.util.List;
 
 /**
  * Repository for storing and retrieving historical metrics.
+ * Supports multi-instance via instance_id column.
  *
  * @author Paul Snow
  * @version 0.0.0
@@ -26,119 +27,137 @@ public class HistoryRepository {
     DataSource dataSource;
 
     /**
-     * Saves a system metrics snapshot.
+     * Saves a system metrics snapshot for an instance.
      */
-    public void saveSystemMetrics(SystemMetricsHistory metrics) {
+    public void saveSystemMetrics(String instanceId, SystemMetricsHistory metrics) {
         String sql = """
             INSERT INTO pgconsole.system_metrics_history (
-                sampled_at, total_connections, max_connections, active_queries,
+                instance_id, sampled_at, total_connections, max_connections, active_queries,
                 idle_connections, idle_in_transaction, blocked_queries,
                 longest_query_seconds, longest_transaction_seconds,
                 cache_hit_ratio, total_database_size_bytes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setTimestamp(1, Timestamp.from(Instant.now()));
-            stmt.setInt(2, metrics.getTotalConnections());
-            stmt.setInt(3, metrics.getMaxConnections());
-            stmt.setInt(4, metrics.getActiveQueries());
-            stmt.setInt(5, metrics.getIdleConnections());
-            stmt.setInt(6, metrics.getIdleInTransaction());
-            stmt.setInt(7, metrics.getBlockedQueries());
-            stmt.setObject(8, metrics.getLongestQuerySeconds());
-            stmt.setObject(9, metrics.getLongestTransactionSeconds());
-            stmt.setObject(10, metrics.getCacheHitRatio());
-            stmt.setObject(11, metrics.getTotalDatabaseSizeBytes());
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setInt(3, metrics.getTotalConnections());
+            stmt.setInt(4, metrics.getMaxConnections());
+            stmt.setInt(5, metrics.getActiveQueries());
+            stmt.setInt(6, metrics.getIdleConnections());
+            stmt.setInt(7, metrics.getIdleInTransaction());
+            stmt.setInt(8, metrics.getBlockedQueries());
+            stmt.setObject(9, metrics.getLongestQuerySeconds());
+            stmt.setObject(10, metrics.getLongestTransactionSeconds());
+            stmt.setObject(11, metrics.getCacheHitRatio());
+            stmt.setObject(12, metrics.getTotalDatabaseSizeBytes());
 
             stmt.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to save system metrics", e);
+            throw new RuntimeException("Failed to save system metrics for " + instanceId, e);
         }
     }
 
+    /** Backward-compatible overload for default instance. */
+    public void saveSystemMetrics(SystemMetricsHistory metrics) {
+        saveSystemMetrics("default", metrics);
+    }
+
     /**
-     * Saves a query metrics snapshot.
+     * Saves a query metrics snapshot for an instance.
      */
-    public void saveQueryMetrics(QueryMetricsHistory metrics) {
+    public void saveQueryMetrics(String instanceId, QueryMetricsHistory metrics) {
         String sql = """
             INSERT INTO pgconsole.query_metrics_history (
-                sampled_at, query_id, query_text, total_calls, total_time_ms,
+                instance_id, sampled_at, query_id, query_text, total_calls, total_time_ms,
                 total_rows, mean_time_ms, min_time_ms, max_time_ms, stddev_time_ms,
                 shared_blks_hit, shared_blks_read, temp_blks_written
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setTimestamp(1, Timestamp.from(Instant.now()));
-            stmt.setString(2, metrics.getQueryId());
-            stmt.setString(3, metrics.getQueryText());
-            stmt.setLong(4, metrics.getTotalCalls());
-            stmt.setDouble(5, metrics.getTotalTimeMs());
-            stmt.setLong(6, metrics.getTotalRows());
-            stmt.setDouble(7, metrics.getMeanTimeMs());
-            stmt.setObject(8, metrics.getMinTimeMs());
-            stmt.setObject(9, metrics.getMaxTimeMs());
-            stmt.setObject(10, metrics.getStddevTimeMs());
-            stmt.setObject(11, metrics.getSharedBlksHit());
-            stmt.setObject(12, metrics.getSharedBlksRead());
-            stmt.setObject(13, metrics.getTempBlksWritten());
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setString(3, metrics.getQueryId());
+            stmt.setString(4, metrics.getQueryText());
+            stmt.setLong(5, metrics.getTotalCalls());
+            stmt.setDouble(6, metrics.getTotalTimeMs());
+            stmt.setLong(7, metrics.getTotalRows());
+            stmt.setDouble(8, metrics.getMeanTimeMs());
+            stmt.setObject(9, metrics.getMinTimeMs());
+            stmt.setObject(10, metrics.getMaxTimeMs());
+            stmt.setObject(11, metrics.getStddevTimeMs());
+            stmt.setObject(12, metrics.getSharedBlksHit());
+            stmt.setObject(13, metrics.getSharedBlksRead());
+            stmt.setObject(14, metrics.getTempBlksWritten());
 
             stmt.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to save query metrics", e);
+            throw new RuntimeException("Failed to save query metrics for " + instanceId, e);
         }
     }
 
+    /** Backward-compatible overload for default instance. */
+    public void saveQueryMetrics(QueryMetricsHistory metrics) {
+        saveQueryMetrics("default", metrics);
+    }
+
     /**
-     * Saves a database metrics snapshot.
+     * Saves a database metrics snapshot for an instance.
      */
-    public void saveDatabaseMetrics(DatabaseMetricsHistory metrics) {
+    public void saveDatabaseMetrics(String instanceId, DatabaseMetricsHistory metrics) {
         String sql = """
             INSERT INTO pgconsole.database_metrics_history (
-                sampled_at, database_name, num_backends, xact_commit, xact_rollback,
+                instance_id, sampled_at, database_name, num_backends, xact_commit, xact_rollback,
                 blks_hit, blks_read, cache_hit_ratio, tup_returned, tup_fetched,
                 tup_inserted, tup_updated, tup_deleted, deadlocks, conflicts,
                 temp_files, temp_bytes, database_size_bytes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setTimestamp(1, Timestamp.from(Instant.now()));
-            stmt.setString(2, metrics.getDatabaseName());
-            stmt.setInt(3, metrics.getNumBackends());
-            stmt.setLong(4, metrics.getXactCommit());
-            stmt.setLong(5, metrics.getXactRollback());
-            stmt.setLong(6, metrics.getBlksHit());
-            stmt.setLong(7, metrics.getBlksRead());
-            stmt.setObject(8, metrics.getCacheHitRatio());
-            stmt.setObject(9, metrics.getTupReturned());
-            stmt.setObject(10, metrics.getTupFetched());
-            stmt.setObject(11, metrics.getTupInserted());
-            stmt.setObject(12, metrics.getTupUpdated());
-            stmt.setObject(13, metrics.getTupDeleted());
-            stmt.setObject(14, metrics.getDeadlocks());
-            stmt.setObject(15, metrics.getConflicts());
-            stmt.setObject(16, metrics.getTempFiles());
-            stmt.setObject(17, metrics.getTempBytes());
-            stmt.setObject(18, metrics.getDatabaseSizeBytes());
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setString(3, metrics.getDatabaseName());
+            stmt.setInt(4, metrics.getNumBackends());
+            stmt.setLong(5, metrics.getXactCommit());
+            stmt.setLong(6, metrics.getXactRollback());
+            stmt.setLong(7, metrics.getBlksHit());
+            stmt.setLong(8, metrics.getBlksRead());
+            stmt.setObject(9, metrics.getCacheHitRatio());
+            stmt.setObject(10, metrics.getTupReturned());
+            stmt.setObject(11, metrics.getTupFetched());
+            stmt.setObject(12, metrics.getTupInserted());
+            stmt.setObject(13, metrics.getTupUpdated());
+            stmt.setObject(14, metrics.getTupDeleted());
+            stmt.setObject(15, metrics.getDeadlocks());
+            stmt.setObject(16, metrics.getConflicts());
+            stmt.setObject(17, metrics.getTempFiles());
+            stmt.setObject(18, metrics.getTempBytes());
+            stmt.setObject(19, metrics.getDatabaseSizeBytes());
 
             stmt.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to save database metrics", e);
+            throw new RuntimeException("Failed to save database metrics for " + instanceId, e);
         }
     }
 
+    /** Backward-compatible overload for default instance. */
+    public void saveDatabaseMetrics(DatabaseMetricsHistory metrics) {
+        saveDatabaseMetrics("default", metrics);
+    }
+
     /**
-     * Gets system metrics history for the last N hours.
+     * Gets system metrics history for an instance for the last N hours.
      */
-    public List<SystemMetricsHistory> getSystemMetricsHistory(int hours) {
+    public List<SystemMetricsHistory> getSystemMetricsHistory(String instanceId, int hours) {
         List<SystemMetricsHistory> history = new ArrayList<>();
         Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
 
@@ -148,14 +167,15 @@ public class HistoryRepository {
                    longest_query_seconds, longest_transaction_seconds,
                    cache_hit_ratio, total_database_size_bytes
             FROM pgconsole.system_metrics_history
-            WHERE sampled_at >= ?
+            WHERE instance_id = ? AND sampled_at >= ?
             ORDER BY sampled_at ASC
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setTimestamp(1, Timestamp.from(since));
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(since));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -168,24 +188,29 @@ public class HistoryRepository {
                     m.setIdleConnections(rs.getInt("idle_connections"));
                     m.setIdleInTransaction(rs.getInt("idle_in_transaction"));
                     m.setBlockedQueries(rs.getInt("blocked_queries"));
-                    m.setLongestQuerySeconds(rs.getObject("longest_query_seconds", Double.class));
-                    m.setLongestTransactionSeconds(rs.getObject("longest_transaction_seconds", Double.class));
-                    m.setCacheHitRatio(rs.getObject("cache_hit_ratio", Double.class));
-                    m.setTotalDatabaseSizeBytes(rs.getObject("total_database_size_bytes", Long.class));
+                    m.setLongestQuerySeconds(getDoubleOrNull(rs, "longest_query_seconds"));
+                    m.setLongestTransactionSeconds(getDoubleOrNull(rs, "longest_transaction_seconds"));
+                    m.setCacheHitRatio(getDoubleOrNull(rs, "cache_hit_ratio"));
+                    m.setTotalDatabaseSizeBytes(getLongOrNull(rs, "total_database_size_bytes"));
                     history.add(m);
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get system metrics history", e);
+            throw new RuntimeException("Failed to get system metrics history for " + instanceId, e);
         }
 
         return history;
     }
 
+    /** Backward-compatible overload for default instance. */
+    public List<SystemMetricsHistory> getSystemMetricsHistory(int hours) {
+        return getSystemMetricsHistory("default", hours);
+    }
+
     /**
-     * Gets query metrics history for a specific query.
+     * Gets query metrics history for a specific query on an instance.
      */
-    public List<QueryMetricsHistory> getQueryMetricsHistory(String queryId, int hours) {
+    public List<QueryMetricsHistory> getQueryMetricsHistory(String instanceId, String queryId, int hours) {
         List<QueryMetricsHistory> history = new ArrayList<>();
         Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
 
@@ -194,15 +219,16 @@ public class HistoryRepository {
                    total_rows, mean_time_ms, min_time_ms, max_time_ms, stddev_time_ms,
                    shared_blks_hit, shared_blks_read, temp_blks_written
             FROM pgconsole.query_metrics_history
-            WHERE query_id = ? AND sampled_at >= ?
+            WHERE instance_id = ? AND query_id = ? AND sampled_at >= ?
             ORDER BY sampled_at ASC
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, queryId);
-            stmt.setTimestamp(2, Timestamp.from(since));
+            stmt.setString(1, instanceId);
+            stmt.setString(2, queryId);
+            stmt.setTimestamp(3, Timestamp.from(since));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -215,26 +241,31 @@ public class HistoryRepository {
                     m.setTotalTimeMs(rs.getDouble("total_time_ms"));
                     m.setTotalRows(rs.getLong("total_rows"));
                     m.setMeanTimeMs(rs.getDouble("mean_time_ms"));
-                    m.setMinTimeMs(rs.getObject("min_time_ms", Double.class));
-                    m.setMaxTimeMs(rs.getObject("max_time_ms", Double.class));
-                    m.setStddevTimeMs(rs.getObject("stddev_time_ms", Double.class));
-                    m.setSharedBlksHit(rs.getObject("shared_blks_hit", Long.class));
-                    m.setSharedBlksRead(rs.getObject("shared_blks_read", Long.class));
-                    m.setTempBlksWritten(rs.getObject("temp_blks_written", Long.class));
+                    m.setMinTimeMs(getDoubleOrNull(rs, "min_time_ms"));
+                    m.setMaxTimeMs(getDoubleOrNull(rs, "max_time_ms"));
+                    m.setStddevTimeMs(getDoubleOrNull(rs, "stddev_time_ms"));
+                    m.setSharedBlksHit(getLongOrNull(rs, "shared_blks_hit"));
+                    m.setSharedBlksRead(getLongOrNull(rs, "shared_blks_read"));
+                    m.setTempBlksWritten(getLongOrNull(rs, "temp_blks_written"));
                     history.add(m);
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get query metrics history", e);
+            throw new RuntimeException("Failed to get query metrics history for " + instanceId, e);
         }
 
         return history;
     }
 
+    /** Backward-compatible overload for default instance. */
+    public List<QueryMetricsHistory> getQueryMetricsHistory(String queryId, int hours) {
+        return getQueryMetricsHistory("default", queryId, hours);
+    }
+
     /**
-     * Gets database metrics history.
+     * Gets database metrics history for an instance.
      */
-    public List<DatabaseMetricsHistory> getDatabaseMetricsHistory(String databaseName, int hours) {
+    public List<DatabaseMetricsHistory> getDatabaseMetricsHistory(String instanceId, String databaseName, int hours) {
         List<DatabaseMetricsHistory> history = new ArrayList<>();
         Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
 
@@ -244,15 +275,16 @@ public class HistoryRepository {
                    tup_inserted, tup_updated, tup_deleted, deadlocks, conflicts,
                    temp_files, temp_bytes, database_size_bytes
             FROM pgconsole.database_metrics_history
-            WHERE database_name = ? AND sampled_at >= ?
+            WHERE instance_id = ? AND database_name = ? AND sampled_at >= ?
             ORDER BY sampled_at ASC
             """;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, databaseName);
-            stmt.setTimestamp(2, Timestamp.from(since));
+            stmt.setString(1, instanceId);
+            stmt.setString(2, databaseName);
+            stmt.setTimestamp(3, Timestamp.from(since));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -265,25 +297,30 @@ public class HistoryRepository {
                     m.setXactRollback(rs.getLong("xact_rollback"));
                     m.setBlksHit(rs.getLong("blks_hit"));
                     m.setBlksRead(rs.getLong("blks_read"));
-                    m.setCacheHitRatio(rs.getObject("cache_hit_ratio", Double.class));
-                    m.setTupReturned(rs.getObject("tup_returned", Long.class));
-                    m.setTupFetched(rs.getObject("tup_fetched", Long.class));
-                    m.setTupInserted(rs.getObject("tup_inserted", Long.class));
-                    m.setTupUpdated(rs.getObject("tup_updated", Long.class));
-                    m.setTupDeleted(rs.getObject("tup_deleted", Long.class));
-                    m.setDeadlocks(rs.getObject("deadlocks", Long.class));
-                    m.setConflicts(rs.getObject("conflicts", Long.class));
-                    m.setTempFiles(rs.getObject("temp_files", Long.class));
-                    m.setTempBytes(rs.getObject("temp_bytes", Long.class));
-                    m.setDatabaseSizeBytes(rs.getObject("database_size_bytes", Long.class));
+                    m.setCacheHitRatio(getDoubleOrNull(rs, "cache_hit_ratio"));
+                    m.setTupReturned(getLongOrNull(rs, "tup_returned"));
+                    m.setTupFetched(getLongOrNull(rs, "tup_fetched"));
+                    m.setTupInserted(getLongOrNull(rs, "tup_inserted"));
+                    m.setTupUpdated(getLongOrNull(rs, "tup_updated"));
+                    m.setTupDeleted(getLongOrNull(rs, "tup_deleted"));
+                    m.setDeadlocks(getLongOrNull(rs, "deadlocks"));
+                    m.setConflicts(getLongOrNull(rs, "conflicts"));
+                    m.setTempFiles(getLongOrNull(rs, "temp_files"));
+                    m.setTempBytes(getLongOrNull(rs, "temp_bytes"));
+                    m.setDatabaseSizeBytes(getLongOrNull(rs, "database_size_bytes"));
                     history.add(m);
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get database metrics history", e);
+            throw new RuntimeException("Failed to get database metrics history for " + instanceId, e);
         }
 
         return history;
+    }
+
+    /** Backward-compatible overload for default instance. */
+    public List<DatabaseMetricsHistory> getDatabaseMetricsHistory(String databaseName, int hours) {
+        return getDatabaseMetricsHistory("default", databaseName, hours);
     }
 
     /**
@@ -312,5 +349,15 @@ public class HistoryRepository {
         }
 
         return totalDeleted;
+    }
+
+    private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
+        double value = rs.getDouble(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private Long getLongOrNull(ResultSet rs, String column) throws SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
     }
 }

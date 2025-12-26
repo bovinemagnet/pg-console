@@ -1,12 +1,18 @@
 {#include base}
 {#title}Slow Queries - PostgreSQL Console{/title}
 
-<div id="refreshable-content" hx-get="/slow-queries?sortBy={sortBy}&order={order}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">
         <h1>Slow Queries</h1>
         <p class="text-muted">Data from pg_stat_statements extension</p>
+    </div>
+    <div class="col-auto">
+        <a href="/slow-queries/export?instance={currentInstance ?: 'default'}&sortBy={sortBy}&order={order}"
+           class="btn btn-outline-secondary">
+            📥 Export CSV
+        </a>
     </div>
 </div>
 
@@ -23,7 +29,7 @@
                 <thead>
                     <tr>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=query&order={#if sortBy == 'query' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=query&order={#if sortBy == 'query' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Query
@@ -32,7 +38,7 @@
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=calls&order={#if sortBy == 'calls' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=calls&order={#if sortBy == 'calls' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Calls
@@ -41,7 +47,7 @@
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=totalTime&order={#if sortBy == 'totalTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=totalTime&order={#if sortBy == 'totalTime' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Total Time
@@ -50,7 +56,7 @@
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=meanTime&order={#if sortBy == 'meanTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=meanTime&order={#if sortBy == 'meanTime' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Mean Time
@@ -59,7 +65,7 @@
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=maxTime&order={#if sortBy == 'maxTime' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=maxTime&order={#if sortBy == 'maxTime' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Max Time
@@ -68,7 +74,7 @@
                             {/if}
                         </th>
                         <th class="sortable"
-                            hx-get="/slow-queries?sortBy=rows&order={#if sortBy == 'rows' && order == 'asc'}desc{#else}asc{/if}"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=rows&order={#if sortBy == 'rows' && order == 'asc'}desc{#else}asc{/if}"
                             hx-target="body"
                             hx-swap="innerHTML">
                             Rows
@@ -92,7 +98,7 @@
                         <td>{query.maxTimeFormatted}</td>
                         <td>{query.rows}</td>
                         <td>
-                            <a href="/slow-queries/{query.queryId}" class="btn btn-sm btn-outline-primary">Details</a>
+                            <a href="/slow-queries/{query.queryId}?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary">Details</a>
                         </td>
                     </tr>
                     {/for}

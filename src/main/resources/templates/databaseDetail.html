@@ -1,14 +1,14 @@
 {#include base}
 {#title}{db.datname} - Database Metrics - PostgreSQL Console{/title}
 
-<div id="refreshable-content" hx-get="/databases/{db.datname}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/databases/{db.datname}?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="/databases">Databases</a></li>
+                <li class="breadcrumb-item"><a href="/?instance={currentInstance ?: 'default'}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/databases?instance={currentInstance ?: 'default'}">Databases</a></li>
                 <li class="breadcrumb-item active" aria-current="page">{db.datname}</li>
             </ol>
         </nav>

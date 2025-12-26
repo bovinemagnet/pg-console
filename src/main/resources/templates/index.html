@@ -1,7 +1,7 @@
 {#include base}
 {#title}PostgreSQL Insight Dashboard{/title}
 
-<div id="refreshable-content" hx-get="/" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+<div id="refreshable-content" hx-get="/?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
 
 <div class="row mb-4">
     <div class="col">
@@ -33,7 +33,7 @@
                 <h6 class="card-subtitle mb-2 text-muted">Active Queries</h6>
                 <h2 class="mb-0 {#if stats.activeQueries > 10}text-warning{/if}">{stats.activeQueries}</h2>
                 <div class="mt-2" title="Last 1 hour">{activeQueriesSparkline.raw}</div>
-                <a href="/activity" class="btn btn-sm btn-outline-primary mt-2">View Activity</a>
+                <a href="/activity?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary mt-2">View Activity</a>
             </div>
         </div>
     </div>
@@ -44,7 +44,7 @@
                 <h2 class="mb-0 {#if stats.blockedQueries > 0}text-danger{/if}">{stats.blockedQueries}</h2>
                 <div class="mt-2" title="Last 1 hour">{blockedQueriesSparkline.raw}</div>
                 {#if stats.blockedQueries > 0}
-                <a href="/locks" class="btn btn-sm btn-outline-danger mt-2">View Locks</a>
+                <a href="/locks?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-danger mt-2">View Locks</a>
                 {#else}
                 <small class="text-success">No blocking</small>
                 {/if}
@@ -86,8 +86,8 @@
             <div class="card-body text-center">
                 <h6 class="card-subtitle mb-2 text-muted">Quick Links</h6>
                 <div class="btn-group-vertical w-100" role="group">
-                    <a href="/slow-queries" class="btn btn-outline-primary btn-sm">Slow Queries</a>
-                    <a href="/tables" class="btn btn-outline-primary btn-sm">Table Stats</a>
+                    <a href="/slow-queries?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm">Slow Queries</a>
+                    <a href="/tables?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm">Table Stats</a>
                 </div>
             </div>
         </div>
@@ -124,7 +124,7 @@
                 {/if}
             </div>
             <div class="card-footer">
-                <a href="/tables" class="btn btn-sm btn-outline-secondary">View All Tables</a>
+                <a href="/tables?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-secondary">View All Tables</a>
             </div>
         </div>
     </div>

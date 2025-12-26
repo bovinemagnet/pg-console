@@ -31,12 +31,12 @@ Product Specification: Postgres Insight Dashboard
 - [x] Trend panels with sparklines (Overview dashboard and Query Detail page)
 - [x] Retention cleanup job (daily at 3 AM, configurable retention days)
 
-### Phase 3 — Polishing + Safety + Multi-Instance ❌ NOT IMPLEMENTED
-- [ ] Multi-instance selector
-- [ ] Authentication integration
-- [ ] Authorization for dangerous actions
-- [ ] Cancel/Terminate query buttons
-- [ ] Export: download CSV
+### Phase 3 — Polishing + Safety + Multi-Instance ✅ COMPLETE
+- [x] Multi-instance selector (full implementation with configurable named datasources)
+- [x] Authentication integration (Quarkus Elytron Security with HTTP Basic auth, configurable enable/disable)
+- [x] Authorization for dangerous actions (admin role required for cancel/terminate)
+- [x] Cancel/Terminate query buttons (with confirmation modals)
+- [x] Export: download CSV (slow queries export with timestamp)
 
 ---
 
