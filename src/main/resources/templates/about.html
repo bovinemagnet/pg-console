@@ -1,0 +1,134 @@
+{#include base}
+{#title}About - PostgreSQL Console{/title}
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>About</h1>
+        <p class="text-muted">PostgreSQL Console - Database Insight Dashboard</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Application</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 40%">Name</th>
+                            <td>{appName}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Version</th>
+                            <td>{appVersion}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">PostgreSQL Server</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 40%">Version</th>
+                            <td><code>{dbInfo.postgresVersion}</code></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Database</th>
+                            <td>{dbInfo.currentDatabase}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">User</th>
+                            <td>{dbInfo.currentUser}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Encoding</th>
+                            <td>{dbInfo.serverEncoding}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Server Start</th>
+                            <td>{dbInfo.serverStartTime}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Extensions</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 40%">pg_stat_statements</th>
+                            <td>
+                                {#if dbInfo.pgStatStatementsEnabled}
+                                <span class="badge bg-success">Enabled</span>
+                                <small class="text-muted ms-2">v{dbInfo.pgStatStatementsVersion}</small>
+                                {#else}
+                                <span class="badge bg-warning text-dark">Not Installed</span>
+                                <small class="text-muted ms-2">Slow query monitoring unavailable</small>
+                                {/if}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Technology Stack</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><strong>Backend:</strong> Quarkus 3.16.3 + Java 21</li>
+                    <li><strong>Templating:</strong> Qute</li>
+                    <li><strong>Frontend:</strong> htmx + Bootstrap 5</li>
+                    <li><strong>Database:</strong> PostgreSQL JDBC</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{#if !dbInfo.pgStatStatementsEnabled}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning">
+            <h5 class="alert-heading">pg_stat_statements Not Enabled</h5>
+            <p class="mb-2">To enable slow query monitoring, follow these steps:</p>
+            <ol class="mb-0">
+                <li>Add to <code>postgresql.conf</code>:
+                    <pre class="mt-1 mb-1"><code>shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = all</code></pre>
+                </li>
+                <li>Restart PostgreSQL</li>
+                <li>Create the extension:
+                    <pre class="mt-1 mb-0"><code>CREATE EXTENSION pg_stat_statements;</code></pre>
+                </li>
+            </ol>
+        </div>
+    </div>
+</div>
+{/if}
+
+{/include}

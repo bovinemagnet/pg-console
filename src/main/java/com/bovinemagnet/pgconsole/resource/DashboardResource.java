@@ -1,6 +1,11 @@
 package com.bovinemagnet.pgconsole.resource;
 
 import com.bovinemagnet.pgconsole.model.Activity;
+import com.bovinemagnet.pgconsole.model.BlockingTree;
+import com.bovinemagnet.pgconsole.model.DatabaseInfo;
+import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
+import com.bovinemagnet.pgconsole.model.LockInfo;
+import com.bovinemagnet.pgconsole.model.OverviewStats;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import com.bovinemagnet.pgconsole.model.TableStats;
 import com.bovinemagnet.pgconsole.service.PostgresService;
@@ -10,15 +15,23 @@ import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.Arrays;
 import java.util.List;
 
 @Path("/")
 public class DashboardResource {
+
+    @ConfigProperty(name = "quarkus.application.name", defaultValue = "pg-console")
+    String appName;
+
+    @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0")
+    String appVersion;
 
     @Inject
     Template index;
@@ -33,6 +46,21 @@ public class DashboardResource {
     Template tables;
 
     @Inject
+    Template about;
+
+    @Inject
+    Template locks;
+
+    @Inject
+    Template queryDetail;
+
+    @Inject
+    Template databases;
+
+    @Inject
+    Template databaseDetail;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -41,7 +69,19 @@ public class DashboardResource {
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index() {
-        return index.instance();
+        OverviewStats stats = postgresService.getOverviewStats();
+
+        // Generate sparklines from history (last 1 hour)
+        String connectionsSparkline = sparklineService.getConnectionsSparkline(1, 120, 30);
+        String activeQueriesSparkline = sparklineService.getActiveQueriesSparkline(1, 120, 30);
+        String blockedQueriesSparkline = sparklineService.getBlockedQueriesSparkline(1, 120, 30);
+        String cacheHitSparkline = sparklineService.getCacheHitRatioSparkline(1, 120, 30);
+
+        return index.data("stats", stats)
+                    .data("connectionsSparkline", connectionsSparkline)
+                    .data("activeQueriesSparkline", activeQueriesSparkline)
+                    .data("blockedQueriesSparkline", blockedQueriesSparkline)
+                    .data("cacheHitSparkline", cacheHitSparkline);
     }
 
     @GET
@@ -91,5 +131,56 @@ public class DashboardResource {
             .toList();
         
         return sparklineService.generateSparkline(valueList, 100, 30);
+    }
+
+    @GET
+    @Path("/about")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance about() {
+        DatabaseInfo dbInfo = postgresService.getDatabaseInfo();
+        return about.data("dbInfo", dbInfo)
+                    .data("appName", appName)
+                    .data("appVersion", appVersion);
+    }
+
+    @GET
+    @Path("/locks")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance locks() {
+        List<BlockingTree> blockingTree = postgresService.getBlockingTree();
+        List<LockInfo> lockInfos = postgresService.getLockInfo();
+        return locks.data("blockingTree", blockingTree)
+                    .data("locks", lockInfos);
+    }
+
+    @GET
+    @Path("/slow-queries/{queryId}")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance queryDetail(@PathParam("queryId") String queryId) {
+        SlowQuery query = postgresService.getSlowQueryById(queryId);
+
+        // Generate sparklines from query history (last 24 hours)
+        String meanTimeSparkline = sparklineService.getQueryMeanTimeSparkline(queryId, 24, 200, 40);
+        String callsSparkline = sparklineService.getQueryCallsSparkline(queryId, 24, 200, 40);
+
+        return queryDetail.data("query", query)
+                          .data("meanTimeSparkline", meanTimeSparkline)
+                          .data("callsSparkline", callsSparkline);
+    }
+
+    @GET
+    @Path("/databases")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance databases() {
+        List<DatabaseMetrics> dbMetrics = postgresService.getAllDatabaseMetrics();
+        return databases.data("databases", dbMetrics);
+    }
+
+    @GET
+    @Path("/databases/{dbName}")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance databaseDetail(@PathParam("dbName") String dbName) {
+        DatabaseMetrics db = postgresService.getDatabaseMetrics(dbName);
+        return databaseDetail.data("db", db);
     }
 }

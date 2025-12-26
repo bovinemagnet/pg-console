@@ -1,4 +1,45 @@
 Product Specification: Postgres Insight Dashboard
+
+## Implementation Status
+
+### Phase 0 — Foundations ✅ COMPLETE
+- [x] Quarkus Gradle project
+- [x] Qute layout template with nav
+- [x] Static assets setup (htmx + CSS framework)
+- [x] Dark mode toggle working (persisted in localStorage)
+- [x] DB connectivity config for one instance
+- [x] Basic "About" page showing app + DB version
+
+### Phase 1 — MVP Monitoring Dashboards ✅ COMPLETE
+- [x] Overview page (live widgets: connections, active/blocked queries, cache hit ratio, DB size, top tables/indexes)
+- [x] Activity page (active sessions table, auto-refresh)
+- [x] Locks/Blocking page (blocking tree, lock list, idle-in-transaction highlighting)
+- [x] Slow Queries page using pg_stat_statements
+  - [x] Sortable table (by calls, totalTime, meanTime, maxTime, rows)
+  - [x] Hover full query (CSS tooltip)
+  - [x] Query detail page with copy button and full statistics
+- [x] Auto-refresh dropdown (Off/5s/10s/30s/60s with localStorage persistence)
+- [x] Tables page with bloat indicators
+- [x] Databases page (per-database metrics from pg_stat_database)
+  - [x] Comparison view showing all databases
+  - [x] Detailed view for individual database metrics
+  - [x] All pg_stat_database columns (transactions, cache, tuples, sessions, I/O, temp files, deadlocks)
+
+### Phase 2 — History Sampling + SVG Sparklines ✅ COMPLETE
+- [x] Dashboard schema + migrations (Flyway with pgconsole schema)
+- [x] Scheduled sampler job (configurable interval, default 60s)
+- [x] Trend panels with sparklines (Overview dashboard and Query Detail page)
+- [x] Retention cleanup job (daily at 3 AM, configurable retention days)
+
+### Phase 3 — Polishing + Safety + Multi-Instance ❌ NOT IMPLEMENTED
+- [ ] Multi-instance selector
+- [ ] Authentication integration
+- [ ] Authorization for dangerous actions
+- [ ] Cancel/Terminate query buttons
+- [ ] Export: download CSV
+
+---
+
 1. Purpose
 
 Provide a lightweight, self-hosted web dashboard for PostgreSQL operational insight and performance monitoring, focusing on:

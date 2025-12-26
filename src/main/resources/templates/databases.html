@@ -1,0 +1,236 @@
+{#include base}
+{#title}Databases - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/databases" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Database Metrics</h1>
+        <p class="text-muted">Per-database statistics from pg_stat_database</p>
+    </div>
+</div>
+
+{#if databases.isEmpty()}
+<div class="alert alert-warning">
+    No databases found.
+</div>
+{#else}
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    {#for db in databases}
+    <div class="col-md-4 col-lg-3 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <a href="/databases/{db.datname}" class="text-decoration-none">{db.datname}</a>
+                    {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Size</small>
+                        <div class="fw-bold">{db.databaseSize}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Connections</small>
+                        <div class="fw-bold">{db.numBackends}</div>
+                    </div>
+                </div>
+                <hr class="my-2">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Cache Hit</small>
+                        <div class="fw-bold {#if db.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{db.cacheHitRatioFormatted}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Commit %</small>
+                        <div class="fw-bold">{db.commitRatioFormatted}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/databases/{db.datname}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+            </div>
+        </div>
+    </div>
+    {/for}
+</div>
+
+<!-- Detailed Comparison Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detailed Comparison</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Size</th>
+                                <th class="text-end">Backends</th>
+                                <th class="text-end">Commits</th>
+                                <th class="text-end">Rollbacks</th>
+                                <th class="text-end">Cache Hit</th>
+                                <th class="text-end">Blocks Read</th>
+                                <th class="text-end">Blocks Hit</th>
+                                <th class="text-end">Deadlocks</th>
+                                <th class="text-end">Conflicts</th>
+                                <th class="text-end">Temp Files</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for db in databases}
+                            <tr>
+                                <td>
+                                    <a href="/databases/{db.datname}"><code>{db.datname}</code></a>
+                                    {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
+                                </td>
+                                <td class="text-end">{db.databaseSize}</td>
+                                <td class="text-end">{db.numBackends}</td>
+                                <td class="text-end">{db.xactCommit}</td>
+                                <td class="text-end">{db.xactRollback}</td>
+                                <td class="text-end {#if db.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{db.cacheHitRatioFormatted}</td>
+                                <td class="text-end">{db.blksRead}</td>
+                                <td class="text-end">{db.blksHit}</td>
+                                <td class="text-end {#if db.deadlocks > 0}text-danger fw-bold{/if}">{db.deadlocks}</td>
+                                <td class="text-end {#if db.conflicts > 0}text-warning{/if}">{db.conflicts}</td>
+                                <td class="text-end">{db.tempFiles}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tuple Statistics Table -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Tuple Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Returned</th>
+                                <th class="text-end">Fetched</th>
+                                <th class="text-end">Inserted</th>
+                                <th class="text-end">Updated</th>
+                                <th class="text-end">Deleted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for db in databases}
+                            <tr>
+                                <td><code>{db.datname}</code></td>
+                                <td class="text-end">{db.tupReturned}</td>
+                                <td class="text-end">{db.tupFetched}</td>
+                                <td class="text-end">{db.tupInserted}</td>
+                                <td class="text-end">{db.tupUpdated}</td>
+                                <td class="text-end">{db.tupDeleted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Session Statistics Table -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Session Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Total Sessions</th>
+                                <th class="text-end">Abandoned</th>
+                                <th class="text-end">Fatal</th>
+                                <th class="text-end">Killed</th>
+                                <th class="text-end">Session Time</th>
+                                <th class="text-end">Active Time</th>
+                                <th class="text-end">Idle in Txn</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for db in databases}
+                            <tr>
+                                <td><code>{db.datname}</code></td>
+                                <td class="text-end">{db.sessions}</td>
+                                <td class="text-end {#if db.sessionsAbandoned > 0}text-warning{/if}">{db.sessionsAbandoned}</td>
+                                <td class="text-end {#if db.sessionsFatal > 0}text-danger{/if}">{db.sessionsFatal}</td>
+                                <td class="text-end {#if db.sessionsKilled > 0}text-danger{/if}">{db.sessionsKilled}</td>
+                                <td class="text-end">{db.sessionTimeFormatted}</td>
+                                <td class="text-end">{db.activeTimeFormatted}</td>
+                                <td class="text-end">{db.idleInTransactionTimeFormatted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- I/O Statistics Table -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">I/O Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Block Read Time</th>
+                                <th class="text-end">Block Write Time</th>
+                                <th class="text-end">Temp Bytes</th>
+                                <th>Stats Reset</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for db in databases}
+                            <tr>
+                                <td><code>{db.datname}</code></td>
+                                <td class="text-end">{db.blkReadTimeFormatted}</td>
+                                <td class="text-end">{db.blkWriteTimeFormatted}</td>
+                                <td class="text-end">{db.tempBytesFormatted}</td>
+                                <td><small class="text-muted">{db.statsReset}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{/if}
+
+</div>
+
+{/include}

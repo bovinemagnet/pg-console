@@ -1,0 +1,147 @@
+{#include base}
+{#title}Locks & Blocking - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/locks" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Locks & Blocking</h1>
+        <p class="text-muted">View current lock contention and blocking relationships</p>
+    </div>
+</div>
+
+<!-- Blocking Tree Section -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Blocking Tree</h5>
+                <span class="badge {#if blockingTree.isEmpty}bg-success{#else}bg-danger{/if}">
+                    {blockingTree.size} blocked session{#if blockingTree.size != 1}s{/if}
+                </span>
+            </div>
+            <div class="card-body p-0">
+                {#if blockingTree.isEmpty}
+                <div class="p-4 text-center text-success">
+                    <h4>No blocking detected</h4>
+                    <p class="mb-0">All sessions are running without lock contention</p>
+                </div>
+                {#else}
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Blocked</th>
+                            <th>Blocked Query</th>
+                            <th>Duration</th>
+                            <th></th>
+                            <th>Blocker</th>
+                            <th>Blocker Query</th>
+                            <th>Lock Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for item in blockingTree}
+                        <tr class="{#if item.blockerIdleInTransaction}table-warning{/if}">
+                            <td>
+                                <strong>PID {item.blockedPid}</strong><br>
+                                <small class="text-muted">{item.blockedUser}</small>
+                            </td>
+                            <td class="query-preview">
+                                <code>{item.shortBlockedQuery}</code>
+                                {#if item.blockedQuery.length > 60}
+                                <div class="query-full"><pre>{item.blockedQuery}</pre></div>
+                                {/if}
+                            </td>
+                            <td><span class="badge bg-danger">{item.blockedDuration}</span></td>
+                            <td class="text-center text-danger">⟵ blocked by ⟵</td>
+                            <td>
+                                <strong>PID {item.blockerPid}</strong><br>
+                                <small class="text-muted">{item.blockerUser}</small>
+                                {#if item.blockerIdleInTransaction}
+                                <br><span class="badge bg-warning text-dark">idle in transaction</span>
+                                {/if}
+                            </td>
+                            <td class="query-preview">
+                                <code>{item.shortBlockerQuery}</code>
+                                {#if item.blockerQuery.length > 60}
+                                <div class="query-full"><pre>{item.blockerQuery}</pre></div>
+                                {/if}
+                            </td>
+                            <td><span class="badge bg-secondary">{item.lockMode}</span></td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- All Locks Section -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">All Locks</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if locks.isEmpty}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No locks currently held</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>User</th>
+                                <th>Lock Type</th>
+                                <th>Relation</th>
+                                <th>Mode</th>
+                                <th>Granted</th>
+                                <th>State</th>
+                                <th>Query</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for lock in locks}
+                            <tr class="{#if !lock.granted}table-danger{#else if lock.idleInTransaction}table-warning{/if}">
+                                <td>{lock.pid}</td>
+                                <td>{lock.user}</td>
+                                <td><small>{lock.lockType}</small></td>
+                                <td><code>{lock.relation}</code></td>
+                                <td><span class="badge bg-secondary">{lock.mode}</span></td>
+                                <td>
+                                    {#if lock.granted}
+                                    <span class="badge bg-success">Yes</span>
+                                    {#else}
+                                    <span class="badge bg-danger">Waiting</span>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <span class="badge {#if lock.state == 'active'}bg-success{#else if lock.idleInTransaction}bg-warning text-dark{#else}bg-secondary{/if}">
+                                        {lock.state}
+                                    </span>
+                                </td>
+                                <td class="query-preview">
+                                    <code>{lock.shortQuery}</code>
+                                    {#if lock.query != null && lock.query.length > 80}
+                                    <div class="query-full"><pre>{lock.query}</pre></div>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

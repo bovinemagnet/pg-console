@@ -1,20 +1,16 @@
 {#include base}
 {#title}Current Activity - PostgreSQL Console{/title}
-{#insert}
-<div class="row mt-4">
-    <div class="col-12">
+
+<div id="refreshable-content" hx-get="/activity" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
         <h1>Current Activity</h1>
         <p class="text-muted">Active connections and running queries</p>
-        <button class="btn btn-sm btn-secondary" 
-                hx-get="/activity" 
-                hx-target="body"
-                hx-swap="innerHTML">
-            🔄 Refresh
-        </button>
     </div>
 </div>
 
-<div class="row mt-3">
+<div class="row">
     <div class="col-12">
         {#if activities.isEmpty()}
         <div class="alert alert-info">
@@ -44,16 +40,16 @@
                         <td>{act.database}</td>
                         <td>{act.applicationName}</td>
                         <td>
-                            <span class="badge 
+                            <span class="badge
                                 {#if act.state == 'active'}bg-success
-                                {#else if act.state == 'idle in transaction'}bg-warning
+                                {#else if act.state == 'idle in transaction'}bg-warning text-dark
                                 {#else}bg-secondary{/if}">
                                 {act.state}
                             </span>
                         </td>
                         <td>
                             {#if act.waitEventType}
-                                {act.waitEventType}: {act.waitEvent}
+                                <small>{act.waitEventType}: {act.waitEvent}</small>
                             {#else}
                                 -
                             {/if}
@@ -65,7 +61,7 @@
                         </td>
                         <td>
                             {#if act.blockingPid}
-                                <span class="blocking">⚠️ {act.blockingPid}</span>
+                                <a href="/locks" class="blocking">⚠️ {act.blockingPid}</a>
                             {#else}
                                 -
                             {/if}
@@ -78,5 +74,7 @@
         {/if}
     </div>
 </div>
-{/insert}
+
+</div>
+
 {/include}

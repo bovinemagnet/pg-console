@@ -1,63 +1,166 @@
 {#include base}
 {#title}PostgreSQL Insight Dashboard{/title}
-{#insert}
-<div class="row mt-4">
-    <div class="col-12">
+
+<div id="refreshable-content" hx-get="/" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
         <h1>PostgreSQL Insight Dashboard</h1>
-        <p class="lead">Lightweight, self-hosted PostgreSQL operational insight and performance monitoring</p>
+        <p class="text-muted">Real-time operational insight and performance monitoring</p>
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card metric-card">
-            <div class="card-body">
-                <h5 class="card-title">Slow Queries</h5>
-                <p class="card-text">Monitor expensive and slow-running queries with pg_stat_statements</p>
-                <a href="/slow-queries" class="btn btn-primary">View Slow Queries</a>
+<!-- Key Metrics Row -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Connections</h6>
+                <h2 class="mb-0">{stats.connectionsUsed} / {stats.connectionsMax}</h2>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar {#if stats.connectionPercentage > 80}bg-danger{#else if stats.connectionPercentage > 60}bg-warning{#else}bg-success{/if}"
+                         role="progressbar"
+                         style="width: {stats.connectionPercentage}%"></div>
+                </div>
+                <small class="text-muted">{stats.connectionPercentage}% used</small>
+                <div class="mt-2" title="Last 1 hour">{connectionsSparkline.raw}</div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4">
-        <div class="card metric-card">
-            <div class="card-body">
-                <h5 class="card-title">Current Activity</h5>
-                <p class="card-text">View active connections, blocking queries, and long-running transactions</p>
-                <a href="/activity" class="btn btn-primary">View Activity</a>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Active Queries</h6>
+                <h2 class="mb-0 {#if stats.activeQueries > 10}text-warning{/if}">{stats.activeQueries}</h2>
+                <div class="mt-2" title="Last 1 hour">{activeQueriesSparkline.raw}</div>
+                <a href="/activity" class="btn btn-sm btn-outline-primary mt-2">View Activity</a>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4">
-        <div class="card metric-card">
-            <div class="card-body">
-                <h5 class="card-title">Table Statistics</h5>
-                <p class="card-text">Analyze table/index usage and identify bloat indicators</p>
-                <a href="/tables" class="btn btn-primary">View Tables</a>
+    <div class="col-md-3">
+        <div class="card h-100 {#if stats.blockedQueries > 0}border-danger{/if}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Blocked Queries</h6>
+                <h2 class="mb-0 {#if stats.blockedQueries > 0}text-danger{/if}">{stats.blockedQueries}</h2>
+                <div class="mt-2" title="Last 1 hour">{blockedQueriesSparkline.raw}</div>
+                {#if stats.blockedQueries > 0}
+                <a href="/locks" class="btn btn-sm btn-outline-danger mt-2">View Locks</a>
+                {#else}
+                <small class="text-success">No blocking</small>
+                {/if}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Longest Query</h6>
+                <h4 class="mb-0">{stats.longestQueryDuration}</h4>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-12">
+<!-- Second Metrics Row -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Cache Hit Ratio</h6>
+                <h2 class="mb-0 {#if stats.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{stats.cacheHitRatioFormatted}</h2>
+                <small class="text-muted">Target: &gt;99%</small>
+                <div class="mt-2" title="Last 1 hour">{cacheHitSparkline.raw}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Database Size</h6>
+                <h2 class="mb-0">{stats.databaseSize}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Quick Links</h6>
+                <div class="btn-group-vertical w-100" role="group">
+                    <a href="/slow-queries" class="btn btn-outline-primary btn-sm">Slow Queries</a>
+                    <a href="/tables" class="btn btn-outline-primary btn-sm">Table Stats</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tables and Indexes Row -->
+<div class="row">
+    <div class="col-md-6">
         <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Features</h5>
-                <ul>
-                    <li>Real-time monitoring of slow and expensive queries</li>
-                    <li>Current activity tracking with blocking detection</li>
-                    <li>Connection and wait event analysis</li>
-                    <li>Table and index usage statistics</li>
-                    <li>Bloat indicators for database health</li>
-                    <li>Server-side rendered SVG sparklines for visualizations</li>
-                    <li>Sortable columns with htmx</li>
-                    <li>Hover to view full queries</li>
-                </ul>
+            <div class="card-header">
+                <h5 class="mb-0">Top Tables by Size</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if stats.topTablesBySize.isEmpty}
+                <p class="text-muted p-3 mb-0">No user tables found</p>
+                {#else}
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Table</th>
+                            <th class="text-end">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for table in stats.topTablesBySize}
+                        <tr>
+                            <td><code>{table.fullName}</code></td>
+                            <td class="text-end">{table.size}</td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+                {/if}
+            </div>
+            <div class="card-footer">
+                <a href="/tables" class="btn btn-sm btn-outline-secondary">View All Tables</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Top Indexes by Size</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if stats.topIndexesBySize.isEmpty}
+                <p class="text-muted p-3 mb-0">No user indexes found</p>
+                {#else}
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Index</th>
+                            <th>Table</th>
+                            <th class="text-end">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for index in stats.topIndexesBySize}
+                        <tr>
+                            <td><code>{index.indexName}</code></td>
+                            <td><small class="text-muted">{index.tableName}</small></td>
+                            <td class="text-end">{index.size}</td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+                {/if}
             </div>
         </div>
     </div>
 </div>
-{/insert}
+
+</div>
+
 {/include}
