@@ -24,10 +24,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Service for generating and sending scheduled reports.
+ * Service for generating and sending scheduled PostgreSQL monitoring reports.
+ * <p>
+ * Provides functionality to create daily and weekly summary reports containing
+ * database overview statistics, slow query analysis, index recommendations, and
+ * maintenance suggestions. Supports automated scheduling and email delivery via
+ * the Quarkus Mailer.
+ * <p>
+ * Reports are HTML-formatted and can be sent to multiple recipients. The service
+ * uses a scheduled task to process pending reports based on their configuration.
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see ScheduledReport
  */
 @ApplicationScoped
 public class ReportService {
@@ -53,8 +62,17 @@ public class ReportService {
     boolean reportsEnabled;
 
     /**
-     * Scheduled job to process pending reports.
-     * Runs every minute to check for reports due to be sent.
+     * Processes all scheduled reports that are due for execution.
+     * <p>
+     * This method runs every 60 seconds and checks for enabled reports where the
+     * next run time has been reached. For each due report, it generates and sends
+     * the report, then updates the next run timestamp.
+     * <p>
+     * Processing only occurs if reports are enabled via the {@code pg-console.reports.enabled}
+     * configuration property.
+     *
+     * @see #getDueReports()
+     * @see #sendReport(ScheduledReport)
      */
     @Scheduled(every = "60s", identity = "report-scheduler")
     public void processScheduledReports() {
@@ -74,7 +92,26 @@ public class ReportService {
     }
 
     /**
-     * Generates a daily summary report for an instance.
+     * Generates an HTML-formatted daily summary report for a database instance.
+     * <p>
+     * The report includes:
+     * <ul>
+     *   <li>Database overview statistics (version, connections, cache hit ratio, size)</li>
+     *   <li>Top 10 slowest queries by total execution time</li>
+     *   <li>Index recommendations (up to 5)</li>
+     *   <li>Table maintenance recommendations (up to 5)</li>
+     * </ul>
+     * <p>
+     * The generated HTML includes inline CSS styling for consistent formatting
+     * across email clients.
+     *
+     * @param instanceId the database instance identifier
+     * @return HTML-formatted report content. If an error occurs during generation,
+     *         the error message is included in the returned HTML.
+     * @see PostgresService#getOverviewStats(String)
+     * @see PostgresService#getSlowQueries(String, String, String)
+     * @see IndexAdvisorService#getRecommendations(String)
+     * @see TableMaintenanceService#getRecommendations(String)
      */
     public String generateDailySummary(String instanceId) {
         StringBuilder html = new StringBuilder();
@@ -182,7 +219,15 @@ public class ReportService {
     }
 
     /**
-     * Sends a report to its recipients.
+     * Generates and sends a report to all configured recipients.
+     * <p>
+     * The report content is generated based on the report type (daily_summary,
+     * weekly_summary, etc.) and sent via email to each recipient. Failures to
+     * individual recipients are logged but do not prevent delivery to others.
+     *
+     * @param report the scheduled report configuration containing type, instance,
+     *               and recipient list
+     * @see #generateDailySummary(String)
      */
     public void sendReport(ScheduledReport report) {
         String content = switch (report.getReportType()) {
@@ -204,7 +249,16 @@ public class ReportService {
     }
 
     /**
-     * Gets reports that are due to be sent.
+     * Retrieves all enabled reports that are due for execution.
+     * <p>
+     * Queries the {@code pgconsole.scheduled_report} table for reports where:
+     * <ul>
+     *   <li>The report is enabled</li>
+     *   <li>The next_run_at timestamp is null or in the past</li>
+     * </ul>
+     *
+     * @return list of scheduled reports ready for execution, or an empty list
+     *         if no reports are due or if an error occurs
      */
     public List<ScheduledReport> getDueReports() {
         List<ScheduledReport> reports = new ArrayList<>();
@@ -231,7 +285,13 @@ public class ReportService {
     }
 
     /**
-     * Gets all scheduled reports.
+     * Retrieves all configured scheduled reports regardless of status.
+     * <p>
+     * Returns complete report configurations including enabled/disabled state,
+     * last run time, and next scheduled run time for administrative purposes.
+     *
+     * @return list of all scheduled reports ordered by name, or an empty list
+     *         if no reports exist or if an error occurs
      */
     public List<ScheduledReport> getAllReports() {
         List<ScheduledReport> reports = new ArrayList<>();
@@ -268,7 +328,16 @@ public class ReportService {
     }
 
     /**
-     * Creates a new scheduled report.
+     * Creates a new scheduled report configuration in the database.
+     * <p>
+     * Persists the report configuration to the {@code pgconsole.scheduled_report}
+     * table and calculates the initial next run timestamp based on the schedule.
+     * The generated report ID is set on the provided report object.
+     *
+     * @param report the report configuration to create. Must have name, instanceId,
+     *               reportType, schedule, and recipients populated.
+     * @return the same report object with the generated ID populated, or the
+     *         original object if creation fails
      */
     public ScheduledReport createReport(ScheduledReport report) {
         String sql = """
@@ -305,7 +374,12 @@ public class ReportService {
     }
 
     /**
-     * Updates the last run time and calculates next run.
+     * Updates the last run timestamp and calculates the next scheduled run time.
+     * <p>
+     * Called after successfully sending a report to record execution and schedule
+     * the next occurrence based on the report's schedule configuration.
+     *
+     * @param report the report whose run timestamps should be updated
      */
     private void updateLastRun(ScheduledReport report) {
         String sql = """
@@ -362,7 +436,12 @@ public class ReportService {
     }
 
     /**
-     * Scheduled report configuration.
+     * Configuration for a scheduled database monitoring report.
+     * <p>
+     * Encapsulates all settings for automated report generation including
+     * schedule frequency, target instance, report type, recipient list, and
+     * execution history. Supports standard schedules (daily, weekly) and
+     * custom cron-like expressions.
      */
     public static class ScheduledReport {
         private long id;

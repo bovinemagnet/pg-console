@@ -14,10 +14,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Service for monitoring logical replication: publications, subscriptions, and origins.
+ * Service for monitoring PostgreSQL logical replication infrastructure.
+ * <p>
+ * Provides comprehensive monitoring and inspection of logical replication components:
+ * <ul>
+ *   <li>Publications - defines which tables/data are replicated from the publisher</li>
+ *   <li>Subscriptions - configures replication from publishers to subscribers</li>
+ *   <li>Replication origins - tracks replication progress and prevents loops</li>
+ *   <li>Subscription statistics - monitors errors and replication health (PostgreSQL 15+)</li>
+ * </ul>
+ * <p>
+ * This service queries system catalogs ({@code pg_publication}, {@code pg_subscription},
+ * {@code pg_replication_origin}) and statistics views to provide visibility into
+ * logical replication topology and health.
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see Publication
+ * @see Subscription
+ * @see ReplicationOrigin
+ * @see SubscriptionStats
  */
 @ApplicationScoped
 public class LogicalReplicationService {
@@ -28,7 +44,16 @@ public class LogicalReplicationService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets all publications in the database.
+     * Retrieves all publications configured on the database instance.
+     * <p>
+     * Queries {@code pg_publication} to obtain publication definitions including
+     * which DML operations are replicated (INSERT, UPDATE, DELETE, TRUNCATE) and
+     * whether the publication includes all tables or a specific subset.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of publications ordered by name. Returns an empty list if no
+     *         publications exist or if an error occurs.
+     * @see Publication
      */
     public List<Publication> getPublications(String instanceName) {
         List<Publication> publications = new ArrayList<>();
@@ -73,7 +98,16 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets tables in a publication.
+     * Retrieves all tables included in a specific publication.
+     * <p>
+     * Queries {@code pg_publication_tables} to list tables replicated by the
+     * publication, including any column filters or row-level filters applied.
+     *
+     * @param instanceName the database instance identifier
+     * @param pubName the publication name
+     * @return list of tables in the publication ordered by schema and table name.
+     *         Returns an empty list if the publication has no tables or if an error occurs.
+     * @see PublicationTable
      */
     public List<PublicationTable> getPublicationTables(String instanceName, String pubName) {
         List<PublicationTable> tables = new ArrayList<>();
@@ -117,7 +151,18 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets all subscriptions in the database.
+     * Retrieves all subscriptions configured on the database instance.
+     * <p>
+     * Queries {@code pg_subscription} to obtain subscription configurations including
+     * connection information to the publisher, replication slot name, synchronous commit
+     * settings, and the list of publications being consumed. Connection strings are
+     * masked to hide passwords.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of subscriptions ordered by name. Returns an empty list if no
+     *         subscriptions exist or if an error occurs.
+     * @see Subscription
+     * @see #maskConnectionString(String)
      */
     public List<Subscription> getSubscriptions(String instanceName) {
         List<Subscription> subscriptions = new ArrayList<>();
@@ -167,7 +212,17 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets subscription table states.
+     * Retrieves the replication state for all tables in a subscription.
+     * <p>
+     * Queries {@code pg_subscription_rel} to show the synchronisation state of each
+     * table being replicated. States include: initialising, data copying, finished
+     * table copy, synchronised, and ready.
+     *
+     * @param instanceName the database instance identifier
+     * @param subName the subscription name
+     * @return list of table states ordered by table name. Returns an empty list if
+     *         the subscription has no tables or if an error occurs.
+     * @see SubscriptionTable
      */
     public List<SubscriptionTable> getSubscriptionTables(String instanceName, String subName) {
         List<SubscriptionTable> tables = new ArrayList<>();
@@ -206,7 +261,17 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets replication origins.
+     * Retrieves all replication origins configured on the instance.
+     * <p>
+     * Queries {@code pg_replication_origin} and {@code pg_replication_origin_status}
+     * to show replication origins and their current LSN positions. Origins are used
+     * to track replication progress and prevent replication loops in multi-master
+     * or cascading replication topologies.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of replication origins ordered by name. Returns an empty list if
+     *         no origins exist or if an error occurs.
+     * @see ReplicationOrigin
      */
     public List<ReplicationOrigin> getReplicationOrigins(String instanceName) {
         List<ReplicationOrigin> origins = new ArrayList<>();
@@ -242,7 +307,18 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets subscription statistics (PG 15+).
+     * Retrieves subscription error statistics (PostgreSQL 15+).
+     * <p>
+     * Queries {@code pg_stat_subscription_stats} to obtain apply and sync error counts
+     * for each subscription. On PostgreSQL 14 and earlier, falls back to legacy
+     * statistics from {@code pg_stat_subscription} showing LSN positions and
+     * message timestamps.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of subscription statistics ordered by subscription name. Returns
+     *         an empty list if no subscriptions exist or if an error occurs.
+     * @see SubscriptionStats
+     * @see #getSubscriptionStatsLegacy(String)
      */
     public List<SubscriptionStats> getSubscriptionStats(String instanceName) {
         List<SubscriptionStats> stats = new ArrayList<>();
@@ -340,7 +416,15 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Gets summary statistics.
+     * Generates a summary of logical replication configuration.
+     * <p>
+     * Provides aggregate counts of publications, subscriptions (total and enabled),
+     * and replication origins to give a quick overview of the logical replication
+     * infrastructure on the instance.
+     *
+     * @param instanceName the database instance identifier
+     * @return summary object containing replication configuration counts
+     * @see LogicalReplicationSummary
      */
     public LogicalReplicationSummary getSummary(String instanceName) {
         LogicalReplicationSummary summary = new LogicalReplicationSummary();
@@ -371,7 +455,14 @@ public class LogicalReplicationService {
     }
 
     /**
-     * Masks password in connection string.
+     * Masks passwords in PostgreSQL connection strings for secure display.
+     * <p>
+     * Replaces password values with asterisks to prevent exposure of credentials
+     * in logs and user interfaces.
+     *
+     * @param connInfo the connection string potentially containing passwords
+     * @return the connection string with password values replaced by "****",
+     *         or {@code null} if the input is {@code null}
      */
     private String maskConnectionString(String connInfo) {
         if (connInfo == null) return null;
@@ -380,6 +471,12 @@ public class LogicalReplicationService {
 
     // --- Model Classes ---
 
+    /**
+     * Represents a logical replication publication.
+     * <p>
+     * Publications define which tables and operations are replicated from
+     * a publisher database to subscribers.
+     */
     public static class Publication {
         private long oid;
         private String name;
@@ -428,6 +525,12 @@ public class LogicalReplicationService {
         }
     }
 
+    /**
+     * Represents a table included in a publication.
+     * <p>
+     * Contains information about column filtering and row-level filtering
+     * applied to the published table.
+     */
     public static class PublicationTable {
         private String schemaName;
         private String tableName;
@@ -458,6 +561,12 @@ public class LogicalReplicationService {
         public boolean hasRowFilter() { return rowFilter != null && !rowFilter.isEmpty(); }
     }
 
+    /**
+     * Represents a logical replication subscription.
+     * <p>
+     * Subscriptions consume changes from one or more publications on a
+     * publisher database and apply them to the subscriber.
+     */
     public static class Subscription {
         private long oid;
         private String name;
@@ -506,6 +615,12 @@ public class LogicalReplicationService {
         }
     }
 
+    /**
+     * Represents the replication state of a table within a subscription.
+     * <p>
+     * Tracks the synchronisation progress of individual tables during
+     * initial data copy and ongoing replication.
+     */
     public static class SubscriptionTable {
         private String tableName;
         private String state;
@@ -542,6 +657,12 @@ public class LogicalReplicationService {
         public void setLsn(String lsn) { this.lsn = lsn; }
     }
 
+    /**
+     * Represents a replication origin tracking replication progress.
+     * <p>
+     * Origins track remote and local LSN positions to maintain replication
+     * state and prevent replication loops in multi-node topologies.
+     */
     public static class ReplicationOrigin {
         private int id;
         private String name;
@@ -561,6 +682,12 @@ public class LogicalReplicationService {
         public void setLocalLsn(String localLsn) { this.localLsn = localLsn; }
     }
 
+    /**
+     * Subscription statistics and error tracking.
+     * <p>
+     * Contains error counts (PostgreSQL 15+) or LSN progress and timing
+     * information (PostgreSQL 14 and earlier) for monitoring subscription health.
+     */
     public static class SubscriptionStats {
         private String name;
         private long applyErrorCount;
@@ -596,6 +723,12 @@ public class LogicalReplicationService {
         }
     }
 
+    /**
+     * Summary statistics for logical replication infrastructure.
+     * <p>
+     * Provides aggregate counts of replication components to give an
+     * overview of the logical replication topology.
+     */
     public static class LogicalReplicationSummary {
         private int publicationCount;
         private int subscriptionCount;

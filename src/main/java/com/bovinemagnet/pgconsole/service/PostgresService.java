@@ -44,29 +44,42 @@ public class PostgresService {
     Optional<String> databaseFilter;
 
     /**
-     * Gets the datasource for an instance.
+     * Retrieves the datasource for the specified instance.
+     *
+     * @param instanceName the name of the PostgreSQL instance
+     * @return the datasource for the instance
      */
     private DataSource getDataSource(String instanceName) {
         return dataSourceManager.getDataSource(instanceName);
     }
 
     /**
-     * Gets the list of configured instances.
+     * Retrieves the list of configured PostgreSQL instances with their connection status and metadata.
+     *
+     * @return list of instance information objects containing name, display name, connection status, and version details
+     * @see DataSourceManager#getInstanceInfoList()
      */
     public List<InstanceInfo> getInstanceList() {
         return dataSourceManager.getInstanceInfoList();
     }
 
     /**
-     * Gets the list of available instance names.
+     * Retrieves the list of available PostgreSQL instance names.
+     *
+     * @return list of configured instance names
+     * @see DataSourceManager#getAvailableInstances()
      */
     public List<String> getAvailableInstances() {
         return dataSourceManager.getAvailableInstances();
     }
 
     /**
-     * Returns the set of database names to monitor.
-     * If empty, all non-template databases are shown.
+     * Retrieves the set of database names to monitor based on configured filters.
+     * <p>
+     * If the filter configuration is empty or blank, returns an empty set,
+     * which indicates that all non-template databases should be shown.
+     *
+     * @return set of database names to include in monitoring, or empty set to include all databases
      */
     private Set<String> getDatabaseFilterSet() {
         if (databaseFilter.isEmpty() || databaseFilter.get().isBlank()) {
@@ -79,7 +92,12 @@ public class PostgresService {
     }
 
     /**
-     * Returns true if the given database should be included based on the filter.
+     * Determines whether the specified database should be included in monitoring based on configured filters.
+     * <p>
+     * If no filter is configured (empty set), all databases are included.
+     *
+     * @param dbName the name of the database to check
+     * @return true if the database should be included, false otherwise
      */
     private boolean shouldIncludeDatabase(String dbName) {
         Set<String> filter = getDatabaseFilterSet();
@@ -88,6 +106,18 @@ public class PostgresService {
 
     // ========== Slow Queries ==========
 
+    /**
+     * Retrieves slow queries from pg_stat_statements for the specified instance.
+     * <p>
+     * Queries pg_stat_statements to identify queries with high execution times or call counts.
+     * Note that pg_stat_statements extension must be installed and enabled for this method to return results.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @param sortBy the column to sort by (e.g., "totalTime", "calls", "meanTime", "maxTime", "rows")
+     * @param order the sort order ("asc" for ascending, "desc" for descending)
+     * @return list of slow query records, limited to 100 results; empty list if pg_stat_statements is unavailable
+     * @see #getSlowQueryById(String, String)
+     */
     public List<SlowQuery> getSlowQueries(String instanceName, String sortBy, String order) {
         List<SlowQuery> queries = new ArrayList<>();
         String orderClause = getOrderClause(sortBy, order);
@@ -133,11 +163,28 @@ public class PostgresService {
         return queries;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves slow queries from pg_stat_statements for the default instance.
+     * <p>
+     * This is a convenience method that delegates to {@link #getSlowQueries(String, String, String)}
+     * using "default" as the instance name.
+     *
+     * @param sortBy the column to sort by (e.g., "totalTime", "calls", "meanTime", "maxTime", "rows")
+     * @param order the sort order ("asc" for ascending, "desc" for descending)
+     * @return list of slow query records, limited to 100 results
+     * @see #getSlowQueries(String, String, String)
+     */
     public List<SlowQuery> getSlowQueries(String sortBy, String order) {
         return getSlowQueries("default", sortBy, order);
     }
 
+    /**
+     * Constructs an ORDER BY clause for slow query sorting.
+     *
+     * @param sortBy the field to sort by; defaults to "totalTime" if null
+     * @param order the sort direction ("asc" or "desc"); defaults to "DESC" if not "asc"
+     * @return SQL ORDER BY clause fragment (e.g., "total_exec_time DESC")
+     */
     private String getOrderClause(String sortBy, String order) {
         String column = switch (sortBy != null ? sortBy : "totalTime") {
             case "calls" -> "calls";
@@ -151,6 +198,17 @@ public class PostgresService {
         return column + " " + direction;
     }
 
+    /**
+     * Retrieves detailed information about a specific slow query by its query ID.
+     * <p>
+     * Returns comprehensive statistics including execution time details, buffer I/O metrics,
+     * and temporary file usage from pg_stat_statements.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @param queryId the MD5 hash of the query text used as identifier
+     * @return the slow query details, or null if not found
+     * @see #getSlowQueries(String, String, String)
+     */
     public SlowQuery getSlowQueryById(String instanceName, String queryId) {
         String sql = """
             SELECT
@@ -208,13 +266,30 @@ public class PostgresService {
         return null;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves detailed information about a specific slow query by its query ID for the default instance.
+     *
+     * @param queryId the MD5 hash of the query text used as identifier
+     * @return the slow query details, or null if not found
+     * @see #getSlowQueryById(String, String)
+     */
     public SlowQuery getSlowQueryById(String queryId) {
         return getSlowQueryById("default", queryId);
     }
 
     // ========== Activity ==========
 
+    /**
+     * Retrieves current activity from pg_stat_activity for the specified instance.
+     * <p>
+     * Returns information about all non-idle backend processes, excluding the current backend.
+     * Includes query text, connection information, wait events, and blocking relationships.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of active backend processes, limited to 50 most recent by query start time
+     * @throws RuntimeException if the query fails
+     * @see #getBlockingTree(String)
+     */
     public List<Activity> getCurrentActivity(String instanceName) {
         List<Activity> activities = new ArrayList<>();
 
@@ -275,7 +350,13 @@ public class PostgresService {
         return activities;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves current activity from pg_stat_activity for the default instance.
+     *
+     * @return list of active backend processes, limited to 50 most recent
+     * @throws RuntimeException if the query fails
+     * @see #getCurrentActivity(String)
+     */
     public List<Activity> getCurrentActivity() {
         return getCurrentActivity("default");
     }
@@ -283,12 +364,16 @@ public class PostgresService {
     // ========== Cancel/Terminate Queries ==========
 
     /**
-     * Cancels the current query running on a backend.
-     * Uses pg_cancel_backend() which is less aggressive than terminate.
+     * Cancels the current query running on a PostgreSQL backend process.
+     * <p>
+     * Uses {@code pg_cancel_backend()} which sends a SIGINT signal to cancel the query.
+     * This is less aggressive than {@link #terminateQuery(String, int)} as it only cancels
+     * the current query whilst leaving the connection open.
      *
-     * @param instanceName the instance to operate on
-     * @param pid the backend process ID
-     * @return true if the signal was sent successfully
+     * @param instanceName the name of the PostgreSQL instance
+     * @param pid the backend process ID to cancel
+     * @return true if the signal was sent successfully, false otherwise
+     * @see #terminateQuery(String, int)
      */
     public boolean cancelQuery(String instanceName, int pid) {
         String sql = "SELECT pg_cancel_backend(?)";
@@ -309,12 +394,16 @@ public class PostgresService {
     }
 
     /**
-     * Terminates a backend process.
-     * Uses pg_terminate_backend() which forcefully disconnects the client.
+     * Terminates a PostgreSQL backend process, forcefully disconnecting the client.
+     * <p>
+     * Uses {@code pg_terminate_backend()} which sends a SIGTERM signal to terminate the entire
+     * backend process. This is more aggressive than {@link #cancelQuery(String, int)} as it
+     * closes the client connection. Use with caution.
      *
-     * @param instanceName the instance to operate on
-     * @param pid the backend process ID
-     * @return true if the signal was sent successfully
+     * @param instanceName the name of the PostgreSQL instance
+     * @param pid the backend process ID to terminate
+     * @return true if the signal was sent successfully, false otherwise
+     * @see #cancelQuery(String, int)
      */
     public boolean terminateQuery(String instanceName, int pid) {
         String sql = "SELECT pg_terminate_backend(?)";
@@ -336,6 +425,16 @@ public class PostgresService {
 
     // ========== Table Stats ==========
 
+    /**
+     * Retrieves table statistics from pg_stat_user_tables for the specified instance.
+     * <p>
+     * Returns statistics about user-defined tables, including scan counts, tuple operations,
+     * and live/dead tuple counts. Excludes system catalogues.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of table statistics, ordered by total tuples (live + dead) descending, limited to 50
+     * @throws RuntimeException if the query fails
+     */
     public List<TableStats> getTableStats(String instanceName) {
         List<TableStats> stats = new ArrayList<>();
 
@@ -384,13 +483,29 @@ public class PostgresService {
         return stats;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves table statistics from pg_stat_user_tables for the default instance.
+     *
+     * @return list of table statistics, ordered by total tuples descending, limited to 50
+     * @throws RuntimeException if the query fails
+     * @see #getTableStats(String)
+     */
     public List<TableStats> getTableStats() {
         return getTableStats("default");
     }
 
     // ========== Database Info ==========
 
+    /**
+     * Retrieves general database information and configuration for the specified instance.
+     * <p>
+     * Returns PostgreSQL version, current database and user, server encoding, start time,
+     * and checks for the presence of the pg_stat_statements extension.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return database information object with metadata and extension status
+     * @throws RuntimeException if the basic info query fails
+     */
     public DatabaseInfo getDatabaseInfo(String instanceName) {
         DatabaseInfo info = new DatabaseInfo();
 
@@ -440,13 +555,30 @@ public class PostgresService {
         return info;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves general database information and configuration for the default instance.
+     *
+     * @return database information object with metadata and extension status
+     * @throws RuntimeException if the basic info query fails
+     * @see #getDatabaseInfo(String)
+     */
     public DatabaseInfo getDatabaseInfo() {
         return getDatabaseInfo("default");
     }
 
     // ========== Overview Stats ==========
 
+    /**
+     * Retrieves comprehensive overview statistics for the specified instance.
+     * <p>
+     * Returns a consolidated view including connection usage, active/blocked query counts,
+     * PostgreSQL version, longest running query duration, cache hit ratio, database size,
+     * and the top 10 largest tables and indexes.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return overview statistics aggregating multiple metrics
+     * @throws RuntimeException if any critical query fails
+     */
     public OverviewStats getOverviewStats(String instanceName) {
         OverviewStats stats = new OverviewStats();
 
@@ -623,13 +755,29 @@ public class PostgresService {
         return stats;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves comprehensive overview statistics for the default instance.
+     *
+     * @return overview statistics aggregating multiple metrics
+     * @throws RuntimeException if any critical query fails
+     * @see #getOverviewStats(String)
+     */
     public OverviewStats getOverviewStats() {
         return getOverviewStats("default");
     }
 
     // ========== Blocking Tree ==========
 
+    /**
+     * Retrieves the lock blocking hierarchy for the specified instance.
+     * <p>
+     * Identifies blocked queries and their blocking processes by analysing pg_locks and pg_stat_activity.
+     * Returns pairs of blocked and blocker processes with query details and lock modes.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of blocking relationships showing which queries are blocking others; empty list if query fails
+     * @see #getLockInfo(String)
+     */
     public List<BlockingTree> getBlockingTree(String instanceName) {
         List<BlockingTree> tree = new ArrayList<>();
 
@@ -688,13 +836,29 @@ public class PostgresService {
         return tree;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves the lock blocking hierarchy for the default instance.
+     *
+     * @return list of blocking relationships; empty list if query fails
+     * @see #getBlockingTree(String)
+     */
     public List<BlockingTree> getBlockingTree() {
         return getBlockingTree("default");
     }
 
     // ========== Lock Info ==========
 
+    /**
+     * Retrieves current lock information from pg_locks for the specified instance.
+     * <p>
+     * Returns details about all locks held or awaited by backend processes, joined with
+     * activity information. Excludes the current backend.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of lock information including granted/waiting status, lock type, and relation details; limited to 100 records
+     * @throws RuntimeException if the query fails
+     * @see #getBlockingTree(String)
+     */
     public List<LockInfo> getLockInfo(String instanceName) {
         List<LockInfo> locks = new ArrayList<>();
 
@@ -746,13 +910,30 @@ public class PostgresService {
         return locks;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves current lock information from pg_locks for the default instance.
+     *
+     * @return list of lock information; limited to 100 records
+     * @throws RuntimeException if the query fails
+     * @see #getLockInfo(String)
+     */
     public List<LockInfo> getLockInfo() {
         return getLockInfo("default");
     }
 
     // ========== Database List ==========
 
+    /**
+     * Retrieves the list of non-template databases for the specified instance.
+     * <p>
+     * Returns database names from pg_database, filtered by the configured database filter
+     * and excluding template databases.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of database names, filtered according to configured filters
+     * @throws RuntimeException if the query fails
+     * @see #shouldIncludeDatabase(String)
+     */
     public List<String> getDatabaseList(String instanceName) {
         List<String> databases = new ArrayList<>();
 
@@ -780,13 +961,31 @@ public class PostgresService {
         return databases;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves the list of non-template databases for the default instance.
+     *
+     * @return list of database names, filtered according to configured filters
+     * @throws RuntimeException if the query fails
+     * @see #getDatabaseList(String)
+     */
     public List<String> getDatabaseList() {
         return getDatabaseList("default");
     }
 
     // ========== Database Metrics ==========
 
+    /**
+     * Retrieves comprehensive metrics for all databases on the specified instance.
+     * <p>
+     * Returns statistics from pg_stat_database including transaction counts, block I/O,
+     * tuple operations, conflicts, deadlocks, session statistics, and database sizes.
+     * Excludes template databases and applies configured database filters.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of database metrics for all monitored databases
+     * @throws RuntimeException if the query fails
+     * @see #getDatabaseMetrics(String, String)
+     */
     public List<DatabaseMetrics> getAllDatabaseMetrics(String instanceName) {
         List<DatabaseMetrics> metrics = new ArrayList<>();
 
@@ -844,11 +1043,29 @@ public class PostgresService {
         return metrics;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves comprehensive metrics for all databases on the default instance.
+     *
+     * @return list of database metrics for all monitored databases
+     * @throws RuntimeException if the query fails
+     * @see #getAllDatabaseMetrics(String)
+     */
     public List<DatabaseMetrics> getAllDatabaseMetrics() {
         return getAllDatabaseMetrics("default");
     }
 
+    /**
+     * Retrieves comprehensive metrics for a specific database on the specified instance.
+     * <p>
+     * Returns statistics from pg_stat_database for a single database, including transaction counts,
+     * block I/O, tuple operations, conflicts, deadlocks, session statistics, and database size.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @param databaseName the name of the database to retrieve metrics for
+     * @return database metrics, or null if the database is not found
+     * @throws RuntimeException if the query fails
+     * @see #getAllDatabaseMetrics(String)
+     */
     public DatabaseMetrics getDatabaseMetrics(String instanceName, String databaseName) {
         String sql = """
             SELECT
@@ -901,11 +1118,28 @@ public class PostgresService {
         return null;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves comprehensive metrics for a specific database on the default instance.
+     *
+     * @param databaseName the name of the database to retrieve metrics for
+     * @return database metrics, or null if the database is not found
+     * @throws RuntimeException if the query fails
+     * @see #getDatabaseMetrics(String, String)
+     */
     public DatabaseMetrics getDatabaseMetrics(String databaseName) {
         return getDatabaseMetrics("default", databaseName);
     }
 
+    /**
+     * Maps a ResultSet row to a DatabaseMetrics object.
+     * <p>
+     * This is a utility method used internally to convert database query results
+     * into strongly-typed model objects.
+     *
+     * @param rs the ResultSet positioned at the row to map
+     * @return populated DatabaseMetrics object
+     * @throws SQLException if there is an error reading from the ResultSet
+     */
     private DatabaseMetrics mapDatabaseMetrics(ResultSet rs) throws SQLException {
         DatabaseMetrics m = new DatabaseMetrics();
         m.setDatid(rs.getLong("datid"));
@@ -983,16 +1217,24 @@ public class PostgresService {
         return summaries;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves a summary of current wait events from pg_stat_activity for the default instance.
+     *
+     * @return list of wait event summaries with session counts
+     * @see #getWaitEventSummary(String)
+     */
     public List<WaitEventSummary> getWaitEventSummary() {
         return getWaitEventSummary("default");
     }
 
     /**
-     * Gets wait event totals grouped by wait_event_type.
+     * Retrieves wait event totals grouped by wait_event_type for the specified instance.
+     * <p>
+     * Aggregates sessions from pg_stat_activity by wait_event_type to provide a high-level
+     * view of what types of events backends are waiting on.
      *
-     * @param instanceName the instance to query
-     * @return list of wait event type summaries
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of wait event type summaries with session counts, sorted by session count descending
      */
     public List<WaitEventSummary> getWaitEventTypeSummary(String instanceName) {
         List<WaitEventSummary> summaries = new ArrayList<>();
@@ -1026,7 +1268,12 @@ public class PostgresService {
         return summaries;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves wait event totals grouped by wait_event_type for the default instance.
+     *
+     * @return list of wait event type summaries with session counts
+     * @see #getWaitEventTypeSummary(String)
+     */
     public List<WaitEventSummary> getWaitEventTypeSummary() {
         return getWaitEventTypeSummary("default");
     }
@@ -1036,15 +1283,21 @@ public class PostgresService {
     // =============================================
 
     /**
-     * Generates an EXPLAIN plan for a query.
-     * Note: This only works for simple SELECT queries due to safety constraints.
-     * The query is NOT executed - only the plan is generated.
+     * Generates an EXPLAIN plan for a query on the specified instance.
+     * <p>
+     * Only SELECT, WITH (CTE), and VALUES queries are allowed for safety reasons.
+     * The query is NOT executed unless {@code analyse} is true, in which case EXPLAIN ANALYZE
+     * runs the query and provides actual execution statistics.
+     * <p>
+     * Note: Using EXPLAIN ANALYZE will execute the query, which may modify data if DDL/DML
+     * is embedded in functions or triggers. This method blocks such statements at the top level.
      *
-     * @param instanceName the instance to query
-     * @param query the SQL query to explain
-     * @param analyse if true, use EXPLAIN ANALYZE (actually runs the query)
-     * @param buffers if true, include buffer usage information
-     * @return the explain plan result
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @param query the SQL query to explain (must be SELECT, WITH, or VALUES)
+     * @param analyse if true, uses EXPLAIN ANALYZE which actually executes the query
+     * @param buffers if true, includes buffer usage information in the plan output
+     * @return the explain plan result containing plan text or error message
+     * @see #isExplainSafe(String)
      */
     public ExplainPlan explainQuery(String instanceName, String query, boolean analyse, boolean buffers) {
         ExplainPlan plan = new ExplainPlan();
@@ -1099,8 +1352,13 @@ public class PostgresService {
     }
 
     /**
-     * Checks if a query is safe to run with EXPLAIN.
-     * Only allows SELECT, WITH (CTE), and VALUES statements.
+     * Validates whether a query is safe to execute with EXPLAIN.
+     * <p>
+     * Only allows SELECT, WITH (CTE), and VALUES statements to prevent accidental
+     * execution of DDL or DML operations.
+     *
+     * @param upperQuery the SQL query in uppercase with leading whitespace removed
+     * @return true if the query starts with SELECT, WITH, or VALUES; false otherwise
      */
     private boolean isExplainSafe(String upperQuery) {
         // Remove leading whitespace and check first keyword
@@ -1128,7 +1386,15 @@ public class PostgresService {
         return false;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates an EXPLAIN plan for a query on the default instance.
+     *
+     * @param query the SQL query to explain (must be SELECT, WITH, or VALUES)
+     * @param analyse if true, uses EXPLAIN ANALYZE which actually executes the query
+     * @param buffers if true, includes buffer usage information in the plan output
+     * @return the explain plan result containing plan text or error message
+     * @see #explainQuery(String, String, boolean, boolean)
+     */
     public ExplainPlan explainQuery(String query, boolean analyse, boolean buffers) {
         return explainQuery("default", query, analyse, buffers);
     }

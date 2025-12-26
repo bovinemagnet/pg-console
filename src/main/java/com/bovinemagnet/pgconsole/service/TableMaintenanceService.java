@@ -18,11 +18,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Service for analysing tables and providing maintenance recommendations.
- * Identifies tables needing vacuum, analyse, or other maintenance.
+ * Service for analysing table health and providing maintenance recommendations.
+ * <p>
+ * Monitors PostgreSQL table statistics to identify maintenance requirements including:
+ * <ul>
+ *   <li>Tables with excessive dead tuples requiring VACUUM</li>
+ *   <li>Tables with outdated statistics requiring ANALYSE</li>
+ *   <li>Bloated tables that may benefit from VACUUM FULL</li>
+ * </ul>
+ * <p>
+ * Recommendations are prioritised by severity (CRITICAL, HIGH, MEDIUM, LOW) based
+ * on configurable thresholds for dead tuple ratios, table sizes, and staleness of
+ * statistics. Only tables exceeding minimum size thresholds are flagged to avoid
+ * noise from trivial maintenance needs.
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see TableMaintenanceRecommendation
+ * @see MaintenanceSummary
  */
 @ApplicationScoped
 public class TableMaintenanceService {
@@ -44,10 +57,19 @@ public class TableMaintenanceService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets all maintenance recommendations for an instance.
+     * Retrieves all maintenance recommendations for a database instance.
+     * <p>
+     * Aggregates recommendations from vacuum, analyse, and bloat analysis to provide
+     * a comprehensive view of table maintenance needs. Results are sorted by severity
+     * (CRITICAL first) and then by dead tuple ratio to prioritise the most urgent
+     * maintenance tasks.
      *
-     * @param instanceName the database instance
-     * @return list of recommendations sorted by severity
+     * @param instanceName the database instance identifier
+     * @return list of maintenance recommendations sorted by priority. Returns an empty
+     *         list if no maintenance is needed or if an error occurs.
+     * @see #findTablesNeedingVacuum(String)
+     * @see #findTablesNeedingAnalyse(String)
+     * @see #findBloatedTables(String)
      */
     public List<TableMaintenanceRecommendation> getRecommendations(String instanceName) {
         List<TableMaintenanceRecommendation> recommendations = new ArrayList<>();
@@ -67,7 +89,22 @@ public class TableMaintenanceService {
     }
 
     /**
-     * Finds tables with high dead tuple ratios that need vacuum.
+     * Identifies tables with excessive dead tuples requiring VACUUM.
+     * <p>
+     * Analyses {@code pg_stat_user_tables} to find tables where dead tuple ratios
+     * or absolute dead tuple counts exceed configured thresholds:
+     * <ul>
+     *   <li>CRITICAL: ≥{@value #CRITICAL_DEAD_TUPLE_RATIO} ratio or ≥{@value #CRITICAL_DEAD_TUPLES} dead tuples</li>
+     *   <li>HIGH: ≥{@value #HIGH_DEAD_TUPLE_RATIO} ratio</li>
+     *   <li>MEDIUM: ≥{@value #MEDIUM_DEAD_TUPLE_RATIO} ratio</li>
+     * </ul>
+     * <p>
+     * Only tables larger than {@value #MIN_TABLE_SIZE} bytes are considered unless
+     * they exceed the critical dead tuple count threshold.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of recommendations for tables needing VACUUM, limited to top 100
+     *         candidates. Returns an empty list if an error occurs.
      */
     public List<TableMaintenanceRecommendation> findTablesNeedingVacuum(String instanceName) {
         List<TableMaintenanceRecommendation> recommendations = new ArrayList<>();
@@ -152,7 +189,22 @@ public class TableMaintenanceService {
     }
 
     /**
-     * Finds tables with outdated statistics that need ANALYSE.
+     * Identifies tables with outdated statistics requiring ANALYSE.
+     * <p>
+     * Examines {@code pg_stat_user_tables} to find tables where statistics are stale
+     * based on last analyse timestamp and modification counts. Severity is assigned as:
+     * <ul>
+     *   <li>HIGH: Never analysed, or &gt;{@value #OVERDUE_ANALYSE_DAYS}×3 days since last analyse</li>
+     *   <li>MEDIUM: &gt;{@value #OVERDUE_ANALYSE_DAYS} days since last analyse</li>
+     *   <li>LOW: Recently analysed but with significant modifications</li>
+     * </ul>
+     * <p>
+     * Only tables larger than {@value #MIN_TABLE_SIZE} bytes with &gt;1000 live tuples
+     * are considered to focus on impactful recommendations.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of recommendations for tables needing ANALYSE, limited to top 50
+     *         candidates. Returns an empty list if an error occurs.
      */
     public List<TableMaintenanceRecommendation> findTablesNeedingAnalyse(String instanceName) {
         List<TableMaintenanceRecommendation> recommendations = new ArrayList<>();
@@ -269,8 +321,25 @@ public class TableMaintenanceService {
     }
 
     /**
-     * Finds tables with significant bloat that may need VACUUM FULL.
-     * Uses an estimate based on dead tuple ratio and table size.
+     * Identifies tables with significant bloat that may benefit from VACUUM FULL.
+     * <p>
+     * Uses a simple bloat estimation based on the ratio of dead tuples to live tuples
+     * as a proxy for wasted space that regular VACUUM cannot reclaim. Severity levels:
+     * <ul>
+     *   <li>HIGH: ≥{@value #HIGH_BLOAT_THRESHOLD}% estimated bloat</li>
+     *   <li>MEDIUM: ≥{@value #MEDIUM_BLOAT_THRESHOLD}% estimated bloat</li>
+     * </ul>
+     * <p>
+     * Only tables larger than {@value #MIN_TABLE_SIZE}×10 bytes (10MB) with &gt;10,000
+     * live tuples are considered, as VACUUM FULL requires an exclusive lock and significant
+     * I/O overhead.
+     * <p>
+     * <strong>Note:</strong> This is a simplified estimate. For production environments,
+     * consider using {@code pgstattuple} or similar tools for accurate bloat measurement.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of recommendations for bloated tables, limited to top 20 candidates.
+     *         Returns an empty list if an error occurs.
      */
     public List<TableMaintenanceRecommendation> findBloatedTables(String instanceName) {
         List<TableMaintenanceRecommendation> recommendations = new ArrayList<>();
@@ -356,7 +425,14 @@ public class TableMaintenanceService {
     }
 
     /**
-     * Gets summary statistics for the maintenance page.
+     * Generates summary statistics for the maintenance dashboard.
+     * <p>
+     * Provides aggregate counts of tables requiring various maintenance actions
+     * including vacuum needs, analyse requirements, and overall table health metrics.
+     *
+     * @param instanceName the database instance identifier
+     * @return summary object containing maintenance overview statistics
+     * @see MaintenanceSummary
      */
     public MaintenanceSummary getSummary(String instanceName) {
         MaintenanceSummary summary = new MaintenanceSummary();
@@ -414,7 +490,11 @@ public class TableMaintenanceService {
     }
 
     /**
-     * Summary statistics for the maintenance page.
+     * Aggregated summary statistics for table maintenance status.
+     * <p>
+     * Provides dashboard-level metrics including counts of tables requiring
+     * vacuum, tables with outdated statistics, and total dead tuple accumulation
+     * across all tables.
      */
     public static class MaintenanceSummary {
         private int tablesNeedingVacuum;

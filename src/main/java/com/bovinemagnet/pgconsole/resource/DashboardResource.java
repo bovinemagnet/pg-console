@@ -192,6 +192,15 @@ public class DashboardResource {
     @Inject
     PartitioningService partitioningService;
 
+    /**
+     * Renders the main dashboard overview page with key PostgreSQL metrics and sparklines.
+     * <p>
+     * Displays connection counts, active queries, blocked queries, and cache hit ratios
+     * with visual sparklines showing trends over the last hour.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing overview statistics and sparkline data
+     */
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index(
@@ -214,6 +223,18 @@ public class DashboardResource {
                     .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the slow queries page displaying pg_stat_statements data.
+     * <p>
+     * Supports both individual query view and grouped fingerprint view.
+     * Queries can be sorted by total time, calls, mean time, or other metrics.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param sortBy the sort field (defaults to "totalTime")
+     * @param order the sort order "asc" or "desc" (defaults to "desc")
+     * @param view the view mode: "individual" or "grouped" (defaults to "individual")
+     * @return template instance containing slow query data
+     */
     @GET
     @Path("/slow-queries")
     @Produces(MediaType.TEXT_HTML)
@@ -246,6 +267,15 @@ public class DashboardResource {
         return template;
     }
 
+    /**
+     * Renders the current activity page showing all active database sessions.
+     * <p>
+     * Displays queries from pg_stat_activity including running queries, idle connections,
+     * and idle-in-transaction sessions.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing current activity data
+     */
     @GET
     @Path("/activity")
     @Produces(MediaType.TEXT_HTML)
@@ -258,6 +288,15 @@ public class DashboardResource {
                       .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the tables page showing statistics for all user tables.
+     * <p>
+     * Displays table sizes, row counts, index usage, sequential scans,
+     * and vacuum statistics from pg_stat_user_tables.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing table statistics
+     */
     @GET
     @Path("/tables")
     @Produces(MediaType.TEXT_HTML)
@@ -270,6 +309,14 @@ public class DashboardResource {
                     .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Generates an SVG sparkline visualisation from a comma-separated list of values.
+     * <p>
+     * This endpoint is typically called via htmx to dynamically render sparklines.
+     *
+     * @param values comma-separated list of numeric values
+     * @return SVG sparkline as HTML string, or empty string if values are null/empty
+     */
     @GET
     @Path("/api/sparkline")
     @Produces(MediaType.TEXT_HTML)
@@ -286,6 +333,14 @@ public class DashboardResource {
         return sparklineService.generateSparkline(valueList, 100, 30);
     }
 
+    /**
+     * Renders the about page showing database version and application information.
+     * <p>
+     * Displays PostgreSQL version, uptime, and pg-console application details.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing database and application information
+     */
     @GET
     @Path("/about")
     @Produces(MediaType.TEXT_HTML)
@@ -300,6 +355,15 @@ public class DashboardResource {
                     .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the locks page showing lock information and blocking tree.
+     * <p>
+     * Displays current locks from pg_locks and a hierarchical blocking tree
+     * showing which processes are blocking others.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing lock and blocking tree data
+     */
     @GET
     @Path("/locks")
     @Produces(MediaType.TEXT_HTML)
@@ -314,6 +378,15 @@ public class DashboardResource {
                     .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the wait events page showing what database processes are waiting on.
+     * <p>
+     * Displays wait event summaries grouped by type and individual wait events
+     * from pg_stat_activity, helping identify performance bottlenecks.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing wait event summaries
+     */
     @GET
     @Path("/wait-events")
     @Produces(MediaType.TEXT_HTML)
@@ -328,6 +401,15 @@ public class DashboardResource {
                         .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the index advisor page with index recommendations.
+     * <p>
+     * Analyses query patterns and table scans to suggest missing indexes
+     * that could improve query performance.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing index recommendations and summary
+     */
     @GET
     @Path("/index-advisor")
     @Produces(MediaType.TEXT_HTML)
@@ -342,6 +424,17 @@ public class DashboardResource {
                           .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the query regressions page showing queries with performance changes.
+     * <p>
+     * Compares query performance over time to detect regressions (slower) and
+     * improvements (faster). Uses historical data to identify significant changes.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param windowHours time window in hours for comparison (defaults to 24)
+     * @param thresholdPercent percentage change threshold for detection (defaults to 50)
+     * @return template instance containing regression and improvement data
+     */
     @GET
     @Path("/query-regressions")
     @Produces(MediaType.TEXT_HTML)
@@ -362,6 +455,15 @@ public class DashboardResource {
                                .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the table maintenance page with vacuum and analyse recommendations.
+     * <p>
+     * Identifies tables that need vacuuming or analysing based on bloat,
+     * dead tuple counts, and last vacuum/analyse timestamps.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing maintenance recommendations and summary
+     */
     @GET
     @Path("/table-maintenance")
     @Produces(MediaType.TEXT_HTML)
@@ -376,6 +478,16 @@ public class DashboardResource {
                                .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the statements management page showing query performance changes.
+     * <p>
+     * Displays "top movers" - queries whose performance characteristics have
+     * changed significantly, either improving or degrading.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param windowHours time window in hours for comparison (defaults to 24)
+     * @return template instance containing top movers and summary statistics
+     */
     @GET
     @Path("/statements-management")
     @Produces(MediaType.TEXT_HTML)
@@ -392,6 +504,15 @@ public class DashboardResource {
                                    .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the replication page showing streaming replication status.
+     * <p>
+     * Displays connected replicas, replication slots, WAL statistics,
+     * and indicates whether this instance is itself a replica.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing replication status and statistics
+     */
     @GET
     @Path("/replication")
     @Produces(MediaType.TEXT_HTML)
@@ -412,6 +533,15 @@ public class DashboardResource {
                           .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the infrastructure page showing background processes and storage.
+     * <p>
+     * Displays vacuum progress, background writer statistics, checkpointer stats,
+     * and storage usage information.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing infrastructure metrics
+     */
     @GET
     @Path("/infrastructure")
     @Produces(MediaType.TEXT_HTML)
@@ -428,6 +558,15 @@ public class DashboardResource {
                              .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the audit log page showing recent administrative actions.
+     * <p>
+     * Displays a log of user actions such as query cancellations, connection
+     * terminations, and other administrative operations.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing recent audit logs and summary
+     */
     @GET
     @Path("/audit-log")
     @Produces(MediaType.TEXT_HTML)
@@ -442,6 +581,16 @@ public class DashboardResource {
                        .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the bookmarks page showing saved queries and notes.
+     * <p>
+     * Displays user-saved bookmarks with optional tag filtering.
+     * Bookmarks can include queries, notes, and metadata.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param tag optional tag filter to show only bookmarks with this tag
+     * @return template instance containing bookmarks, summary, and available tags
+     */
     @GET
     @Path("/bookmarks")
     @Produces(MediaType.TEXT_HTML)
@@ -459,6 +608,15 @@ public class DashboardResource {
                         .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the comparison page showing metrics across multiple instances.
+     * <p>
+     * Provides a side-by-side comparison of key metrics across all configured
+     * PostgreSQL instances, including common queries running on multiple instances.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing comparison data and common queries
+     */
     @GET
     @Path("/comparison")
     @Produces(MediaType.TEXT_HTML)
@@ -479,6 +637,15 @@ public class DashboardResource {
 
     // --- Phase 8: Change Data Control & Schema Management ---
 
+    /**
+     * Renders the logical replication page showing publications and subscriptions.
+     * <p>
+     * Displays logical replication configuration including publications,
+     * subscriptions, replication origins, and subscription statistics.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing logical replication data and summary
+     */
     @GET
     @Path("/logical-replication")
     @Produces(MediaType.TEXT_HTML)
@@ -499,6 +666,15 @@ public class DashboardResource {
                                  .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the change data capture page showing table modification activity.
+     * <p>
+     * Displays table change activity, high-churn tables, and WAL generation
+     * estimates to help monitor data change patterns.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing CDC activity and statistics
+     */
     @GET
     @Path("/cdc")
     @Produces(MediaType.TEXT_HTML)
@@ -517,6 +693,15 @@ public class DashboardResource {
                   .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the data lineage page showing schema dependencies.
+     * <p>
+     * Displays event triggers, foreign key relationships, view dependencies,
+     * and function dependencies to help understand data flow and schema structure.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing dependency information and summary
+     */
     @GET
     @Path("/data-lineage")
     @Produces(MediaType.TEXT_HTML)
@@ -537,6 +722,15 @@ public class DashboardResource {
                           .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the partitions page showing table partitioning information.
+     * <p>
+     * Displays partitioned tables, their partitions, and orphan partitions
+     * (partitions without a parent table).
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing partition data and summary
+     */
     @GET
     @Path("/partitions")
     @Produces(MediaType.TEXT_HTML)
@@ -553,6 +747,16 @@ public class DashboardResource {
                          .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the query detail page for a specific query.
+     * <p>
+     * Displays detailed statistics and sparklines showing performance trends
+     * over the last 24 hours for the specified query.
+     *
+     * @param queryId the query identifier from pg_stat_statements
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing query details and sparkline data
+     */
     @GET
     @Path("/slow-queries/{queryId}")
     @Produces(MediaType.TEXT_HTML)
@@ -573,6 +777,15 @@ public class DashboardResource {
                           .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the databases page showing metrics for all databases.
+     * <p>
+     * Displays size, connection counts, transaction rates, and cache hit ratios
+     * for all databases in the PostgreSQL instance.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing database metrics
+     */
     @GET
     @Path("/databases")
     @Produces(MediaType.TEXT_HTML)
@@ -585,6 +798,16 @@ public class DashboardResource {
                        .data("securityEnabled", config.security().enabled());
     }
 
+    /**
+     * Renders the database detail page for a specific database.
+     * <p>
+     * Displays detailed metrics and statistics for a single database
+     * including size, connections, and activity metrics.
+     *
+     * @param dbName the name of the database
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing database-specific metrics
+     */
     @GET
     @Path("/databases/{dbName}")
     @Produces(MediaType.TEXT_HTML)
@@ -601,8 +824,14 @@ public class DashboardResource {
     // --- Admin Actions: Cancel/Terminate Queries ---
 
     /**
-     * Cancels a running query by PID.
+     * Cancels a running query by process ID (PID).
+     * <p>
+     * Calls pg_cancel_backend() to send SIGINT to the backend process.
      * Requires admin role when security is enabled (enforced via HTTP permissions).
+     *
+     * @param pid the process ID of the backend to cancel
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with success or failure badge HTML
      */
     @POST
     @Path("/api/activity/{pid}/cancel")
@@ -619,8 +848,15 @@ public class DashboardResource {
     }
 
     /**
-     * Terminates a backend connection by PID.
+     * Terminates a backend connection by process ID (PID).
+     * <p>
+     * Calls pg_terminate_backend() to forcefully disconnect the backend.
+     * This is more aggressive than cancellation and will close the connection.
      * Requires admin role when security is enabled (enforced via HTTP permissions).
+     *
+     * @param pid the process ID of the backend to terminate
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with success or failure badge HTML
      */
     @POST
     @Path("/api/activity/{pid}/terminate")
@@ -640,7 +876,15 @@ public class DashboardResource {
 
     /**
      * Generates an EXPLAIN plan for a query.
-     * Returns HTML fragment for htmx to insert into the page.
+     * <p>
+     * Executes EXPLAIN (optionally with ANALYSE and BUFFERS) on the provided query.
+     * Returns an HTML fragment for htmx to insert into the page.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param query the SQL query to explain
+     * @param analyse whether to execute EXPLAIN ANALYSE (defaults to false)
+     * @param buffers whether to include buffer usage in the plan (defaults to false)
+     * @return HTTP response containing the EXPLAIN plan as HTML
      */
     @POST
     @Path("/api/explain")
@@ -681,7 +925,13 @@ public class DashboardResource {
     }
 
     /**
-     * Escapes HTML special characters.
+     * Escapes HTML special characters to prevent XSS and ensure correct rendering.
+     * <p>
+     * Replaces ampersand, less-than, greater-than, and quote characters
+     * with their HTML entity equivalents.
+     *
+     * @param text the text to escape, may be null
+     * @return escaped text, or empty string if input is null
      */
     private String escapeHtml(String text) {
         if (text == null) {
@@ -697,6 +947,14 @@ public class DashboardResource {
 
     /**
      * Exports slow queries as a CSV file.
+     * <p>
+     * Generates a CSV download containing query statistics from pg_stat_statements.
+     * The filename includes the instance name and timestamp.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param sortBy the sort field (defaults to "totalTime")
+     * @param order the sort order "asc" or "desc" (defaults to "desc")
+     * @return HTTP response with CSV content and download headers
      */
     @GET
     @Path("/slow-queries/export")
@@ -747,7 +1005,14 @@ public class DashboardResource {
 
     /**
      * Captures and exports an incident report as a text file.
-     * Contains a point-in-time snapshot of the database state.
+     * <p>
+     * Creates a point-in-time snapshot of the database state including
+     * active queries, locks, configuration, and key metrics.
+     * Useful for post-incident analysis and troubleshooting.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param description optional description of the incident
+     * @return HTTP response with incident report as plain text download
      */
     @GET
     @Path("/incident-report/export")
@@ -768,7 +1033,13 @@ public class DashboardResource {
     }
 
     /**
-     * Escapes a string for CSV format.
+     * Escapes a string for CSV format according to RFC 4180.
+     * <p>
+     * Wraps values containing commas, newlines, or quotes in double quotes.
+     * Escapes existing quotes by doubling them.
+     *
+     * @param value the value to escape, may be null
+     * @return escaped CSV value, or empty string if input is null
      */
     private String escapeCsv(String value) {
         if (value == null) {

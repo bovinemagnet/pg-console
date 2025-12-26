@@ -30,7 +30,16 @@ public class ReplicationService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets streaming replication status from pg_stat_replication.
+     * Retrieves streaming replication status for all connected replicas.
+     * <p>
+     * Queries the {@code pg_stat_replication} system view to obtain detailed information
+     * about each streaming replication connection, including LSN positions, lag metrics,
+     * and synchronisation state.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of replication status objects for all connected replicas, ordered by application name.
+     *         Returns an empty list if no replicas are connected or if an error occurs.
+     * @see ReplicationStatus
      */
     public List<ReplicationStatus> getStreamingReplication(String instanceName) {
         List<ReplicationStatus> replicas = new ArrayList<>();
@@ -106,7 +115,16 @@ public class ReplicationService {
     }
 
     /**
-     * Gets replication slots from pg_replication_slots.
+     * Retrieves all replication slots configured on the database instance.
+     * <p>
+     * Queries the {@code pg_replication_slots} system view to obtain information about
+     * both physical and logical replication slots, including their current state,
+     * WAL retention, and whether they are safe to delete.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of replication slot objects, ordered by slot type and name.
+     *         Returns an empty list if no slots exist or if an error occurs.
+     * @see ReplicationSlot
      */
     public List<ReplicationSlot> getReplicationSlots(String instanceName) {
         List<ReplicationSlot> slots = new ArrayList<>();
@@ -160,7 +178,16 @@ public class ReplicationService {
     }
 
     /**
-     * Gets WAL statistics.
+     * Retrieves Write-Ahead Log (WAL) statistics and configuration for the database instance.
+     * <p>
+     * Collects comprehensive WAL metrics including current LSN position, WAL configuration
+     * parameters (wal_level, max_wal_senders, max_replication_slots), usage statistics,
+     * and WAL retention information based on active replication slots.
+     *
+     * @param instanceName the database instance identifier
+     * @return WAL statistics object containing current state and configuration.
+     *         Individual fields may be zero or null if retrieval fails.
+     * @see WalStats
      */
     public WalStats getWalStats(String instanceName) {
         WalStats stats = new WalStats();
@@ -219,7 +246,18 @@ public class ReplicationService {
     }
 
     /**
-     * Gets summary statistics for the replication dashboard.
+     * Generates a comprehensive replication summary for dashboard display.
+     * <p>
+     * Aggregates data from streaming replication status, replication slots, and WAL statistics
+     * to provide an overview of the replication health, including replica counts, lag metrics,
+     * slot usage, and WAL retention.
+     *
+     * @param instanceName the database instance identifier
+     * @return summary object containing aggregated replication metrics
+     * @see ReplicationSummary
+     * @see #getStreamingReplication(String)
+     * @see #getReplicationSlots(String)
+     * @see #getWalStats(String)
      */
     public ReplicationSummary getSummary(String instanceName) {
         ReplicationSummary summary = new ReplicationSummary();
@@ -260,7 +298,14 @@ public class ReplicationService {
     }
 
     /**
-     * Checks if this server is a replica (standby).
+     * Checks whether the database instance is currently in recovery mode (replica/standby).
+     * <p>
+     * Uses the PostgreSQL {@code pg_is_in_recovery()} function to determine if the instance
+     * is operating as a standby server receiving WAL records from a primary.
+     *
+     * @param instanceName the database instance identifier
+     * @return {@code true} if the instance is in recovery mode (standby), {@code false} if it is
+     *         a primary server or if an error occurs
      */
     public boolean isReplica(String instanceName) {
         String sql = "SELECT pg_is_in_recovery()";
@@ -280,7 +325,11 @@ public class ReplicationService {
     }
 
     /**
-     * WAL statistics.
+     * Encapsulates Write-Ahead Log (WAL) statistics and configuration parameters.
+     * <p>
+     * Provides both current operational metrics (LSN position, WAL file name) and
+     * configuration settings (wal_level, sender limits, slot limits) for monitoring
+     * WAL activity and capacity planning.
      */
     public static class WalStats {
         private String currentLsn;
@@ -338,7 +387,11 @@ public class ReplicationService {
     }
 
     /**
-     * Summary for replication dashboard.
+     * Aggregated replication summary for dashboard display.
+     * <p>
+     * Consolidates key replication metrics including replica counts by state,
+     * replication slot usage, maximum lag measurements, and WAL retention totals
+     * to provide a quick overview of replication health.
      */
     public static class ReplicationSummary {
         private int totalReplicas;

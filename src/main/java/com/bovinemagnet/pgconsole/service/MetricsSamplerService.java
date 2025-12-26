@@ -42,7 +42,16 @@ public class MetricsSamplerService {
 
     /**
      * Samples system metrics every minute (configurable via cron).
-     * Iterates over all configured instances.
+     * Iterates over all configured instances and captures system, query, and database metrics.
+     * Also performs alerting threshold checks if alerting is enabled.
+     * <p>
+     * This method is scheduled to run at regular intervals and will skip concurrent execution
+     * to prevent overlapping runs. Failed sampling for individual instances is logged but
+     * does not prevent sampling of other instances.
+     *
+     * @see #sampleSystemMetrics(String)
+     * @see #sampleQueryMetrics(String)
+     * @see #sampleDatabaseMetrics(String)
      */
     @Scheduled(every = "${pg-console.history.interval-seconds:60}s",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
@@ -77,6 +86,12 @@ public class MetricsSamplerService {
 
     /**
      * Cleans up old history data daily at 3 AM.
+     * Removes historical metrics older than the configured retention period to prevent
+     * unbounded growth of the history tables.
+     * <p>
+     * The retention period is configured via {@code pg-console.history.retention-days}.
+     * This operation is performed once daily and skips concurrent execution to prevent
+     * overlapping cleanup runs.
      */
     @Scheduled(cron = "0 0 3 * * ?",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
@@ -94,6 +109,14 @@ public class MetricsSamplerService {
         }
     }
 
+    /**
+     * Samples system-level metrics for a single instance.
+     * Captures connection counts, active query counts, cache hit ratios, and database sizes.
+     * <p>
+     * The metrics are persisted to the history repository for trend analysis and alerting.
+     *
+     * @param instanceId the database instance identifier
+     */
     private void sampleSystemMetrics(String instanceId) {
         String sql = """
             SELECT
@@ -138,6 +161,16 @@ public class MetricsSamplerService {
         }
     }
 
+    /**
+     * Samples query-level metrics for a single instance.
+     * Captures the top N slowest queries from pg_stat_statements including execution times,
+     * call counts, and buffer statistics.
+     * <p>
+     * The number of top queries captured is configurable via {@code pg-console.history.top-queries}.
+     * Queries containing 'pg_stat_statements' or 'pg_console' are excluded from capture.
+     *
+     * @param instanceId the database instance identifier
+     */
     private void sampleQueryMetrics(String instanceId) {
         String sql = """
             SELECT
@@ -190,6 +223,16 @@ public class MetricsSamplerService {
         }
     }
 
+    /**
+     * Samples database-level metrics for a single instance.
+     * Captures statistics for each database including transaction counts, cache hit ratios,
+     * tuple activity, deadlocks, conflicts, and temporary file usage.
+     * <p>
+     * Template databases are excluded from sampling. Metrics are captured from pg_stat_database
+     * and enriched with size information from pg_database_size().
+     *
+     * @param instanceId the database instance identifier
+     */
     private void sampleDatabaseMetrics(String instanceId) {
         String sql = """
             SELECT
@@ -249,11 +292,27 @@ public class MetricsSamplerService {
         }
     }
 
+    /**
+     * Safely extracts a double value from a ResultSet, returning null if the value is SQL NULL.
+     *
+     * @param rs the ResultSet to read from
+     * @param column the column name to retrieve
+     * @return the double value, or null if the database value is NULL
+     * @throws SQLException if a database access error occurs
+     */
     private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
         double value = rs.getDouble(column);
         return rs.wasNull() ? null : value;
     }
 
+    /**
+     * Safely extracts a long value from a ResultSet, returning null if the value is SQL NULL.
+     *
+     * @param rs the ResultSet to read from
+     * @param column the column name to retrieve
+     * @return the long value, or null if the database value is NULL
+     * @throws SQLException if a database access error occurs
+     */
     private Long getLongOrNull(ResultSet rs, String column) throws SQLException {
         long value = rs.getLong(column);
         return rs.wasNull() ? null : value;

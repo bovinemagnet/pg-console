@@ -65,7 +65,13 @@ public class ApiResource {
     InfrastructureService infrastructureService;
 
     /**
-     * Returns overview statistics for a PostgreSQL instance.
+     * Returns overview statistics for a PostgreSQL instance as JSON.
+     * <p>
+     * Includes timestamp, instance identifier, and key metrics such as
+     * connection counts, database size, and cache hit ratio.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, and overview statistics
      */
     @GET
     @Path("/overview")
@@ -80,7 +86,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns current database activity.
+     * Returns current database activity as JSON.
+     * <p>
+     * Retrieves active sessions from pg_stat_activity including running queries,
+     * idle connections, and session metadata.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, activity count, and activity list
      */
     @GET
     @Path("/activity")
@@ -96,7 +108,16 @@ public class ApiResource {
     }
 
     /**
-     * Returns slow queries from pg_stat_statements.
+     * Returns slow queries from pg_stat_statements as JSON.
+     * <p>
+     * Retrieves query performance statistics with configurable sorting and limiting.
+     * Results can be sorted by total time, calls, mean time, or other metrics.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param sortBy the sort field (defaults to "totalTime")
+     * @param order the sort order "asc" or "desc" (defaults to "desc")
+     * @param limit maximum number of queries to return (defaults to 50)
+     * @return JSON map containing timestamp, instance name, query count, and query list
      */
     @GET
     @Path("/slow-queries")
@@ -118,7 +139,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns lock information.
+     * Returns lock information as JSON.
+     * <p>
+     * Retrieves current locks from pg_locks and a hierarchical blocking tree
+     * showing which processes are blocking others.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, blocking tree, and locks list
      */
     @GET
     @Path("/locks")
@@ -135,7 +162,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns wait event summary.
+     * Returns wait event summary as JSON.
+     * <p>
+     * Retrieves wait event statistics from pg_stat_activity, grouped by type
+     * and individually, to help identify performance bottlenecks.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, type summaries, and wait events
      */
     @GET
     @Path("/wait-events")
@@ -152,7 +185,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns table statistics.
+     * Returns table statistics as JSON.
+     * <p>
+     * Retrieves statistics for all user tables from pg_stat_user_tables
+     * including sizes, row counts, index usage, and vacuum information.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, table count, and tables list
      */
     @GET
     @Path("/tables")
@@ -168,7 +207,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns database metrics.
+     * Returns database metrics as JSON.
+     * <p>
+     * Retrieves metrics for all databases in the PostgreSQL instance
+     * including size, connection counts, transaction rates, and cache hit ratios.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, database count, and databases list
      */
     @GET
     @Path("/databases")
@@ -184,7 +229,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns index recommendations.
+     * Returns index recommendations as JSON.
+     * <p>
+     * Analyses query patterns and table scans to suggest missing indexes
+     * that could improve query performance.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, summary, and recommendations list
      */
     @GET
     @Path("/index-advisor")
@@ -201,7 +252,15 @@ public class ApiResource {
     }
 
     /**
-     * Returns query regressions.
+     * Returns query regressions as JSON.
+     * <p>
+     * Compares query performance over time to detect regressions (slower) and
+     * improvements (faster). Uses historical data to identify significant changes.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param windowHours time window in hours for comparison (defaults to 24)
+     * @param thresholdPercent percentage change threshold for detection (defaults to 50)
+     * @return JSON map containing timestamp, instance name, window parameters, summary, regressions, and improvements
      */
     @GET
     @Path("/query-regressions")
@@ -224,7 +283,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns table maintenance recommendations.
+     * Returns table maintenance recommendations as JSON.
+     * <p>
+     * Identifies tables that need vacuuming or analysing based on bloat,
+     * dead tuple counts, and last vacuum/analyse timestamps.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, summary, and recommendations list
      */
     @GET
     @Path("/table-maintenance")
@@ -241,7 +306,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns replication status.
+     * Returns replication status as JSON.
+     * <p>
+     * Retrieves streaming replication information including connected replicas,
+     * replication slots, WAL statistics, and whether this instance is a replica.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, replica status, summary, WAL stats, replicas, and slots
      */
     @GET
     @Path("/replication")
@@ -264,7 +335,13 @@ public class ApiResource {
     }
 
     /**
-     * Returns infrastructure status (vacuum progress, background processes, storage).
+     * Returns infrastructure status as JSON.
+     * <p>
+     * Retrieves vacuum progress, background writer statistics, checkpointer stats,
+     * and storage usage information for monitoring PostgreSQL infrastructure health.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, vacuum progress, background process stats, and storage stats
      */
     @GET
     @Path("/infrastructure")
@@ -283,7 +360,12 @@ public class ApiResource {
     }
 
     /**
-     * Returns list of configured instances.
+     * Returns list of configured PostgreSQL instances as JSON.
+     * <p>
+     * Retrieves all configured instances from the application configuration,
+     * including their names and display names.
+     *
+     * @return JSON map containing timestamp, instance count, and instances list
      */
     @GET
     @Path("/instances")
@@ -297,7 +379,13 @@ public class ApiResource {
     }
 
     /**
-     * Health check endpoint.
+     * Health check endpoint for monitoring and load balancers.
+     * <p>
+     * Returns health status, PostgreSQL version, and connection information.
+     * Returns "healthy" status if database is accessible, "unhealthy" with error details otherwise.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, status, and database information or error details
      */
     @GET
     @Path("/health")

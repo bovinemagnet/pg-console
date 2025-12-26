@@ -37,22 +37,39 @@ public class QueryRegressionService {
     InstanceConfig config;
 
     /**
-     * Detects query regressions by comparing current period to previous period.
+     * Detects query performance regressions using default thresholds.
+     * <p>
+     * Compares query performance between the current 24-hour period and the previous
+     * 24-hour period, flagging queries with mean execution time increases of 50% or more.
      *
-     * @param instanceName the database instance
-     * @return list of queries showing regression, sorted by severity
+     * @param instanceName the database instance identifier
+     * @return list of queries showing performance regression, sorted by severity (CRITICAL first)
+     *         then by percentage change descending
+     * @see #detectRegressions(String, int, int)
      */
     public List<QueryRegression> detectRegressions(String instanceName) {
         return detectRegressions(instanceName, DEFAULT_WINDOW_HOURS, DEFAULT_REGRESSION_THRESHOLD);
     }
 
     /**
-     * Detects query regressions with configurable parameters.
+     * Detects query performance regressions with configurable time windows and thresholds.
+     * <p>
+     * Compares aggregated query metrics between two time periods:
+     * <ul>
+     * <li>Current period: last {@code windowHours} hours</li>
+     * <li>Previous period: from {@code windowHours} to {@code 2 * windowHours} hours ago</li>
+     * </ul>
+     * Queries are matched by query ID (normalised fingerprint). Only queries present in both
+     * periods are compared. Queries with very low mean time (less than 1ms) are excluded to
+     * avoid noise from fast queries where timing variations are insignificant.
+     * <p>
+     * Severity levels are assigned based on percentage increase:
+     * CRITICAL (200%+), HIGH (100-200%), MEDIUM (50-100%), LOW (below 50%).
      *
-     * @param instanceName the database instance
+     * @param instanceName the database instance identifier
      * @param windowHours the size of each comparison window in hours
-     * @param thresholdPercent minimum percentage increase to flag as regression
-     * @return list of queries showing regression, sorted by severity
+     * @param thresholdPercent minimum percentage increase to flag as regression (e.g., 50 for 50%)
+     * @return list of queries showing performance regression, sorted by severity then by change percentage
      */
     public List<QueryRegression> detectRegressions(String instanceName, int windowHours, int thresholdPercent) {
         List<QueryRegression> regressions = new ArrayList<>();
@@ -130,12 +147,18 @@ public class QueryRegressionService {
     }
 
     /**
-     * Detects improvements (queries that got faster).
+     * Detects query performance improvements (queries that became faster).
+     * <p>
+     * Identifies queries where mean execution time decreased by at least the specified threshold
+     * percentage. Uses the same time window comparison logic as regression detection, but looks
+     * for negative performance changes (faster execution).
+     * <p>
+     * All improvements are assigned LOW severity as they represent positive changes.
      *
-     * @param instanceName the database instance
+     * @param instanceName the database instance identifier
      * @param windowHours the size of each comparison window in hours
-     * @param thresholdPercent minimum percentage decrease to flag as improvement
-     * @return list of queries showing improvement, sorted by magnitude
+     * @param thresholdPercent minimum percentage decrease to flag as improvement (positive value, e.g., 50 for 50% faster)
+     * @return list of queries showing performance improvement, sorted by improvement magnitude (most improved first)
      */
     public List<QueryRegression> detectImprovements(String instanceName, int windowHours, int thresholdPercent) {
         List<QueryRegression> improvements = new ArrayList<>();
@@ -200,7 +223,15 @@ public class QueryRegressionService {
     }
 
     /**
-     * Gets summary statistics for query regression detection.
+     * Retrieves summary statistics for query regression detection.
+     * <p>
+     * Computes aggregate counts of regressions and improvements, breaking down
+     * regressions by severity level (CRITICAL, HIGH, MEDIUM).
+     *
+     * @param instanceName the database instance identifier
+     * @param windowHours the size of each comparison window in hours
+     * @param thresholdPercent minimum percentage change threshold
+     * @return summary statistics including total counts and severity breakdown
      */
     public RegressionSummary getSummary(String instanceName, int windowHours, int thresholdPercent) {
         List<QueryRegression> regressions = detectRegressions(instanceName, windowHours, thresholdPercent);
@@ -222,7 +253,13 @@ public class QueryRegressionService {
     }
 
     /**
-     * Calculates percentage change between two values.
+     * Calculates the percentage change between two values.
+     * <p>
+     * Returns 0 if the old value is 0 to avoid division by zero.
+     *
+     * @param oldValue the baseline value
+     * @param newValue the new value to compare
+     * @return percentage change from old to new (positive for increase, negative for decrease)
      */
     private double calculatePercentChange(double oldValue, double newValue) {
         if (oldValue == 0) {
@@ -232,7 +269,10 @@ public class QueryRegressionService {
     }
 
     /**
-     * Summary statistics for the regression detection page.
+     * Encapsulates summary statistics for query regression detection.
+     * <p>
+     * Provides aggregate counts of regressions and improvements with breakdown
+     * by severity level for use in dashboard displays.
      */
     public static class RegressionSummary {
         private int totalRegressions;

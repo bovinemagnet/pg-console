@@ -27,7 +27,14 @@ public class HistoryRepository {
     DataSource dataSource;
 
     /**
-     * Saves a system metrics snapshot for an instance.
+     * Saves a system metrics snapshot for an instance to the history database.
+     * <p>
+     * Stores current metrics including connections, active queries, blocked queries,
+     * cache hit ratio, and database size for historical trend analysis.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param metrics the system metrics snapshot to save
+     * @throws RuntimeException if database insert fails
      */
     public void saveSystemMetrics(String instanceId, SystemMetricsHistory metrics) {
         String sql = """
@@ -61,13 +68,28 @@ public class HistoryRepository {
         }
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Saves a system metrics snapshot for the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #saveSystemMetrics(String, SystemMetricsHistory)}
+     * using "default" as the instance identifier.
+     *
+     * @param metrics the system metrics snapshot to save
+     * @throws RuntimeException if database insert fails
+     */
     public void saveSystemMetrics(SystemMetricsHistory metrics) {
         saveSystemMetrics("default", metrics);
     }
 
     /**
-     * Saves a query metrics snapshot for an instance.
+     * Saves a query metrics snapshot for an instance to the history database.
+     * <p>
+     * Stores query performance statistics from pg_stat_statements including
+     * execution counts, timing statistics, and resource usage.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param metrics the query metrics snapshot to save
+     * @throws RuntimeException if database insert fails
      */
     public void saveQueryMetrics(String instanceId, QueryMetricsHistory metrics) {
         String sql = """
@@ -102,13 +124,28 @@ public class HistoryRepository {
         }
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Saves a query metrics snapshot for the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #saveQueryMetrics(String, QueryMetricsHistory)}
+     * using "default" as the instance identifier.
+     *
+     * @param metrics the query metrics snapshot to save
+     * @throws RuntimeException if database insert fails
+     */
     public void saveQueryMetrics(QueryMetricsHistory metrics) {
         saveQueryMetrics("default", metrics);
     }
 
     /**
-     * Saves a database metrics snapshot for an instance.
+     * Saves a database metrics snapshot for an instance to the history database.
+     * <p>
+     * Stores per-database statistics including connection counts, transaction rates,
+     * cache hit ratios, tuple operations, and deadlock information.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param metrics the database metrics snapshot to save
+     * @throws RuntimeException if database insert fails
      */
     public void saveDatabaseMetrics(String instanceId, DatabaseMetricsHistory metrics) {
         String sql = """
@@ -149,13 +186,29 @@ public class HistoryRepository {
         }
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Saves a database metrics snapshot for the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #saveDatabaseMetrics(String, DatabaseMetricsHistory)}
+     * using "default" as the instance identifier.
+     *
+     * @param metrics the database metrics snapshot to save
+     * @throws RuntimeException if database insert fails
+     */
     public void saveDatabaseMetrics(DatabaseMetricsHistory metrics) {
         saveDatabaseMetrics("default", metrics);
     }
 
     /**
-     * Gets system metrics history for an instance for the last N hours.
+     * Retrieves system metrics history for an instance over a specified time period.
+     * <p>
+     * Returns historical data points ordered chronologically, useful for
+     * generating trend visualisations and sparklines.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param hours number of hours of history to retrieve
+     * @return list of system metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
      */
     public List<SystemMetricsHistory> getSystemMetricsHistory(String instanceId, int hours) {
         List<SystemMetricsHistory> history = new ArrayList<>();
@@ -202,13 +255,31 @@ public class HistoryRepository {
         return history;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves system metrics history for the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #getSystemMetricsHistory(String, int)}
+     * using "default" as the instance identifier.
+     *
+     * @param hours number of hours of history to retrieve
+     * @return list of system metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
     public List<SystemMetricsHistory> getSystemMetricsHistory(int hours) {
         return getSystemMetricsHistory("default", hours);
     }
 
     /**
-     * Gets query metrics history for a specific query on an instance.
+     * Retrieves query metrics history for a specific query on an instance.
+     * <p>
+     * Returns performance history for a single query identified by its
+     * pg_stat_statements query ID, useful for identifying performance trends.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param queryId the query identifier from pg_stat_statements
+     * @param hours number of hours of history to retrieve
+     * @return list of query metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
      */
     public List<QueryMetricsHistory> getQueryMetricsHistory(String instanceId, String queryId, int hours) {
         List<QueryMetricsHistory> history = new ArrayList<>();
@@ -257,13 +328,32 @@ public class HistoryRepository {
         return history;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves query metrics history for a specific query on the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #getQueryMetricsHistory(String, String, int)}
+     * using "default" as the instance identifier.
+     *
+     * @param queryId the query identifier from pg_stat_statements
+     * @param hours number of hours of history to retrieve
+     * @return list of query metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
     public List<QueryMetricsHistory> getQueryMetricsHistory(String queryId, int hours) {
         return getQueryMetricsHistory("default", queryId, hours);
     }
 
     /**
-     * Gets database metrics history for an instance.
+     * Retrieves database metrics history for a specific database on an instance.
+     * <p>
+     * Returns historical statistics for a single database, useful for
+     * tracking database-level performance trends over time.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param databaseName the name of the database
+     * @param hours number of hours of history to retrieve
+     * @return list of database metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
      */
     public List<DatabaseMetricsHistory> getDatabaseMetricsHistory(String instanceId, String databaseName, int hours) {
         List<DatabaseMetricsHistory> history = new ArrayList<>();
@@ -318,13 +408,30 @@ public class HistoryRepository {
         return history;
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Retrieves database metrics history for a specific database on the default instance.
+     * <p>
+     * Backward-compatible method that delegates to {@link #getDatabaseMetricsHistory(String, String, int)}
+     * using "default" as the instance identifier.
+     *
+     * @param databaseName the name of the database
+     * @param hours number of hours of history to retrieve
+     * @return list of database metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
     public List<DatabaseMetricsHistory> getDatabaseMetricsHistory(String databaseName, int hours) {
         return getDatabaseMetricsHistory("default", databaseName, hours);
     }
 
     /**
-     * Deletes history data older than the specified number of days.
+     * Deletes history data older than the specified retention period.
+     * <p>
+     * Removes old metrics from all history tables (system, query, and database)
+     * to prevent unbounded growth. Typically called by a scheduled cleanup task.
+     *
+     * @param retentionDays number of days of history to retain
+     * @return total number of rows deleted across all history tables
+     * @throws RuntimeException if database deletion fails
      */
     public int deleteOldData(int retentionDays) {
         Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
@@ -352,13 +459,18 @@ public class HistoryRepository {
     }
 
     /**
-     * Gets aggregated query metrics for a time period.
-     * Returns the average mean_time, total calls, and latest query text for each query.
+     * Retrieves aggregated query metrics for a specific time window.
+     * <p>
+     * Aggregates historical query data by computing average mean execution time,
+     * total calls, and total execution time for each query within the specified period.
+     * Only includes queries with at least 2 sample points. Results are ordered by
+     * average mean time descending. Useful for regression detection and performance analysis.
      *
-     * @param instanceId the instance ID
-     * @param startHoursAgo hours ago for the start of the period
-     * @param endHoursAgo hours ago for the end of the period
-     * @return list of aggregated query metrics
+     * @param instanceId the PostgreSQL instance identifier
+     * @param startHoursAgo hours ago for the start of the time window (e.g., 48 for 48 hours ago)
+     * @param endHoursAgo hours ago for the end of the time window (e.g., 24 for 24 hours ago)
+     * @return list of aggregated query metrics ordered by average mean time (descending)
+     * @throws RuntimeException if database query fails
      */
     public List<QueryMetricsHistory> getAggregatedQueryMetrics(String instanceId, int startHoursAgo, int endHoursAgo) {
         List<QueryMetricsHistory> results = new ArrayList<>();
@@ -406,11 +518,31 @@ public class HistoryRepository {
         return results;
     }
 
+    /**
+     * Safely retrieves a Double value from a ResultSet, handling SQL NULL values.
+     * <p>
+     * Returns null if the database column contains NULL, otherwise returns the numeric value.
+     *
+     * @param rs the result set
+     * @param column the column name
+     * @return the Double value, or null if the column is NULL
+     * @throws SQLException if the column name is invalid or type conversion fails
+     */
     private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
         double value = rs.getDouble(column);
         return rs.wasNull() ? null : value;
     }
 
+    /**
+     * Safely retrieves a Long value from a ResultSet, handling SQL NULL values.
+     * <p>
+     * Returns null if the database column contains NULL, otherwise returns the numeric value.
+     *
+     * @param rs the result set
+     * @param column the column name
+     * @return the Long value, or null if the column is NULL
+     * @throws SQLException if the column name is invalid or type conversion fails
+     */
     private Long getLongOrNull(ResultSet rs, String column) throws SQLException {
         long value = rs.getLong(column);
         return rs.wasNull() ? null : value;

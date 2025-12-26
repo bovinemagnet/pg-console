@@ -30,8 +30,18 @@ public class InfrastructureService {
     // ========== Vacuum Progress ==========
 
     /**
-     * Gets active vacuum operations from pg_stat_progress_vacuum.
-     * Compatible with PostgreSQL 12+ (handles column differences across versions).
+     * Retrieves active vacuum operations from {@code pg_stat_progress_vacuum}.
+     * <p>
+     * Monitors ongoing VACUUM operations including both manual and autovacuum processes.
+     * Automatically detects PostgreSQL version and adapts queries accordingly:
+     * <ul>
+     * <li>PostgreSQL 17+: Uses renamed columns (dead_tuple_bytes, max_dead_tuple_bytes)</li>
+     * <li>PostgreSQL 12-16: Uses original column names (num_dead_tuples, max_dead_tuples)</li>
+     * </ul>
+     * Progress percentage is calculated based on heap blocks scanned versus total heap blocks.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of active vacuum operations with progress metrics
      */
     public List<VacuumProgress> getVacuumProgress(String instanceName) {
         List<VacuumProgress> vacuums = new ArrayList<>();
@@ -129,8 +139,18 @@ public class InfrastructureService {
     // ========== Background Processes ==========
 
     /**
-     * Gets background process statistics.
-     * Compatible with PostgreSQL 12+ (handles pg_stat_checkpointer in PG 17+).
+     * Retrieves comprehensive background process statistics.
+     * <p>
+     * Collects statistics about autovacuum workers, checkpointer, background writer,
+     * and other PostgreSQL background processes. Automatically adapts to PostgreSQL version:
+     * <ul>
+     * <li>PostgreSQL 17+: Uses {@code pg_stat_checkpointer} and {@code pg_stat_bgwriter} views separately,
+     *     plus {@code pg_stat_io} for backend I/O statistics</li>
+     * <li>PostgreSQL 12-16: Uses consolidated {@code pg_stat_bgwriter} view for all statistics</li>
+     * </ul>
+     *
+     * @param instanceName the database instance identifier
+     * @return comprehensive background process statistics including autovacuum, checkpointer, and I/O metrics
      */
     public BackgroundProcessStats getBackgroundProcessStats(String instanceName) {
         BackgroundProcessStats stats = new BackgroundProcessStats();
@@ -309,7 +329,18 @@ public class InfrastructureService {
     // ========== Storage Insights ==========
 
     /**
-     * Gets storage statistics including tablespaces and WAL.
+     * Retrieves comprehensive storage statistics including tablespaces, databases, and WAL.
+     * <p>
+     * Collects information about:
+     * <ul>
+     * <li>Tablespace locations and sizes</li>
+     * <li>Database sizes (excluding template databases)</li>
+     * <li>Write-Ahead Logging (WAL) configuration and current usage</li>
+     * <li>Temporary file statistics across all databases</li>
+     * </ul>
+     *
+     * @param instanceName the database instance identifier
+     * @return storage statistics including tablespace, database, WAL, and temporary file metrics
      */
     public StorageStats getStorageStats(String instanceName) {
         StorageStats stats = new StorageStats();
@@ -419,6 +450,12 @@ public class InfrastructureService {
 
     // ========== Inner Classes ==========
 
+    /**
+     * Encapsulates statistics about PostgreSQL background processes.
+     * <p>
+     * Includes autovacuum configuration and activity, checkpoint statistics,
+     * background writer metrics, and buffer allocation patterns.
+     */
     public static class BackgroundProcessStats {
         private boolean autovacuumEnabled;
         private boolean autovacuumLauncherRunning;
@@ -510,6 +547,12 @@ public class InfrastructureService {
         }
     }
 
+    /**
+     * Represents a single type of background process with its count.
+     * <p>
+     * Background process types include autovacuum launcher, autovacuum worker,
+     * background writer, checkpointer, WAL writer, and client backends.
+     */
     public static class BackgroundProcess {
         private String type;
         private int count;
@@ -533,6 +576,12 @@ public class InfrastructureService {
         }
     }
 
+    /**
+     * Encapsulates comprehensive storage statistics for a PostgreSQL instance.
+     * <p>
+     * Includes tablespace information, database sizes, WAL metrics, and temporary
+     * file usage statistics.
+     */
     public static class StorageStats {
         private String dataDirectory;
         private List<TablespaceInfo> tablespaces = new ArrayList<>();
@@ -586,6 +635,12 @@ public class InfrastructureService {
         }
     }
 
+    /**
+     * Represents a PostgreSQL tablespace with its location and size.
+     * <p>
+     * Tablespaces allow database administrators to define filesystem locations
+     * where database objects can be stored.
+     */
     public static class TablespaceInfo {
         private String name;
         private String location;
@@ -613,6 +668,11 @@ public class InfrastructureService {
         }
     }
 
+    /**
+     * Represents a database with its storage size.
+     * <p>
+     * Excludes template databases from size calculations.
+     */
     public static class DatabaseSize {
         private String name;
         private long sizeBytes;

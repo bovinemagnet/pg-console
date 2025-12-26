@@ -27,7 +27,20 @@ public class SchemaChangeService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets all event triggers in the database.
+     * Retrieves all event triggers defined in the specified database instance.
+     * <p>
+     * Event triggers are database-wide triggers that fire for DDL (Data Definition Language) events
+     * such as CREATE, ALTER, and DROP commands. This method queries the {@code pg_event_trigger}
+     * system catalogue to retrieve trigger metadata including the trigger name, event type, owner,
+     * associated function, enabled status, and command tags that activate the trigger.
+     * <p>
+     * The function definition for each trigger is also retrieved to facilitate analysis of the
+     * trigger's behaviour.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link EventTrigger} objects ordered by trigger name; returns an empty list
+     *         if the query fails or no event triggers exist
+     * @see EventTrigger
      */
     public List<EventTrigger> getEventTriggers(String instanceName) {
         List<EventTrigger> triggers = new ArrayList<>();
@@ -73,7 +86,20 @@ public class SchemaChangeService {
     }
 
     /**
-     * Gets object dependencies (what objects depend on what).
+     * Retrieves dependency relationships for a specific database object.
+     * <p>
+     * Queries the {@code pg_depend} system catalogue to identify all objects that depend on the
+     * specified object. This is useful for understanding the impact of schema changes, as dropping
+     * or modifying an object may affect dependent objects such as views, functions, or triggers.
+     * <p>
+     * Only normal ('n') and automatic ('a') dependencies are included, filtering out internal
+     * PostgreSQL dependencies that are not relevant for schema analysis.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @param objectName the fully qualified name of the database object (e.g., "schema.table")
+     * @return a list of {@link ObjectDependency} objects ordered by dependent object name; returns
+     *         an empty list if the query fails or no dependencies exist
+     * @see ObjectDependency
      */
     public List<ObjectDependency> getObjectDependencies(String instanceName, String objectName) {
         List<ObjectDependency> dependencies = new ArrayList<>();
@@ -115,7 +141,20 @@ public class SchemaChangeService {
     }
 
     /**
-     * Gets all foreign key relationships.
+     * Retrieves all foreign key constraint relationships in the specified database instance.
+     * <p>
+     * Queries the {@code information_schema} views to extract foreign key metadata including
+     * the source table, source column, referenced table, referenced column, and the cascade
+     * rules for updates and deletes. This information is essential for understanding referential
+     * integrity constraints and planning schema modifications.
+     * <p>
+     * System schemas (pg_catalog, information_schema, pgconsole) are excluded from the results.
+     * Results are ordered by schema, table, and constraint name for consistent presentation.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link ForeignKeyRelationship} objects ordered by schema and table name;
+     *         returns an empty list if the query fails or no foreign keys exist
+     * @see ForeignKeyRelationship
      */
     public List<ForeignKeyRelationship> getForeignKeyRelationships(String instanceName) {
         List<ForeignKeyRelationship> relationships = new ArrayList<>();
@@ -171,7 +210,20 @@ public class SchemaChangeService {
     }
 
     /**
-     * Gets view and materialised view dependencies.
+     * Retrieves dependency relationships for views and materialised views in the database.
+     * <p>
+     * Identifies the base tables and other objects that views depend upon by querying the
+     * {@code pg_views} system view and correlating it with dependency information from
+     * {@code pg_depend}. This is critical for understanding the impact of table modifications
+     * on dependent views, as changes to base tables may require view updates or recreation.
+     * <p>
+     * Only normal dependencies on class objects (typically tables) are included, excluding
+     * self-references and system objects.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link ViewDependency} objects ordered by schema and view name; returns
+     *         an empty list if the query fails or no view dependencies exist
+     * @see ViewDependency
      */
     public List<ViewDependency> getViewDependencies(String instanceName) {
         List<ViewDependency> dependencies = new ArrayList<>();
@@ -213,7 +265,20 @@ public class SchemaChangeService {
     }
 
     /**
-     * Gets function/procedure call dependencies.
+     * Retrieves dependency relationships for user-defined functions and procedures.
+     * <p>
+     * Identifies the database objects (typically tables) that functions and procedures depend upon
+     * by querying the {@code pg_proc} system catalogue and correlating it with {@code pg_depend}.
+     * This helps understand which functions may be affected by table schema changes and aids in
+     * impact analysis for database modifications.
+     * <p>
+     * Results are limited to 100 function dependencies to avoid excessive data retrieval in
+     * databases with numerous stored procedures.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link FunctionDependency} objects ordered by schema and function name;
+     *         returns an empty list if the query fails or no function dependencies exist
+     * @see FunctionDependency
      */
     public List<FunctionDependency> getFunctionDependencies(String instanceName) {
         List<FunctionDependency> dependencies = new ArrayList<>();
@@ -256,7 +321,19 @@ public class SchemaChangeService {
     }
 
     /**
-     * Gets schema summary statistics.
+     * Retrieves aggregate schema statistics for the specified database instance.
+     * <p>
+     * Provides a database-wide summary of schema objects including counts of event triggers
+     * (both total and enabled), foreign key constraints, views, materialised views, and
+     * user-defined functions. This summary is useful for understanding the overall schema
+     * complexity and identifying potential areas requiring attention.
+     * <p>
+     * System schemas (pg_catalog, information_schema, pgconsole) are excluded from all counts.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a {@link SchemaSummary} object containing aggregate schema statistics; returns an
+     *         object with default values (zeros) if the query fails
+     * @see SchemaSummary
      */
     public SchemaSummary getSummary(String instanceName) {
         SchemaSummary summary = new SchemaSummary();
@@ -298,6 +375,16 @@ public class SchemaChangeService {
 
     // --- Model Classes ---
 
+    /**
+     * Data transfer object representing a PostgreSQL event trigger.
+     * <p>
+     * Event triggers are database-wide triggers that fire for DDL events. This class encapsulates
+     * the trigger metadata including its name, the event type it responds to (e.g., ddl_command_start,
+     * ddl_command_end, sql_drop), the associated function, enabled status, and optional command tags
+     * that filter which DDL commands activate the trigger.
+     *
+     * @see #getEventTriggers(String)
+     */
     public static class EventTrigger {
         private String name;
         private String event;
@@ -354,6 +441,16 @@ public class SchemaChangeService {
         public void setFunctionDef(String def) { this.functionDef = def; }
     }
 
+    /**
+     * Data transfer object representing a dependency relationship between database objects.
+     * <p>
+     * Captures the relationship where one database object (the dependent) relies on another
+     * database object (the referenced). Includes the type of both objects (e.g., table, view,
+     * function) and the nature of the dependency (normal, automatic, internal, etc.). This
+     * information is crucial for understanding the impact of schema changes.
+     *
+     * @see #getObjectDependencies(String, String)
+     */
     public static class ObjectDependency {
         private String dependentType;
         private String dependentName;
@@ -389,6 +486,16 @@ public class SchemaChangeService {
         }
     }
 
+    /**
+     * Data transfer object representing a foreign key constraint relationship between tables.
+     * <p>
+     * Encapsulates the complete foreign key relationship including the source table and column,
+     * the referenced (target) table and column, and the cascade rules for update and delete
+     * operations. This information is essential for understanding referential integrity constraints
+     * and planning schema modifications that may affect related tables.
+     *
+     * @see #getForeignKeyRelationships(String)
+     */
     public static class ForeignKeyRelationship {
         private String constraintName;
         private String fromSchema;
@@ -436,6 +543,15 @@ public class SchemaChangeService {
         }
     }
 
+    /**
+     * Data transfer object representing a dependency relationship for a database view.
+     * <p>
+     * Identifies the base table or other object that a view depends upon. When base tables
+     * are modified, dependent views may need to be updated or recreated. This class helps
+     * track these relationships to facilitate impact analysis and schema migration planning.
+     *
+     * @see #getViewDependencies(String)
+     */
     public static class ViewDependency {
         private String viewSchema;
         private String viewName;
@@ -457,6 +573,15 @@ public class SchemaChangeService {
         public void setDependsOnName(String name) { this.dependsOnName = name; }
     }
 
+    /**
+     * Data transfer object representing a dependency relationship for a user-defined function or procedure.
+     * <p>
+     * Captures the database objects that a function depends upon, typically tables that the function
+     * queries or modifies. Understanding these dependencies is important for impact analysis when
+     * modifying table schemas, as function code may need to be updated to reflect schema changes.
+     *
+     * @see #getFunctionDependencies(String)
+     */
     public static class FunctionDependency {
         private String functionName;
         private String schemaName;
@@ -482,6 +607,16 @@ public class SchemaChangeService {
         public void setDependsOnName(String name) { this.dependsOnName = name; }
     }
 
+    /**
+     * Data transfer object containing aggregate schema statistics for a database instance.
+     * <p>
+     * Provides summary counts of various schema objects including event triggers, foreign key
+     * constraints, views, materialised views, and user-defined functions. This summary helps
+     * assess the overall complexity of the database schema and identify potential areas that
+     * may require attention during maintenance or migration activities.
+     *
+     * @see #getSummary(String)
+     */
     public static class SchemaSummary {
         private int eventTriggerCount;
         private int enabledTriggers;

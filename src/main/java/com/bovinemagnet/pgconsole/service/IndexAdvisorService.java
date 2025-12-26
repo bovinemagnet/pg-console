@@ -36,10 +36,13 @@ public class IndexAdvisorService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets all index recommendations for an instance.
+     * Retrieves all index recommendations for the specified database instance.
+     * <p>
+     * Analyses the instance for missing indexes, unused indexes, and duplicate indexes,
+     * then consolidates and sorts recommendations by severity (HIGH, MEDIUM, LOW) and type.
      *
-     * @param instanceName the database instance
-     * @return list of recommendations sorted by severity
+     * @param instanceName the database instance identifier
+     * @return list of all index recommendations sorted by severity (HIGH first) then by type
      */
     public List<IndexRecommendation> getRecommendations(String instanceName) {
         List<IndexRecommendation> recommendations = new ArrayList<>();
@@ -59,7 +62,18 @@ public class IndexAdvisorService {
     }
 
     /**
-     * Finds tables with high sequential scan ratios that may need indexes.
+     * Identifies tables with high sequential scan ratios that may benefit from indexes.
+     * <p>
+     * Queries {@code pg_stat_user_tables} to find tables where sequential scans dominate
+     * over index scans. Only considers tables with significant row counts (over 1000 rows)
+     * and scan activity (over 100 sequential scans) to avoid false positives on small or
+     * infrequently accessed tables.
+     * <p>
+     * Severity is HIGH if sequential scans exceed 90% of total scans, MEDIUM if over 70%.
+     * System schemas (pg_catalog, information_schema, pgconsole) are excluded.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of tables recommended for indexing, sorted by sequential scan ratio descending
      */
     public List<IndexRecommendation> findTablesNeedingIndexes(String instanceName) {
         List<IndexRecommendation> recommendations = new ArrayList<>();
@@ -132,7 +146,18 @@ public class IndexAdvisorService {
     }
 
     /**
-     * Finds indexes that have never been used (or rarely used).
+     * Identifies indexes that have never been used since statistics were last reset.
+     * <p>
+     * Queries {@code pg_stat_user_indexes} to find indexes with zero index scans. Primary key
+     * and unique constraint indexes are excluded as they serve data integrity purposes beyond
+     * query optimisation. System schemas are also excluded.
+     * <p>
+     * Severity is MEDIUM for indexes larger than 10 MB, LOW for indexes between 1 MB and 10 MB,
+     * and LOW for smaller indexes. Larger unused indexes represent more significant waste of
+     * storage and write performance.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of unused indexes ordered by size descending
      */
     public List<IndexRecommendation> findUnusedIndexes(String instanceName) {
         List<IndexRecommendation> recommendations = new ArrayList<>();
@@ -194,7 +219,18 @@ public class IndexAdvisorService {
     }
 
     /**
-     * Finds potentially duplicate indexes (indexes with identical leading columns).
+     * Identifies potentially redundant indexes where one index is a prefix of another.
+     * <p>
+     * Detects indexes on the same table where one index's column list is a prefix of another
+     * index's column list. For example, if index A covers columns (a, b) and index B covers
+     * columns (a, b, c), then index A may be redundant as index B can serve the same queries.
+     * <p>
+     * Note that this analysis is conservative and may flag indexes that are intentionally
+     * separate for query performance reasons. Verification is recommended before dropping.
+     * All duplicate index recommendations are assigned LOW severity.
+     *
+     * @param instanceName the database instance identifier
+     * @return list of potentially redundant indexes ordered by size descending
      */
     public List<IndexRecommendation> findDuplicateIndexes(String instanceName) {
         List<IndexRecommendation> recommendations = new ArrayList<>();
@@ -268,7 +304,14 @@ public class IndexAdvisorService {
     }
 
     /**
-     * Gets summary statistics for the index advisor.
+     * Retrieves summary statistics for the index advisor dashboard.
+     * <p>
+     * Computes aggregate counts of tables with high sequential scan ratios, unused indexes,
+     * total indexes, and the total storage consumed by unused indexes. These metrics provide
+     * a high-level overview of indexing opportunities and inefficiencies.
+     *
+     * @param instanceName the database instance identifier
+     * @return summary statistics for index advisor analysis
      */
     public IndexAdvisorSummary getSummary(String instanceName) {
         IndexAdvisorSummary summary = new IndexAdvisorSummary();
@@ -306,7 +349,10 @@ public class IndexAdvisorService {
     }
 
     /**
-     * Summary statistics for the Index Advisor page.
+     * Encapsulates summary statistics for the Index Advisor dashboard.
+     * <p>
+     * Provides aggregate metrics about indexing opportunities including tables needing
+     * indexes, unused indexes, and storage waste from unused indexes.
      */
     public static class IndexAdvisorSummary {
         private int highSeqScanTables;

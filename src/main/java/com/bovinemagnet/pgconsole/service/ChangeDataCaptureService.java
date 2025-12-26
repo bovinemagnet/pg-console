@@ -29,7 +29,20 @@ public class ChangeDataCaptureService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets table change activity statistics.
+     * Retrieves table change activity statistics for all user tables in the specified database instance.
+     * <p>
+     * Queries the {@code pg_stat_user_tables} system view to gather comprehensive statistics about
+     * table modifications including insert, update, delete operations, HOT updates, tuple counts,
+     * and maintenance activity.
+     * <p>
+     * Results are ordered by total change activity (inserts + updates + deletes) in descending order
+     * and limited to the top 50 most active tables. System schemas (pg_catalog, information_schema, pgconsole)
+     * are excluded from the results.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link TableChangeActivity} objects containing change statistics for each table;
+     *         returns an empty list if the query fails or no user tables exist
+     * @see TableChangeActivity
      */
     public List<TableChangeActivity> getTableChangeActivity(String instanceName) {
         List<TableChangeActivity> activities = new ArrayList<>();
@@ -91,7 +104,21 @@ public class ChangeDataCaptureService {
     }
 
     /**
-     * Gets high-churn tables (tables with high modification rates).
+     * Retrieves tables with high modification rates (high churn) from the specified database instance.
+     * <p>
+     * Identifies tables experiencing significant data modification activity by calculating the total
+     * number of changes (inserts + updates + deletes) and the churn ratio (total changes divided by
+     * live tuples). This metric helps identify tables that may benefit from more aggressive vacuum
+     * settings or partitioning strategies.
+     * <p>
+     * Only tables with more than 100 live tuples are included to filter out insignificant tables.
+     * Results are ordered by total changes in descending order.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @param limit the maximum number of high-churn tables to return
+     * @return a list of {@link HighChurnTable} objects ordered by total changes descending;
+     *         returns an empty list if the query fails or no qualifying tables exist
+     * @see HighChurnTable
      */
     public List<HighChurnTable> getHighChurnTables(String instanceName, int limit) {
         List<HighChurnTable> tables = new ArrayList<>();
@@ -145,8 +172,24 @@ public class ChangeDataCaptureService {
     }
 
     /**
-     * Estimates WAL generation by table based on change counts.
-     * This is an approximation based on tuple changes and average row sizes.
+     * Estimates Write-Ahead Log (WAL) generation by table based on change counts and row sizes.
+     * <p>
+     * Calculates an approximate WAL generation volume for each table by multiplying the total
+     * number of tuple changes by the average row size, then applying a 1.2x overhead factor to
+     * account for WAL metadata and alignment. This estimation helps identify tables that are
+     * primary contributors to WAL volume and may impact replication lag or backup performance.
+     * <p>
+     * The average row size is calculated as total table size divided by live tuples. Only tables
+     * with active modifications (total_changes &gt; 0) and live tuples are included in the results.
+     * Results are limited to the top 20 tables by estimated WAL generation.
+     * <p>
+     * <strong>Note:</strong> This is an approximation and may not reflect actual WAL volume due to
+     * factors such as index updates, TOAST data, and varying transaction patterns.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link TableWalEstimate} objects ordered by estimated WAL bytes descending;
+     *         returns an empty list if the query fails or no qualifying tables exist
+     * @see TableWalEstimate
      */
     public List<TableWalEstimate> getWalGenerationByTable(String instanceName) {
         List<TableWalEstimate> estimates = new ArrayList<>();
@@ -212,7 +255,20 @@ public class ChangeDataCaptureService {
     }
 
     /**
-     * Gets CDC summary statistics.
+     * Retrieves aggregate Change Data Capture summary statistics for the specified database instance.
+     * <p>
+     * Aggregates statistics from {@code pg_stat_user_tables} to provide a database-wide overview
+     * of data modification activity. The summary includes total insert, update, delete, and HOT update
+     * counts across all user tables, as well as live and dead tuple counts. Additionally, it counts
+     * tables with high activity levels (more than 10,000 total changes).
+     * <p>
+     * This summary is useful for understanding overall database write activity and identifying
+     * potential maintenance requirements such as vacuum or index rebuilds.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a {@link CdcSummary} object containing aggregate statistics; returns an object
+     *         with default values (zeros) if the query fails
+     * @see CdcSummary
      */
     public CdcSummary getSummary(String instanceName) {
         CdcSummary summary = new CdcSummary();
@@ -254,6 +310,16 @@ public class ChangeDataCaptureService {
 
     // --- Model Classes ---
 
+    /**
+     * Data transfer object containing change activity statistics for a single database table.
+     * <p>
+     * Encapsulates metrics from PostgreSQL's {@code pg_stat_user_tables} view including
+     * tuple modification counts, maintenance timestamps, and table size information.
+     * Provides calculated fields for total changes, HOT update ratios, and activity level
+     * classification.
+     *
+     * @see #getTableChangeActivity(String)
+     */
     public static class TableChangeActivity {
         private String schemaName;
         private String tableName;
@@ -339,6 +405,16 @@ public class ChangeDataCaptureService {
         }
     }
 
+    /**
+     * Data transfer object representing a table with high data modification rates (high churn).
+     * <p>
+     * Contains statistics about tables experiencing significant write activity, including
+     * the total number of changes, individual operation counts (inserts, updates, deletes),
+     * and a churn ratio that indicates the rate of change relative to the number of live tuples.
+     * A high churn ratio suggests the table's data is frequently modified relative to its size.
+     *
+     * @see #getHighChurnTables(String, int)
+     */
     public static class HighChurnTable {
         private String schemaName;
         private String tableName;
@@ -391,6 +467,16 @@ public class ChangeDataCaptureService {
         }
     }
 
+    /**
+     * Data transfer object containing estimated Write-Ahead Log (WAL) generation statistics for a table.
+     * <p>
+     * Provides an approximation of how much WAL data a table has generated based on its change
+     * activity and average row size. The estimate is calculated by multiplying total changes by
+     * average row size and applying an overhead factor. This helps identify tables that contribute
+     * significantly to WAL volume and may impact replication performance or archival storage.
+     *
+     * @see #getWalGenerationByTable(String)
+     */
     public static class TableWalEstimate {
         private String schemaName;
         private String tableName;
@@ -441,6 +527,16 @@ public class ChangeDataCaptureService {
         }
     }
 
+    /**
+     * Data transfer object containing aggregate Change Data Capture statistics for a database instance.
+     * <p>
+     * Provides database-wide summary statistics including total insert, update, delete, and HOT update
+     * counts across all user tables. Also tracks tuple counts (live and dead) and identifies tables
+     * with high activity levels. This summary is useful for monitoring overall database write workload
+     * and identifying potential maintenance requirements.
+     *
+     * @see #getSummary(String)
+     */
     public static class CdcSummary {
         private long totalInserts;
         private long totalUpdates;

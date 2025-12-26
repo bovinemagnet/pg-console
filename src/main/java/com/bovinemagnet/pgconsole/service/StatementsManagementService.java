@@ -21,11 +21,23 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Service for managing pg_stat_statements and providing baseline comparisons.
- * Supports reset with snapshot, baseline comparisons, and top movers report.
+ * Service for managing PostgreSQL query statistics via {@code pg_stat_statements}.
+ * <p>
+ * Provides functionality to analyse query performance over time, including:
+ * <ul>
+ *   <li>Baseline comparisons between time periods</li>
+ *   <li>Top movers analysis to identify queries with significant performance changes</li>
+ *   <li>Summary statistics for statement tracking</li>
+ *   <li>Safe reset operations with historical snapshot preservation</li>
+ * </ul>
+ * <p>
+ * The service requires the {@code pg_stat_statements} extension to be installed
+ * and configured on the target PostgreSQL instance.
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see QueryBaseline
+ * @see StatementsSummary
  */
 @ApplicationScoped
 public class StatementsManagementService {
@@ -42,11 +54,28 @@ public class StatementsManagementService {
     HistoryRepository historyRepository;
 
     /**
-     * Gets top movers - queries with biggest changes between periods.
+     * Identifies queries with the most significant performance changes between time periods.
+     * <p>
+     * Compares aggregated query metrics from the current period (last {@code windowHours})
+     * against the previous period (prior {@code windowHours}) to detect:
+     * <ul>
+     *   <li>Newly introduced queries</li>
+     *   <li>Removed or no longer executed queries</li>
+     *   <li>Queries with increased execution time or call frequency</li>
+     *   <li>Queries with decreased execution time or call frequency</li>
+     * </ul>
+     * <p>
+     * Results are ranked by impact score (absolute change in total execution time)
+     * and limited to queries exceeding the {@value #SIGNIFICANT_CHANGE_THRESHOLD}%
+     * threshold. A maximum of {@value #TOP_MOVERS_LIMIT} results are returned.
      *
-     * @param instanceName the database instance
-     * @param windowHours the size of each comparison window
-     * @return list of queries with biggest changes, sorted by impact
+     * @param instanceName the database instance identifier
+     * @param windowHours the duration in hours for each comparison window
+     * @return list of query baselines sorted by impact (highest first), limited to
+     *         top movers. Returns an empty list if insufficient historical data exists
+     *         or if an error occurs.
+     * @see QueryBaseline
+     * @see HistoryRepository#getAggregatedQueryMetrics(String, int, int)
      */
     public List<QueryBaseline> getTopMovers(String instanceName, int windowHours) {
         List<QueryBaseline> movers = new ArrayList<>();
@@ -169,7 +198,17 @@ public class StatementsManagementService {
     }
 
     /**
-     * Gets summary statistics for pg_stat_statements.
+     * Retrieves summary statistics for {@code pg_stat_statements} on the instance.
+     * <p>
+     * Provides an overview of statement tracking including total query count,
+     * aggregate call counts, execution times, and extension availability. Also
+     * includes the last reset timestamp if available (PostgreSQL 14+).
+     *
+     * @param instanceName the database instance identifier
+     * @return summary object containing aggregated statistics. Returns a summary
+     *         with {@code extensionAvailable=false} if {@code pg_stat_statements}
+     *         is not installed.
+     * @see StatementsSummary
      */
     public StatementsSummary getSummary(String instanceName) {
         StatementsSummary summary = new StatementsSummary();
@@ -254,10 +293,17 @@ public class StatementsManagementService {
     }
 
     /**
-     * Resets pg_stat_statements. Should be called after capturing a snapshot.
+     * Resets all query statistics in {@code pg_stat_statements}.
+     * <p>
+     * Invokes {@code pg_stat_statements_reset()} to clear all tracked query metrics
+     * and restart accumulation from zero. This operation should typically be performed
+     * after capturing a historical snapshot to preserve the data before reset.
+     * <p>
+     * <strong>Warning:</strong> This permanently discards all current statement statistics.
+     * Ensure historical data has been captured if needed for analysis.
      *
-     * @param instanceName the database instance
-     * @return true if reset succeeded
+     * @param instanceName the database instance identifier
+     * @return {@code true} if the reset operation succeeded, {@code false} if an error occurred
      */
     public boolean resetStatements(String instanceName) {
         String sql = "SELECT pg_stat_statements_reset()";
@@ -274,7 +320,11 @@ public class StatementsManagementService {
     }
 
     /**
-     * Summary statistics for pg_stat_statements.
+     * Aggregated summary statistics for {@code pg_stat_statements}.
+     * <p>
+     * Provides overview metrics including total tracked queries, aggregate
+     * execution counts and times, and the timestamp of the last statistics
+     * reset. Includes formatting methods for human-readable display.
      */
     public static class StatementsSummary {
         private boolean extensionAvailable;

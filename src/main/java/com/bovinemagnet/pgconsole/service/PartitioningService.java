@@ -29,7 +29,24 @@ public class PartitioningService {
     DataSourceManager dataSourceManager;
 
     /**
-     * Gets all partitioned tables with their partitions.
+     * Retrieves all partitioned tables and their partition details from the specified database instance.
+     * <p>
+     * Queries the {@code pg_partitioned_table} system catalogue to identify parent tables using
+     * declarative partitioning, then retrieves all child partitions via the {@code pg_inherits}
+     * system catalogue. For each partition, metadata including partition boundaries, size, and
+     * tuple counts are collected.
+     * <p>
+     * After retrieving the data, this method calculates partition metrics including size distribution,
+     * average partition size, and identifies imbalanced or empty partitions. Results are ordered by
+     * total table size in descending order.
+     * <p>
+     * System schemas (pg_catalog, information_schema, pgconsole) are excluded from the results.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link PartitionedTable} objects with populated partition details and metrics;
+     *         returns an empty list if the query fails or no partitioned tables exist
+     * @see PartitionedTable
+     * @see Partition
      */
     public List<PartitionedTable> getPartitionedTables(String instanceName) {
         Map<String, PartitionedTable> tableMap = new HashMap<>();
@@ -132,7 +149,24 @@ public class PartitioningService {
     }
 
     /**
-     * Gets partition details for a specific table.
+     * Retrieves detailed partition information for a specific partitioned table.
+     * <p>
+     * Queries the {@code pg_partitioned_table} and {@code pg_inherits} system catalogues to
+     * retrieve comprehensive information about a single partitioned table and all its child
+     * partitions. For each partition, this method retrieves the partition boundaries, size,
+     * live and dead tuple counts, and maintenance timestamps (last vacuum, last analyse).
+     * <p>
+     * After retrieving the data, partition metrics are calculated including size distribution
+     * percentages, imbalance detection, and identification of empty partitions. This detailed
+     * view is useful for partition maintenance planning and troubleshooting partition skew issues.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @param schemaName the schema name of the partitioned table
+     * @param tableName the name of the partitioned table
+     * @return a {@link PartitionedTable} object with detailed partition information and metrics;
+     *         returns {@code null} if the specified table is not found or is not partitioned
+     * @see PartitionedTable
+     * @see Partition
      */
     public PartitionedTable getPartitionedTableDetails(String instanceName, String schemaName, String tableName) {
         PartitionedTable table = null;
@@ -239,7 +273,23 @@ public class PartitioningService {
     }
 
     /**
-     * Gets orphan partitions (partitions without a parent).
+     * Retrieves orphan partitions that exist without a valid parent table relationship.
+     * <p>
+     * Identifies partitions marked as {@code relispartition = true} in {@code pg_class} but
+     * lacking corresponding entries in the {@code pg_inherits} system catalogue. Orphan partitions
+     * typically result from incomplete DDL operations, failed partition detachment, or manual
+     * catalogue manipulation.
+     * <p>
+     * Orphan partitions can cause issues with backup/restore operations and schema migration,
+     * and should typically be either re-attached to a parent table or dropped. Results are
+     * ordered by size in descending order to prioritise larger orphans.
+     * <p>
+     * System schemas (pg_catalog, information_schema, pgconsole) are excluded from the results.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a list of {@link OrphanPartition} objects ordered by size descending; returns
+     *         an empty list if the query fails or no orphan partitions exist
+     * @see OrphanPartition
      */
     public List<OrphanPartition> getOrphanPartitions(String instanceName) {
         List<OrphanPartition> orphans = new ArrayList<>();
@@ -283,7 +333,20 @@ public class PartitioningService {
     }
 
     /**
-     * Gets partitioning summary statistics.
+     * Retrieves aggregate partitioning statistics for the specified database instance.
+     * <p>
+     * Provides a database-wide summary of partitioning usage including counts of partitioned
+     * tables, total partitions, orphan partitions, and the cumulative size of all partitioned
+     * tables. Additionally identifies imbalanced tables (those with significant size skew across
+     * partitions) to highlight potential maintenance requirements.
+     * <p>
+     * This summary is useful for understanding the overall partitioning landscape, identifying
+     * potential issues (orphans, imbalanced partitions), and planning partition maintenance activities.
+     *
+     * @param instanceName the name of the PostgreSQL database instance to query
+     * @return a {@link PartitioningSummary} object containing aggregate partitioning statistics;
+     *         returns an object with default values (zeros) if the query fails
+     * @see PartitioningSummary
      */
     public PartitioningSummary getSummary(String instanceName) {
         PartitioningSummary summary = new PartitioningSummary();
@@ -323,7 +386,21 @@ public class PartitioningService {
     }
 
     /**
-     * Calculates partition size distribution metrics.
+     * Calculates partition size distribution metrics and identifies imbalanced or empty partitions.
+     * <p>
+     * Computes aggregate metrics for a partitioned table including partition count, average
+     * partition size, and size imbalance ratio (max size / min size). For each individual partition,
+     * calculates the size percentage relative to total table size and flags partitions that are
+     * significantly larger than average (more than 3x) or completely empty.
+     * <p>
+     * The size imbalance ratio helps identify tables with uneven data distribution across partitions,
+     * which may benefit from partition reorganisation or revised partitioning strategies. A ratio
+     * greater than 10 indicates significant imbalance.
+     * <p>
+     * This is a private helper method called internally after partition data retrieval.
+     *
+     * @param table the partitioned table for which to calculate metrics; must have a populated
+     *              partition list (may be empty)
      */
     private void calculatePartitionMetrics(PartitionedTable table) {
         List<Partition> partitions = table.getPartitions();
@@ -364,6 +441,21 @@ public class PartitioningService {
 
     // --- Model Classes ---
 
+    /**
+     * Data transfer object representing a partitioned table and its associated partition metadata.
+     * <p>
+     * Encapsulates information about a PostgreSQL declarative partitioned table including the
+     * partition strategy (RANGE, LIST, HASH), partition key definition, total table size, and
+     * a collection of all child partitions. Additionally provides calculated metrics such as
+     * partition count, average partition size, and size imbalance ratios.
+     * <p>
+     * The imbalance detection helps identify partition skew where some partitions are significantly
+     * larger than others, which may indicate the need for partition maintenance or strategy revision.
+     *
+     * @see #getPartitionedTables(String)
+     * @see #getPartitionedTableDetails(String, String, String)
+     * @see Partition
+     */
     public static class PartitionedTable {
         private String schemaName;
         private String tableName;
@@ -467,6 +559,19 @@ public class PartitioningService {
         }
     }
 
+    /**
+     * Data transfer object representing a single partition within a partitioned table.
+     * <p>
+     * Contains detailed information about an individual partition including its name, partition
+     * boundary definition, size, tuple counts (live and dead), and sub-partition count for
+     * multi-level partitioning. Additionally includes calculated fields such as size percentage
+     * relative to the parent table and flags for imbalanced or empty partitions.
+     * <p>
+     * Partitions flagged as imbalanced (more than 3x average size) or empty (zero size) may
+     * require attention such as data redistribution, partition pruning, or maintenance operations.
+     *
+     * @see PartitionedTable
+     */
     public static class Partition {
         private String schemaName;
         private String partitionName;
@@ -544,6 +649,19 @@ public class PartitioningService {
         }
     }
 
+    /**
+     * Data transfer object representing an orphan partition without a valid parent table.
+     * <p>
+     * Orphan partitions are tables marked as partitions ({@code relispartition = true}) but
+     * lacking entries in the inheritance hierarchy ({@code pg_inherits}). These typically result
+     * from incomplete DDL operations, failed partition detachment, or manual system catalogue
+     * modifications.
+     * <p>
+     * Orphan partitions should be investigated and either re-attached to an appropriate parent
+     * table or dropped to prevent schema inconsistencies and potential backup/restore issues.
+     *
+     * @see #getOrphanPartitions(String)
+     */
     public static class OrphanPartition {
         private String schemaName;
         private String tableName;
@@ -577,6 +695,19 @@ public class PartitioningService {
         public String getIssue() { return "Partition without parent table - possible DDL failure"; }
     }
 
+    /**
+     * Data transfer object containing aggregate partitioning statistics for a database instance.
+     * <p>
+     * Provides summary counts of partitioned tables, total partitions, orphan partitions, and
+     * imbalanced tables across the entire database. Also tracks the cumulative size of all
+     * partitioned data. This summary helps assess the overall health and complexity of the
+     * database's partitioning implementation.
+     * <p>
+     * Metrics such as orphan partition count and imbalanced table count serve as indicators
+     * of potential maintenance requirements or partitioning strategy issues.
+     *
+     * @see #getSummary(String)
+     */
     public static class PartitioningSummary {
         private int partitionedTableCount;
         private int totalPartitionCount;

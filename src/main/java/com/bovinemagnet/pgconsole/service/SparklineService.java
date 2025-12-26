@@ -29,7 +29,17 @@ public class SparklineService {
     public static final String COLOUR_INFO = "#0dcaf0";
 
     /**
-     * Generates a sparkline SVG from a list of values.
+     * Generates a sparkline SVG from a list of values using the primary colour.
+     * <p>
+     * A sparkline is a small, simple line chart without axes or labels, designed to show
+     * trends in a compact space. This method creates an SVG path with automatic scaling
+     * to fit the provided dimensions.
+     *
+     * @param values the list of numeric values to plot; must contain at least 2 values
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the sparkline, or an empty sparkline if values is null or too small
+     * @see #generateSparkline(List, int, int, String)
      */
     public String generateSparkline(List<Double> values, int width, int height) {
         return generateSparkline(values, width, height, COLOUR_PRIMARY);
@@ -37,6 +47,16 @@ public class SparklineService {
 
     /**
      * Generates a sparkline SVG with custom colour.
+     * <p>
+     * This method creates a line chart sparkline with automatic scaling and includes
+     * a dot marker at the last data point. Values are normalised to fit within the
+     * specified dimensions with a 1-pixel margin.
+     *
+     * @param values the list of numeric values to plot; must contain at least 2 values
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @param colour the hex colour code for the line and dot (e.g., "#0d6efd")
+     * @return an SVG string representing the sparkline, or an empty sparkline if values is null or too small
      */
     public String generateSparkline(List<Double> values, int width, int height, String colour) {
         if (values == null || values.size() < 2) {
@@ -78,6 +98,16 @@ public class SparklineService {
 
     /**
      * Generates an area sparkline (filled under the line).
+     * <p>
+     * Creates a sparkline with a filled area underneath the line, useful for showing
+     * cumulative or volume-based metrics. The area is rendered with 20% opacity to
+     * allow overlaying multiple sparklines.
+     *
+     * @param values the list of numeric values to plot; must contain at least 2 values
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @param colour the hex colour code for the line and fill area (e.g., "#0d6efd")
+     * @return an SVG string representing the area sparkline, or an empty sparkline if values is null or too small
      */
     public String generateAreaSparkline(List<Double> values, int width, int height, String colour) {
         if (values == null || values.size() < 2) {
@@ -122,6 +152,14 @@ public class SparklineService {
 
     /**
      * Generates an empty sparkline placeholder.
+     * <p>
+     * Creates a dashed horizontal line in the middle of the space to indicate
+     * no data is available. This provides a consistent visual placeholder when
+     * sparkline data is insufficient or missing.
+     *
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing an empty sparkline placeholder
      */
     public String generateEmptySparkline(int width, int height) {
         return String.format(
@@ -136,6 +174,15 @@ public class SparklineService {
 
     /**
      * Generates a connections sparkline from system history for an instance.
+     * <p>
+     * Creates an area sparkline showing the total connection count trend over the
+     * specified time period. Uses the primary colour (blue) for the visualisation.
+     *
+     * @param instanceId the database instance identifier
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the connections trend sparkline
      */
     public String getConnectionsSparkline(String instanceId, int hours, int width, int height) {
         List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
@@ -145,13 +192,32 @@ public class SparklineService {
         return generateAreaSparkline(values, width, height, COLOUR_PRIMARY);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates a connections sparkline for the default instance.
+     * <p>
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the connections trend sparkline
+     * @see #getConnectionsSparkline(String, int, int, int)
+     */
     public String getConnectionsSparkline(int hours, int width, int height) {
         return getConnectionsSparkline("default", hours, width, height);
     }
 
     /**
      * Generates an active queries sparkline from system history for an instance.
+     * <p>
+     * Creates an area sparkline showing the count of actively executing queries over time.
+     * Uses the success colour (green) for the visualisation.
+     *
+     * @param instanceId the database instance identifier
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the active queries trend sparkline
      */
     public String getActiveQueriesSparkline(String instanceId, int hours, int width, int height) {
         List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
@@ -161,13 +227,31 @@ public class SparklineService {
         return generateAreaSparkline(values, width, height, COLOUR_SUCCESS);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates an active queries sparkline for the default instance.
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the active queries trend sparkline
+     * @see #getActiveQueriesSparkline(String, int, int, int)
+     */
     public String getActiveQueriesSparkline(int hours, int width, int height) {
         return getActiveQueriesSparkline("default", hours, width, height);
     }
 
     /**
      * Generates a blocked queries sparkline from system history for an instance.
+     * <p>
+     * Creates an area sparkline showing the count of blocked (waiting for locks) queries over time.
+     * Uses the danger colour (red) for the visualisation.
+     *
+     * @param instanceId the database instance identifier
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the blocked queries trend sparkline
      */
     public String getBlockedQueriesSparkline(String instanceId, int hours, int width, int height) {
         List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
@@ -177,13 +261,31 @@ public class SparklineService {
         return generateAreaSparkline(values, width, height, COLOUR_DANGER);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates a blocked queries sparkline for the default instance.
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the blocked queries trend sparkline
+     * @see #getBlockedQueriesSparkline(String, int, int, int)
+     */
     public String getBlockedQueriesSparkline(int hours, int width, int height) {
         return getBlockedQueriesSparkline("default", hours, width, height);
     }
 
     /**
      * Generates a cache hit ratio sparkline from system history for an instance.
+     * <p>
+     * Creates a line sparkline showing the buffer cache hit ratio percentage over time.
+     * Uses the info colour (cyan) for the visualisation. Missing or null values default to 100%.
+     *
+     * @param instanceId the database instance identifier
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the cache hit ratio trend sparkline
      */
     public String getCacheHitRatioSparkline(String instanceId, int hours, int width, int height) {
         List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
@@ -193,13 +295,32 @@ public class SparklineService {
         return generateSparkline(values, width, height, COLOUR_INFO);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates a cache hit ratio sparkline for the default instance.
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the cache hit ratio trend sparkline
+     * @see #getCacheHitRatioSparkline(String, int, int, int)
+     */
     public String getCacheHitRatioSparkline(int hours, int width, int height) {
         return getCacheHitRatioSparkline("default", hours, width, height);
     }
 
     /**
      * Generates a query mean time sparkline from query history for an instance.
+     * <p>
+     * Creates a line sparkline showing the mean execution time trend for a specific query
+     * over the specified time period. Uses the warning colour (yellow) for the visualisation.
+     *
+     * @param instanceId the database instance identifier
+     * @param queryId the MD5 hash identifier of the query
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the query mean time trend sparkline
      */
     public String getQueryMeanTimeSparkline(String instanceId, String queryId, int hours, int width, int height) {
         List<QueryMetricsHistory> history = historyRepository.getQueryMetricsHistory(instanceId, queryId, hours);
@@ -209,13 +330,33 @@ public class SparklineService {
         return generateSparkline(values, width, height, COLOUR_WARNING);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates a query mean time sparkline for the default instance.
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param queryId the MD5 hash identifier of the query
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the query mean time trend sparkline
+     * @see #getQueryMeanTimeSparkline(String, String, int, int, int)
+     */
     public String getQueryMeanTimeSparkline(String queryId, int hours, int width, int height) {
         return getQueryMeanTimeSparkline("default", queryId, hours, width, height);
     }
 
     /**
      * Generates a query calls sparkline from query history for an instance.
+     * <p>
+     * Creates a line sparkline showing the total call count trend for a specific query
+     * over the specified time period. Uses the primary colour (blue) for the visualisation.
+     *
+     * @param instanceId the database instance identifier
+     * @param queryId the MD5 hash identifier of the query
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the query calls trend sparkline
      */
     public String getQueryCallsSparkline(String instanceId, String queryId, int hours, int width, int height) {
         List<QueryMetricsHistory> history = historyRepository.getQueryMetricsHistory(instanceId, queryId, hours);
@@ -225,7 +366,17 @@ public class SparklineService {
         return generateSparkline(values, width, height, COLOUR_PRIMARY);
     }
 
-    /** Backward-compatible overload for default instance. */
+    /**
+     * Generates a query calls sparkline for the default instance.
+     * Backward-compatible overload that uses the "default" instance identifier.
+     *
+     * @param queryId the MD5 hash identifier of the query
+     * @param hours the number of hours of history to retrieve
+     * @param width the width of the SVG in pixels
+     * @param height the height of the SVG in pixels
+     * @return an SVG string representing the query calls trend sparkline
+     * @see #getQueryCallsSparkline(String, String, int, int, int)
+     */
     public String getQueryCallsSparkline(String queryId, int hours, int width, int height) {
         return getQueryCallsSparkline("default", queryId, hours, width, height);
     }

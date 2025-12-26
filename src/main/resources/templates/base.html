@@ -2,217 +2,1183 @@
 <html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="PostgreSQL Console - Database monitoring and performance insights">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{title ?: 'PostgreSQL Console'}</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+    <!-- Stylesheets -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- htmx -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Early theme/sidebar/view mode application to prevent flicker -->
     <script>
-        // Apply theme early to prevent flicker
         (function() {
             const savedTheme = localStorage.getItem('pg-console-theme') || 'dark';
             document.documentElement.setAttribute('data-bs-theme', savedTheme);
+
+            if (localStorage.getItem('pg-console-sidebar-collapsed') === 'true') {
+                document.documentElement.classList.add('sidebar-collapsed');
+            }
+            if (localStorage.getItem('pg-console-compact-view') === 'true') {
+                document.documentElement.classList.add('compact-view');
+            }
+            if (localStorage.getItem('pg-console-high-contrast') === 'true') {
+                document.documentElement.classList.add('high-contrast');
+            }
         })();
     </script>
+
     <style>
-        body {
-            padding-top: 60px;
+        /* ============================================
+           CSS Custom Properties
+           ============================================ */
+        :root {
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 70px;
+            --topbar-height: 50px;
+            --transition-speed: 0.3s;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+            --shadow-medium: 0 8px 30px rgba(0, 0, 0, 0.15);
+            --shadow-strong: 0 12px 40px rgba(0, 0, 0, 0.2);
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
         }
+
+        [data-bs-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(0, 0, 0, 0.1);
+        }
+
+        /* ============================================
+           High Contrast Mode
+           ============================================ */
+        .high-contrast {
+            --bs-body-color: #ffffff;
+            --bs-body-bg: #000000;
+            --bs-border-color: #ffffff;
+        }
+
+        .high-contrast [data-bs-theme="light"] {
+            --bs-body-color: #000000;
+            --bs-body-bg: #ffffff;
+            --bs-border-color: #000000;
+        }
+
+        .high-contrast .card,
+        .high-contrast .sidebar,
+        .high-contrast .topbar {
+            border-width: 2px !important;
+        }
+
+        /* ============================================
+           Compact View Mode
+           ============================================ */
+        .compact-view {
+            --topbar-height: 42px;
+        }
+
+        .compact-view .main-content {
+            padding: 1rem;
+        }
+
+        .compact-view .card {
+            margin-bottom: 0.75rem;
+        }
+
+        .compact-view .card-body {
+            padding: 0.75rem;
+        }
+
+        .compact-view table {
+            font-size: 0.8em;
+        }
+
+        .compact-view .nav-link {
+            padding: 0.35rem 0.75rem;
+        }
+
+        .compact-view h1 { font-size: 1.5rem; }
+        .compact-view h2 { font-size: 1.25rem; }
+        .compact-view h3 { font-size: 1.1rem; }
+
+        /* ============================================
+           Base Styles & Animations
+           ============================================ */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            padding: 0;
+            margin: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Smooth transitions for interactive elements */
+        a, button, .btn, .nav-link, .card {
+            transition: all 0.2s ease;
+        }
+
+        /* Focus indicators for accessibility */
+        :focus-visible {
+            outline: 3px solid var(--bs-primary);
+            outline-offset: 2px;
+        }
+
+        .btn:focus-visible,
+        .nav-link:focus-visible {
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.5);
+        }
+
+        /* Skip to main content link */
+        .skip-link {
+            position: absolute;
+            top: -100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bs-primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            z-index: 9999;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .skip-link:focus {
+            top: 1rem;
+        }
+
+        /* ============================================
+           Glassmorphism Cards
+           ============================================ */
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-medium);
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        /* ============================================
+           Loading Skeleton
+           ============================================ */
+        .skeleton {
+            background: linear-gradient(90deg,
+                var(--bs-tertiary-bg) 25%,
+                var(--bs-secondary-bg) 50%,
+                var(--bs-tertiary-bg) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        .skeleton-text {
+            height: 1em;
+            margin-bottom: 0.5em;
+        }
+
+        .skeleton-text:last-child {
+            width: 70%;
+        }
+
+        .skeleton-card {
+            height: 120px;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ============================================
+           Pull to Refresh Indicator
+           ============================================ */
+        .pull-indicator {
+            position: fixed;
+            top: var(--topbar-height);
+            left: 50%;
+            transform: translateX(-50%) translateY(-100%);
+            background: var(--bs-primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            z-index: 1040;
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pull-indicator.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .pull-indicator.refreshing i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ============================================
+           Top Bar
+           ============================================ */
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--topbar-height);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            z-index: 1030;
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            transition: left var(--transition-speed) ease;
+        }
+
+        .topbar-brand {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .topbar-brand:hover {
+            color: var(--bs-primary);
+        }
+
+        .topbar-brand i {
+            font-size: 1.3rem;
+        }
+
+        .topbar-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .topbar-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--bs-border-color);
+            background: transparent;
+            color: var(--bs-body-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .topbar-btn:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-primary);
+            transform: scale(1.05);
+        }
+
+        .topbar-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ============================================
+           Sidebar
+           ============================================ */
+        .sidebar {
+            position: fixed;
+            top: var(--topbar-height);
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-right: 1px solid var(--glass-border);
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 1020;
+            transition: width var(--transition-speed) ease, transform var(--transition-speed) ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Custom scrollbar for sidebar */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--bs-secondary-bg);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: var(--bs-tertiary-color);
+        }
+
+        .sidebar-collapsed .sidebar {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 0.75rem;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1025;
+            transition: transform var(--transition-speed) ease, background 0.2s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--bs-tertiary-bg);
+        }
+
+        .sidebar-collapsed .sidebar-toggle {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-toggle i {
+            font-size: 0.75rem;
+        }
+
+        /* Navigation */
+        .sidebar-nav {
+            padding: 0.5rem;
+            flex: 1;
+        }
+
+        .nav-section {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--bs-secondary-color);
+            padding: 0.75rem 0.75rem 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            transition: opacity var(--transition-speed) ease, height var(--transition-speed) ease;
+        }
+
+        .sidebar-collapsed .nav-section-title {
+            opacity: 0;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            white-space: nowrap;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-primary);
+            transform: translateX(2px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, var(--bs-primary), #0a58ca);
+            color: white;
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+        }
+
+        .nav-link i {
+            font-size: 1.1rem;
+            width: 1.5rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-link-text {
+            overflow: hidden;
+            transition: opacity var(--transition-speed) ease, width var(--transition-speed) ease;
+        }
+
+        .sidebar-collapsed .nav-link-text {
+            opacity: 0;
+            width: 0;
+        }
+
+        /* Tooltips for collapsed sidebar */
+        .sidebar-collapsed .nav-link {
+            justify-content: center;
+        }
+
+        .sidebar-collapsed .nav-link::after {
+            content: attr(data-title);
+            position: absolute;
+            left: calc(var(--sidebar-collapsed-width) + 5px);
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
+            z-index: 1050;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .sidebar-collapsed .nav-link:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* ============================================
+           Main Content
+           ============================================ */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--topbar-height);
+            padding: 1.5rem;
+            min-height: calc(100vh - var(--topbar-height));
+            transition: margin-left var(--transition-speed) ease;
+        }
+
+        .sidebar-collapsed .main-content {
+            margin-left: var(--sidebar-collapsed-width);
+        }
+
+        /* ============================================
+           Mobile Bottom Navigation
+           ============================================ */
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid var(--glass-border);
+            z-index: 1030;
+            padding: 0.5rem;
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0));
+        }
+
+        .mobile-nav-items {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .mobile-nav-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            font-size: 0.7rem;
+            border-radius: var(--radius-md);
+            transition: all 0.15s ease;
+            border: none;
+            background: transparent;
+        }
+
+        .mobile-nav-link:hover,
+        .mobile-nav-link.active {
+            color: var(--bs-primary);
+            background: var(--bs-tertiary-bg);
+        }
+
+        .mobile-nav-link i {
+            font-size: 1.25rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        /* ============================================
+           Responsive Tables (Cards on Mobile)
+           ============================================ */
+        @media (max-width: 767.98px) {
+            .table-responsive-cards thead {
+                display: none;
+            }
+
+            .table-responsive-cards tbody tr {
+                display: block;
+                margin-bottom: 1rem;
+                background: var(--glass-bg);
+                border: 1px solid var(--glass-border);
+                border-radius: var(--radius-md);
+                padding: 0.75rem;
+            }
+
+            .table-responsive-cards tbody td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem 0;
+                border: none;
+                border-bottom: 1px solid var(--glass-border);
+            }
+
+            .table-responsive-cards tbody td:last-child {
+                border-bottom: none;
+            }
+
+            .table-responsive-cards tbody td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                font-size: 0.85em;
+                color: var(--bs-secondary-color);
+            }
+        }
+
+        /* ============================================
+           Responsive Breakpoints
+           ============================================ */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: var(--sidebar-width) !important;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .sidebar-collapsed .sidebar {
+                width: var(--sidebar-width) !important;
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+            }
+
+            .mobile-nav {
+                display: block;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .sidebar-toggle {
+                display: none;
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(2px);
+                z-index: 1015;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+
+            .sidebar.show ~ .sidebar-overlay {
+                display: block;
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .topbar-brand span {
+                font-size: 0.95rem;
+            }
+
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+        }
+
+        /* ============================================
+           Existing Utility Styles
+           ============================================ */
         .sparkline {
             vertical-align: middle;
         }
+
         .query-preview {
             font-family: monospace;
             font-size: 0.9em;
             cursor: help;
         }
+
         .query-full {
             display: none;
             position: absolute;
             background: var(--bs-body-bg);
             border: 1px solid var(--bs-border-color);
-            border-radius: 4px;
+            border-radius: var(--radius-md);
             padding: 10px;
             max-width: 600px;
             z-index: 1000;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-medium);
             white-space: pre-wrap;
             font-family: monospace;
             font-size: 0.85em;
             color: var(--bs-body-color);
         }
+
         .query-preview:hover .query-full {
             display: block;
         }
+
         .sortable {
             cursor: pointer;
             user-select: none;
         }
+
         .sortable:hover {
             background-color: var(--bs-tertiary-bg);
         }
+
         .sort-indicator {
             font-size: 0.7em;
             margin-left: 4px;
         }
+
         .metric-card {
             margin-bottom: 20px;
         }
+
         .blocking {
             color: #dc3545;
             font-weight: bold;
         }
+
         table {
             font-size: 0.9em;
         }
+
         .refresh-indicator {
             font-size: 0.75em;
             opacity: 0.8;
         }
+
         .refresh-paused {
             color: var(--bs-warning);
         }
-        .theme-toggle, .refresh-control {
-            cursor: pointer;
+
+        /* ============================================
+           Micro-animations
+           ============================================ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Badge animations */
+        .badge {
+            transition: transform 0.2s ease;
+        }
+
+        .badge:hover {
+            transform: scale(1.05);
+        }
+
+        /* Button hover effects */
+        .btn {
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* ============================================
+           Screen Reader Only
+           ============================================ */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Live region for screen reader announcements */
+        .sr-announcer {
+            position: absolute;
+            left: -10000px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/?instance={currentInstance ?: 'default'}">🐘 PostgreSQL Console</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                {#if instances != null && instances.size > 1}
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="instanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <span class="badge bg-info me-1">📊</span>
-                            {#for inst in instances}{#if inst.name == currentInstance}{inst.displayName}{/if}{/for}
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="instanceDropdown">
-                            {#for inst in instances}
-                            <li>
-                                <a class="dropdown-item {#if inst.name == currentInstance}active{/if}"
-                                   href="?instance={inst.name}">
-                                    {inst.displayName}
-                                    {#if inst.connected}
-                                    <span class="badge bg-success ms-2">●</span>
-                                    {#else}
-                                    <span class="badge bg-danger ms-2">●</span>
-                                    {/if}
-                                </a>
-                            </li>
-                            {/for}
-                        </ul>
-                    </li>
-                </ul>
-                {/if}
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/?instance={currentInstance ?: 'default'}">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}">Slow Queries</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}">Activity</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}">Locks</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}">Wait Events</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}">Tables</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}">Databases</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}">Index Advisor</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}">Regressions</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}">Maintenance</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}">Baselines</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}">Replication</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}">Infrastructure</a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="enterpriseDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Enterprise
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="enterpriseDropdown">
-                            <li><a class="dropdown-item" href="/comparison?instance={currentInstance ?: 'default'}">Instance Comparison</a></li>
-                            <li><a class="dropdown-item" href="/bookmarks?instance={currentInstance ?: 'default'}">Bookmarks</a></li>
-                            <li><a class="dropdown-item" href="/audit-log?instance={currentInstance ?: 'default'}">Audit Log</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="dataControlDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Data Control
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="dataControlDropdown">
-                            <li><a class="dropdown-item" href="/logical-replication?instance={currentInstance ?: 'default'}">Logical Replication</a></li>
-                            <li><a class="dropdown-item" href="/cdc?instance={currentInstance ?: 'default'}">Change Data Capture</a></li>
-                            <li><a class="dropdown-item" href="/data-lineage?instance={currentInstance ?: 'default'}">Data Lineage</a></li>
-                            <li><a class="dropdown-item" href="/partitions?instance={currentInstance ?: 'default'}">Partitions</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}">About</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle refresh-control" href="#" id="refreshDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <span id="refreshIcon">⏸</span> <span id="refreshLabel">Off</span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="refreshDropdown">
-                            <li><a class="dropdown-item" href="#" data-refresh="0">Off</a></li>
-                            <li><a class="dropdown-item" href="#" data-refresh="5">5 seconds</a></li>
-                            <li><a class="dropdown-item" href="#" data-refresh="10">10 seconds</a></li>
-                            <li><a class="dropdown-item" href="#" data-refresh="30">30 seconds</a></li>
-                            <li><a class="dropdown-item" href="#" data-refresh="60">60 seconds</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link theme-toggle" href="#" id="themeToggle" title="Toggle theme">
-                            <span id="themeIcon">🌙</span>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Screen reader announcements -->
+    <div id="sr-announcer" class="sr-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Pull to refresh indicator -->
+    <div id="pullIndicator" class="pull-indicator" role="status" aria-live="polite">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refreshing...</span>
+    </div>
+
+    <!-- Top Bar -->
+    <header class="topbar" role="banner">
+        <button class="topbar-btn mobile-menu-btn me-2" id="mobileMenuBtn"
+                aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar">
+            <i class="bi bi-list fs-5" aria-hidden="true"></i>
+        </button>
+        <a class="topbar-brand" href="/?instance={currentInstance ?: 'default'}" aria-label="PostgreSQL Console home">
+            <i class="bi bi-database text-primary" aria-hidden="true"></i>
+            <span class="d-none d-sm-inline">PostgreSQL Console</span>
+            <span class="d-sm-none">PG Console</span>
+        </a>
+        <div class="topbar-controls">
+            {#if instances != null && instances.size > 1}
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-label="Select database instance">
+                    <i class="bi bi-hdd-stack me-1" aria-hidden="true"></i>
+                    <span class="d-none d-md-inline">{#for inst in instances}{#if inst.name == currentInstance}{inst.displayName}{/if}{/for}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {#for inst in instances}
+                    <li>
+                        <a class="dropdown-item {#if inst.name == currentInstance}active{/if}" href="?instance={inst.name}">
+                            {inst.displayName}
+                            {#if inst.connected}
+                            <span class="badge bg-success ms-2" aria-label="Connected">●</span>
+                            {#else}
+                            <span class="badge bg-danger ms-2" aria-label="Disconnected">●</span>
+                            {/if}
                         </a>
                     </li>
+                    {/for}
                 </ul>
             </div>
+            {/if}
+
+            <!-- View Mode Toggle -->
+            <button class="topbar-btn" id="viewModeToggle" title="Toggle compact view" aria-label="Toggle compact view">
+                <i class="bi bi-arrows-collapse" aria-hidden="true"></i>
+            </button>
+
+            <!-- Auto-refresh Dropdown -->
+            <div class="dropdown">
+                <button class="topbar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false" aria-label="Auto-refresh settings">
+                    <span id="refreshIcon"><i class="bi bi-pause-fill" aria-hidden="true"></i></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><h6 class="dropdown-header">Auto-refresh</h6></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="0">Off</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="5">5 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="10">10 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="30">30 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="60">60 seconds</a></li>
+                </ul>
+            </div>
+
+            <!-- High Contrast Toggle -->
+            <button class="topbar-btn d-none d-md-flex" id="contrastToggle" title="Toggle high contrast"
+                    aria-label="Toggle high contrast mode">
+                <i class="bi bi-circle-half" aria-hidden="true"></i>
+            </button>
+
+            <!-- Theme Toggle -->
+            <button class="topbar-btn" id="themeToggle" title="Toggle dark/light theme"
+                    aria-label="Toggle dark or light theme">
+                <span id="themeIcon"><i class="bi bi-moon-fill" aria-hidden="true"></i></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar"
+             role="button" tabindex="0" aria-label="Toggle sidebar">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Primary">
+            <!-- Monitoring Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-monitoring">
+                <div class="nav-section-title" id="nav-monitoring">Monitoring</div>
+                <a class="nav-link" href="/?instance={currentInstance ?: 'default'}" data-title="Dashboard">
+                    <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                    <span class="nav-link-text">Dashboard</span>
+                </a>
+                <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
+                    <i class="bi bi-activity" aria-hidden="true"></i>
+                    <span class="nav-link-text">Activity</span>
+                </a>
+                <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" data-title="Slow Queries">
+                    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                    <span class="nav-link-text">Slow Queries</span>
+                </a>
+                <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}" data-title="Locks">
+                    <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                    <span class="nav-link-text">Locks</span>
+                </a>
+                <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i>
+                    <span class="nav-link-text">Wait Events</span>
+                </a>
+                <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}" data-title="Tables">
+                    <i class="bi bi-table" aria-hidden="true"></i>
+                    <span class="nav-link-text">Tables</span>
+                </a>
+                <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}" data-title="Databases">
+                    <i class="bi bi-database" aria-hidden="true"></i>
+                    <span class="nav-link-text">Databases</span>
+                </a>
+            </div>
+
+            <!-- Analysis Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-analysis">
+                <div class="nav-section-title" id="nav-analysis">Analysis</div>
+                <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}" data-title="Index Advisor">
+                    <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                    <span class="nav-link-text">Index Advisor</span>
+                </a>
+                <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}" data-title="Regressions">
+                    <i class="bi bi-graph-down-arrow" aria-hidden="true"></i>
+                    <span class="nav-link-text">Regressions</span>
+                </a>
+                <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}" data-title="Maintenance">
+                    <i class="bi bi-wrench" aria-hidden="true"></i>
+                    <span class="nav-link-text">Maintenance</span>
+                </a>
+                <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}" data-title="Baselines">
+                    <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+                    <span class="nav-link-text">Baselines</span>
+                </a>
+            </div>
+
+            <!-- Infrastructure Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-infra">
+                <div class="nav-section-title" id="nav-infra">Infrastructure</div>
+                <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}" data-title="Replication">
+                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                    <span class="nav-link-text">Replication</span>
+                </a>
+                <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}" data-title="Infrastructure">
+                    <i class="bi bi-server" aria-hidden="true"></i>
+                    <span class="nav-link-text">Infrastructure</span>
+                </a>
+            </div>
+
+            <!-- Data Control Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-data">
+                <div class="nav-section-title" id="nav-data">Data Control</div>
+                <a class="nav-link" href="/logical-replication?instance={currentInstance ?: 'default'}" data-title="Logical Replication">
+                    <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                    <span class="nav-link-text">Logical Replication</span>
+                </a>
+                <a class="nav-link" href="/cdc?instance={currentInstance ?: 'default'}" data-title="Change Data Capture">
+                    <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                    <span class="nav-link-text">Change Data Capture</span>
+                </a>
+                <a class="nav-link" href="/data-lineage?instance={currentInstance ?: 'default'}" data-title="Data Lineage">
+                    <i class="bi bi-bezier2" aria-hidden="true"></i>
+                    <span class="nav-link-text">Data Lineage</span>
+                </a>
+                <a class="nav-link" href="/partitions?instance={currentInstance ?: 'default'}" data-title="Partitions">
+                    <i class="bi bi-grid-3x3" aria-hidden="true"></i>
+                    <span class="nav-link-text">Partitions</span>
+                </a>
+            </div>
+
+            <!-- Enterprise Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-enterprise">
+                <div class="nav-section-title" id="nav-enterprise">Enterprise</div>
+                <a class="nav-link" href="/comparison?instance={currentInstance ?: 'default'}" data-title="Instance Comparison">
+                    <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+                    <span class="nav-link-text">Comparison</span>
+                </a>
+                <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
+                    <i class="bi bi-bookmark-star" aria-hidden="true"></i>
+                    <span class="nav-link-text">Bookmarks</span>
+                </a>
+                <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
+                    <i class="bi bi-journal-text" aria-hidden="true"></i>
+                    <span class="nav-link-text">Audit Log</span>
+                </a>
+            </div>
+
+            <!-- System Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-system">
+                <div class="nav-section-title" id="nav-system">System</div>
+                <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}" data-title="About">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    <span class="nav-link-text">About</span>
+                </a>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav" role="navigation" aria-label="Quick navigation">
+        <div class="mobile-nav-items">
+            <a class="mobile-nav-link" href="/?instance={currentInstance ?: 'default'}" aria-label="Dashboard">
+                <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                <span>Dashboard</span>
+            </a>
+            <a class="mobile-nav-link" href="/activity?instance={currentInstance ?: 'default'}" aria-label="Activity">
+                <i class="bi bi-activity" aria-hidden="true"></i>
+                <span>Activity</span>
+            </a>
+            <a class="mobile-nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" aria-label="Slow Queries">
+                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                <span>Queries</span>
+            </a>
+            <a class="mobile-nav-link" href="/locks?instance={currentInstance ?: 'default'}" aria-label="Locks">
+                <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                <span>Locks</span>
+            </a>
+            <button class="mobile-nav-link" id="mobileMoreBtn" aria-label="More navigation options">
+                <i class="bi bi-three-dots" aria-hidden="true"></i>
+                <span>More</span>
+            </button>
         </div>
     </nav>
 
-    <div class="container-fluid">
+    <!-- Main Content -->
+    <main class="main-content" id="main-content" role="main" tabindex="-1">
         {#insert}
             This is the default content
         {/insert}
-    </div>
+    </main>
 
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
-        // Theme toggle
+        // ============================================
+        // Screen Reader Announcements
+        // ============================================
+        function announce(message) {
+            const announcer = document.getElementById('sr-announcer');
+            if (announcer) {
+                announcer.textContent = message;
+                setTimeout(() => { announcer.textContent = ''; }, 1000);
+            }
+        }
+
+        // ============================================
+        // Sidebar Toggle
+        // ============================================
+        (function() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMoreBtn = document.getElementById('mobileMoreBtn');
+
+            function toggleSidebarCollapse() {
+                const isCollapsed = document.documentElement.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('pg-console-sidebar-collapsed', isCollapsed);
+                announce(isCollapsed ? 'Sidebar collapsed' : 'Sidebar expanded');
+            }
+
+            function toggleMobileSidebar() {
+                const isShowing = sidebar.classList.toggle('show');
+                mobileMenuBtn.setAttribute('aria-expanded', isShowing);
+                announce(isShowing ? 'Navigation menu opened' : 'Navigation menu closed');
+            }
+
+            function closeMobileSidebar() {
+                sidebar.classList.remove('show');
+                mobileMenuBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            sidebarToggle.addEventListener('click', toggleSidebarCollapse);
+            sidebarToggle.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleSidebarCollapse();
+                }
+            });
+
+            mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            mobileMoreBtn.addEventListener('click', toggleMobileSidebar);
+            sidebarOverlay.addEventListener('click', closeMobileSidebar);
+
+            // Close sidebar on navigation (mobile)
+            sidebar.querySelectorAll('.nav-link').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    if (window.innerWidth < 992) {
+                        closeMobileSidebar();
+                    }
+                });
+            });
+
+            // Highlight active nav link
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(function(link) {
+                const href = link.getAttribute('href');
+                if (href) {
+                    const linkPath = href.split('?')[0];
+                    if (linkPath === currentPath || (currentPath === '/' && linkPath === '/')) {
+                        link.classList.add('active');
+                        link.setAttribute('aria-current', 'page');
+                    }
+                }
+            });
+
+            // Escape key closes mobile sidebar
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && sidebar.classList.contains('show')) {
+                    closeMobileSidebar();
+                }
+            });
+        })();
+
+        // ============================================
+        // View Mode Toggle (Compact/Comfortable)
+        // ============================================
+        (function() {
+            const viewModeToggle = document.getElementById('viewModeToggle');
+            const icon = viewModeToggle.querySelector('i');
+
+            function updateIcon() {
+                const isCompact = document.documentElement.classList.contains('compact-view');
+                icon.className = isCompact ? 'bi bi-arrows-expand' : 'bi bi-arrows-collapse';
+            }
+
+            updateIcon();
+
+            viewModeToggle.addEventListener('click', function() {
+                const isCompact = document.documentElement.classList.toggle('compact-view');
+                localStorage.setItem('pg-console-compact-view', isCompact);
+                updateIcon();
+                announce(isCompact ? 'Compact view enabled' : 'Comfortable view enabled');
+            });
+        })();
+
+        // ============================================
+        // High Contrast Toggle
+        // ============================================
+        (function() {
+            const contrastToggle = document.getElementById('contrastToggle');
+            if (!contrastToggle) return;
+
+            contrastToggle.addEventListener('click', function() {
+                const isHighContrast = document.documentElement.classList.toggle('high-contrast');
+                localStorage.setItem('pg-console-high-contrast', isHighContrast);
+                announce(isHighContrast ? 'High contrast mode enabled' : 'High contrast mode disabled');
+            });
+        })();
+
+        // ============================================
+        // Theme Toggle
+        // ============================================
         (function() {
             const themeToggle = document.getElementById('themeToggle');
             const themeIcon = document.getElementById('themeIcon');
 
             function updateThemeIcon() {
                 const currentTheme = document.documentElement.getAttribute('data-bs-theme');
-                themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+                themeIcon.innerHTML = currentTheme === 'dark'
+                    ? '<i class="bi bi-sun-fill" aria-hidden="true"></i>'
+                    : '<i class="bi bi-moon-fill" aria-hidden="true"></i>';
             }
 
             updateThemeIcon();
@@ -224,17 +1190,18 @@
                 document.documentElement.setAttribute('data-bs-theme', newTheme);
                 localStorage.setItem('pg-console-theme', newTheme);
                 updateThemeIcon();
+                announce(newTheme === 'dark' ? 'Dark theme enabled' : 'Light theme enabled');
             });
         })();
 
-        // Auto-refresh control
+        // ============================================
+        // Auto-refresh Control
+        // ============================================
         (function() {
             const refreshIcon = document.getElementById('refreshIcon');
-            const refreshLabel = document.getElementById('refreshLabel');
             const refreshItems = document.querySelectorAll('[data-refresh]');
-            let refreshInterval = null;
-            let countdown = 0;
             let countdownTimer = null;
+            let countdown = 0;
 
             function getRefreshableContent() {
                 return document.getElementById('refreshable-content');
@@ -242,11 +1209,9 @@
 
             function updateRefreshUI(seconds) {
                 if (seconds === 0) {
-                    refreshIcon.textContent = '⏸';
-                    refreshLabel.textContent = 'Off';
+                    refreshIcon.innerHTML = '<i class="bi bi-pause-fill" aria-hidden="true"></i>';
                 } else {
-                    refreshIcon.textContent = '🔄';
-                    refreshLabel.textContent = seconds + 's';
+                    refreshIcon.innerHTML = '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i>';
                 }
             }
 
@@ -260,6 +1225,7 @@
                         const content = getRefreshableContent();
                         if (content) {
                             htmx.trigger(content, 'refresh');
+                            announce('Dashboard refreshed');
                         }
                     }
                 }, 1000);
@@ -269,10 +1235,6 @@
                 localStorage.setItem('pg-console-refresh', seconds);
                 updateRefreshUI(seconds);
 
-                if (refreshInterval) {
-                    clearInterval(refreshInterval);
-                    refreshInterval = null;
-                }
                 if (countdownTimer) {
                     clearInterval(countdownTimer);
                     countdownTimer = null;
@@ -280,6 +1242,9 @@
 
                 if (seconds > 0) {
                     startCountdown(seconds);
+                    announce('Auto-refresh set to ' + seconds + ' seconds');
+                } else {
+                    announce('Auto-refresh disabled');
                 }
             }
 
@@ -296,6 +1261,65 @@
                 });
             });
         })();
+
+        // ============================================
+        // Pull to Refresh (Mobile)
+        // ============================================
+        (function() {
+            if (window.innerWidth >= 992) return;
+
+            const pullIndicator = document.getElementById('pullIndicator');
+            const mainContent = document.getElementById('main-content');
+            let startY = 0;
+            let pulling = false;
+
+            mainContent.addEventListener('touchstart', function(e) {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            mainContent.addEventListener('touchmove', function(e) {
+                if (!pulling) return;
+                const currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+
+                if (diff > 60 && window.scrollY === 0) {
+                    pullIndicator.classList.add('visible');
+                }
+            }, { passive: true });
+
+            mainContent.addEventListener('touchend', function() {
+                if (pullIndicator.classList.contains('visible')) {
+                    pullIndicator.classList.add('refreshing');
+                    const content = document.getElementById('refreshable-content');
+                    if (content) {
+                        htmx.trigger(content, 'refresh');
+                    }
+                    setTimeout(function() {
+                        pullIndicator.classList.remove('visible', 'refreshing');
+                        announce('Page refreshed');
+                    }, 1000);
+                }
+                pulling = false;
+            });
+        })();
+
+        // ============================================
+        // Register Service Worker (PWA)
+        // ============================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
     </script>
 </body>
 </html>

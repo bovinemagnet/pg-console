@@ -27,11 +27,18 @@ public class IncidentReportService {
     PostgresService postgresService;
 
     /**
-     * Captures a complete incident report for the specified instance.
+     * Captures a comprehensive point-in-time incident report for the specified instance.
+     * <p>
+     * Collects a snapshot of the database state including overview statistics, current activity,
+     * wait events, blocking chains, lock information, top slow queries, and database configuration.
+     * This snapshot is useful for post-incident analysis and troubleshooting.
+     * <p>
+     * The report limits slow queries to the top 20 by total execution time to keep report size
+     * manageable whilst capturing the most impactful queries.
      *
-     * @param instanceName the database instance to capture
-     * @param description optional description of the incident
-     * @return the captured incident report
+     * @param instanceName the database instance identifier to capture
+     * @param description optional description of the incident for context; may be null
+     * @return complete incident report with all captured metrics and state information
      */
     public IncidentReport captureReport(String instanceName, String description) {
         IncidentReport report = new IncidentReport(instanceName);
@@ -65,10 +72,18 @@ public class IncidentReportService {
     }
 
     /**
-     * Generates a text-based report suitable for export.
+     * Generates a human-readable text-based report suitable for export and analysis.
+     * <p>
+     * Formats the incident report as structured plain text with sections for overview
+     * statistics, active connections, wait events, blocking chains, locks, slow queries,
+     * and database information. Active and blocked queries are highlighted, whilst idle
+     * connections are excluded for clarity.
+     * <p>
+     * The lock section is truncated to the first 50 locks to prevent excessive output
+     * for databases with many concurrent locks.
      *
      * @param report the incident report to format
-     * @return formatted text report
+     * @return formatted multi-line text report ready for export or logging
      */
     public String formatAsText(IncidentReport report) {
         StringBuilder sb = new StringBuilder();
@@ -210,7 +225,14 @@ public class IncidentReportService {
     }
 
     /**
-     * Truncates a string to the specified length.
+     * Truncates and normalises text for single-line display in reports.
+     * <p>
+     * Replaces all whitespace (including newlines) with single spaces and truncates
+     * to the specified maximum length with ellipsis if necessary.
+     *
+     * @param text the text to truncate; may be null
+     * @param maxLength maximum length of returned string including ellipsis
+     * @return truncated and normalised text, or empty string if input is null
      */
     private String truncate(String text, int maxLength) {
         if (text == null) {

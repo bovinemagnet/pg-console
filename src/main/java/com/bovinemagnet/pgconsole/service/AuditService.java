@@ -37,7 +37,22 @@ public class AuditService {
     DataSource dataSource;
 
     /**
-     * Logs an admin action to the audit log.
+     * Records an administrative action to the audit log.
+     * <p>
+     * Writes a comprehensive audit record to the pgconsole.audit_log table including
+     * user identity, action type, target information, optional details as JSON,
+     * client IP address, and success/failure status.
+     *
+     * @param instanceId the database instance identifier where the action occurred
+     * @param username the username who performed the action
+     * @param action the type of action performed
+     * @param targetType the type of target affected (e.g., "query", "connection", "bookmark")
+     * @param targetId the identifier of the target (e.g., PID, query ID, bookmark ID)
+     * @param details optional additional details as a map; will be serialised to JSON; may be null
+     * @param clientIp the client IP address from which the action originated
+     * @param success true if the action succeeded, false if it failed
+     * @param errorMessage error message if the action failed; null if successful
+     * @see Action
      */
     public void log(String instanceId, String username, Action action,
                     String targetType, String targetId, Map<String, Object> details,
@@ -80,7 +95,18 @@ public class AuditService {
     }
 
     /**
-     * Logs a successful action.
+     * Records a successful administrative action to the audit log.
+     * <p>
+     * This is a convenience method that calls {@link #log} with success=true,
+     * no details, and no error message.
+     *
+     * @param instanceId the database instance identifier
+     * @param username the username who performed the action
+     * @param action the type of action performed
+     * @param targetType the type of target affected
+     * @param targetId the identifier of the target
+     * @param clientIp the client IP address
+     * @see #log
      */
     public void logSuccess(String instanceId, String username, Action action,
                            String targetType, String targetId, String clientIp) {
@@ -88,7 +114,19 @@ public class AuditService {
     }
 
     /**
-     * Logs a successful action with details.
+     * Records a successful administrative action with additional details to the audit log.
+     * <p>
+     * This is a convenience method that calls {@link #log} with success=true
+     * and includes custom details as a JSON object.
+     *
+     * @param instanceId the database instance identifier
+     * @param username the username who performed the action
+     * @param action the type of action performed
+     * @param targetType the type of target affected
+     * @param targetId the identifier of the target
+     * @param details additional context information to store as JSON
+     * @param clientIp the client IP address
+     * @see #log
      */
     public void logSuccess(String instanceId, String username, Action action,
                            String targetType, String targetId, Map<String, Object> details, String clientIp) {
@@ -96,7 +134,19 @@ public class AuditService {
     }
 
     /**
-     * Logs a failed action.
+     * Records a failed administrative action to the audit log.
+     * <p>
+     * This is a convenience method that calls {@link #log} with success=false
+     * and includes an error message.
+     *
+     * @param instanceId the database instance identifier
+     * @param username the username who performed the action
+     * @param action the type of action attempted
+     * @param targetType the type of target affected
+     * @param targetId the identifier of the target
+     * @param clientIp the client IP address
+     * @param errorMessage description of why the action failed
+     * @see #log
      */
     public void logFailure(String instanceId, String username, Action action,
                            String targetType, String targetId, String clientIp, String errorMessage) {
@@ -104,21 +154,43 @@ public class AuditService {
     }
 
     /**
-     * Gets recent audit log entries.
+     * Retrieves the most recent audit log entries across all instances.
+     * <p>
+     * Returns audit records ordered by timestamp descending, limited to the specified count.
+     *
+     * @param limit maximum number of audit log entries to return
+     * @return list of recent audit log entries
+     * @see #getLogs(String, String, String, int)
      */
     public List<AuditLog> getRecentLogs(int limit) {
         return getLogs(null, null, null, limit);
     }
 
     /**
-     * Gets audit log entries for a specific instance.
+     * Retrieves audit log entries for a specific database instance.
+     * <p>
+     * Returns audit records for the specified instance, ordered by timestamp descending.
+     *
+     * @param instanceId the database instance identifier to filter by
+     * @param limit maximum number of audit log entries to return
+     * @return list of audit log entries for the specified instance
+     * @see #getLogs(String, String, String, int)
      */
     public List<AuditLog> getLogsForInstance(String instanceId, int limit) {
         return getLogs(instanceId, null, null, limit);
     }
 
     /**
-     * Gets audit log entries with filters.
+     * Retrieves audit log entries with optional filters.
+     * <p>
+     * Allows filtering by instance ID, action type, and username. Any filter parameter
+     * may be null to skip that filter. Results are ordered by timestamp descending.
+     *
+     * @param instanceId the database instance identifier to filter by; null for all instances
+     * @param action the action type name to filter by; null for all actions
+     * @param username the username to filter by; null for all users
+     * @param limit maximum number of audit log entries to return
+     * @return list of filtered audit log entries
      */
     public List<AuditLog> getLogs(String instanceId, String action, String username, int limit) {
         List<AuditLog> logs = new ArrayList<>();
@@ -192,7 +264,12 @@ public class AuditService {
     }
 
     /**
-     * Gets summary statistics for audit logs.
+     * Retrieves summary statistics for audit log activity.
+     * <p>
+     * Provides aggregated metrics including total actions in the last 24 hours and 7 days,
+     * failure counts, and unique user counts. Useful for dashboard displays and monitoring.
+     *
+     * @return audit summary statistics with counts and metrics
      */
     public AuditSummary getSummary() {
         AuditSummary summary = new AuditSummary();
@@ -223,7 +300,10 @@ public class AuditService {
     }
 
     /**
-     * Summary statistics for audit logs.
+     * Container for audit log summary statistics.
+     * <p>
+     * Provides aggregated counts of audit log activity over different time periods,
+     * including total actions, failures, and unique users.
      */
     public static class AuditSummary {
         private int actionsLast24h;

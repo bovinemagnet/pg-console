@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#336791"/>
+      <stop offset="100%" style="stop-color:#0d6efd"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)"/>
+  <!-- PostgreSQL elephant simplified -->
+  <g fill="#ffffff">
+    <!-- Database cylinder top -->
+    <ellipse cx="256" cy="140" rx="120" ry="40"/>
+    <!-- Database cylinder body -->
+    <path d="M136 140 v180 a120,40 0 0 0 240 0 v-180" fill="none" stroke="#ffffff" stroke-width="24"/>
+    <!-- Middle line -->
+    <ellipse cx="256" cy="230" rx="120" ry="40" fill="none" stroke="#ffffff" stroke-width="8"/>
+    <!-- Bottom line -->
+    <ellipse cx="256" cy="320" rx="120" ry="40" fill="none" stroke="#ffffff" stroke-width="8"/>
+    <!-- Console cursor -->
+    <rect x="200" y="370" width="112" height="24" rx="4" fill="#ffffff" opacity="0.9"/>
+    <rect x="200" y="370" width="8" height="24" rx="2" fill="#0d6efd">
+      <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+  <!-- PG text -->
+  <text x="256" y="280" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="48" font-weight="bold" opacity="0.3">PG</text>
+</svg>

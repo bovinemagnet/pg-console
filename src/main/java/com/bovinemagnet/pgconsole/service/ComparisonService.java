@@ -30,7 +30,13 @@ public class ComparisonService {
     PostgresService postgresService;
 
     /**
-     * Compares overview stats across all instances.
+     * Compares overview statistics across all configured PostgreSQL instances.
+     * <p>
+     * Collects overview statistics from each instance and returns a unified comparison
+     * list. Instances that fail to connect are included with error information rather
+     * than being excluded from results.
+     *
+     * @return list of instance comparisons containing stats or error details for each instance
      */
     public List<InstanceComparison> compareOverview() {
         List<InstanceComparison> comparisons = new ArrayList<>();
@@ -59,7 +65,16 @@ public class ComparisonService {
     }
 
     /**
-     * Finds common queries across instances by query fingerprint.
+     * Finds queries that appear across multiple PostgreSQL instances.
+     * <p>
+     * Queries are matched using their query fingerprint (normalised query hash) to identify
+     * the same logical query running on different instances. Only queries present on at least
+     * two instances are returned. Results are sorted by total execution time across all instances.
+     *
+     * @param instanceIds list of instance identifiers to compare
+     * @param limit maximum number of common queries to return
+     * @return list of queries appearing on multiple instances with performance metrics from each,
+     *         sorted by total time descending
      */
     public List<CrossInstanceQuery> findCommonQueries(List<String> instanceIds, int limit) {
         Map<String, CrossInstanceQuery> queryMap = new HashMap<>();
@@ -117,7 +132,14 @@ public class ComparisonService {
     }
 
     /**
-     * Compares a specific query across instances.
+     * Compares performance metrics for a specific query across multiple instances.
+     * <p>
+     * Retrieves metrics for the identified query from each specified instance and calculates
+     * variance statistics including fastest/slowest instance and performance ratio.
+     *
+     * @param queryId the query identifier (fingerprint) to compare
+     * @param instanceIds list of instance identifiers to check
+     * @return cross-instance query comparison with metrics from each instance where the query exists
      */
     public CrossInstanceQuery compareQuery(String queryId, List<String> instanceIds) {
         CrossInstanceQuery crossQuery = new CrossInstanceQuery();
@@ -154,6 +176,14 @@ public class ComparisonService {
         return crossQuery;
     }
 
+    /**
+     * Calculates variance statistics for query performance across instances.
+     * <p>
+     * Computes mean time variance (standard deviation), identifies the fastest and slowest
+     * instances, and calculates the performance ratio between them.
+     *
+     * @param query the cross-instance query to analyse
+     */
     private void calculateVariance(CrossInstanceQuery query) {
         var metrics = query.getInstanceMetrics().values();
         if (metrics.size() < 2) {
@@ -200,7 +230,10 @@ public class ComparisonService {
     }
 
     /**
-     * Comparison data for a single instance.
+     * Encapsulates comparison data for a single PostgreSQL instance.
+     * <p>
+     * Contains either overview statistics if the instance connected successfully,
+     * or error information if connection failed.
      */
     public static class InstanceComparison {
         private String instanceId;
@@ -226,7 +259,10 @@ public class ComparisonService {
     }
 
     /**
-     * Query metrics from a single instance.
+     * Query performance metrics collected from a single instance.
+     * <p>
+     * Aggregates execution statistics including call counts, execution times,
+     * and row counts for a specific query.
      */
     public static class QueryMetrics {
         private long totalCalls;
@@ -259,7 +295,10 @@ public class ComparisonService {
     }
 
     /**
-     * Query data across multiple instances.
+     * Represents a query's performance data aggregated across multiple instances.
+     * <p>
+     * Contains the query text, metrics from each instance, and calculated statistics
+     * including variance, fastest/slowest instances, and performance ratios.
      */
     public static class CrossInstanceQuery {
         private String queryId;
