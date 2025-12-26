@@ -157,6 +157,180 @@ Product Specification: Postgres Insight Dashboard
   - Function dependencies (which tables functions reference)
   - Summary statistics for schema objects
 
+### Phase 9 — Responsive UI & Navigation Redesign (Planned)
+
+**Framework Decision:** Enhance Bootstrap 5 (no build step required)
+- Keep Bootstrap 5 as base framework (CDN)
+- Add Bootstrap Icons for navigation (CDN)
+- Custom CSS for modern aesthetics (glassmorphism, smooth shadows, micro-animations)
+- Optional: Animate.css for transitions (CDN)
+- Optional: Bootswatch theme or Tabler UI kit for refreshed look
+- No Tailwind/Node.js build pipeline required
+
+- [ ] **Left-Hand Icon Navigation**
+  - Collapsible sidebar with icon-based navigation
+  - Icon set: Bootstrap Icons (CDN, no build step)
+  - Tooltips on collapsed state, labels on expanded
+  - Grouped navigation sections (Monitoring, Analysis, Admin, Data Control)
+  - Persistent expand/collapse preference in localStorage
+  - Keyboard shortcuts for navigation (Ctrl+1, Ctrl+2, etc.)
+- [ ] **Mobile-First Responsive Layout**
+  - Bottom navigation bar on mobile devices
+  - Swipe gestures for page navigation
+  - Touch-friendly table interactions (tap to expand rows)
+  - Responsive cards instead of tables on small screens
+  - Pull-to-refresh on mobile
+- [ ] **Progressive Web App (PWA)**
+  - Service worker for offline capability
+  - App manifest for "Add to Home Screen"
+  - Cached dashboard shell for instant loading
+  - Background sync for metrics when reconnected
+- [ ] **Adaptive Dashboard Layouts**
+  - Grid-based widget system (CSS Grid/Flexbox)
+  - Draggable widget reordering (optional)
+  - Responsive breakpoints: mobile (<768px), tablet (768-1024px), desktop (>1024px)
+  - Compact vs comfortable view toggle
+- [ ] **Accessibility Improvements**
+  - ARIA labels for all interactive elements
+  - Keyboard navigation throughout
+  - Screen reader announcements for live updates
+  - High contrast mode option
+  - Focus indicators and skip links
+- [ ] **Modern Aesthetic Enhancements**
+  - Glassmorphism effects for cards and modals (backdrop-blur, transparency)
+  - Refined shadow system (soft, layered shadows)
+  - Smooth micro-animations on interactions (hover, focus, click)
+  - Improved colour palette with better contrast ratios
+  - Refined typography with improved hierarchy
+  - Subtle gradient accents for visual interest
+  - Rounded corners and softer visual edges
+  - Loading skeletons instead of spinners
+
+### Phase 10 — Security & Compliance Monitoring (Planned)
+- [ ] **Role & Permission Auditing**
+  - Database role hierarchy visualisation
+  - Permission matrix (role × object × privilege)
+  - Superuser and elevated privilege warnings
+  - Role membership changes over time
+  - Password policy compliance checks
+- [ ] **Connection Security Analysis**
+  - SSL/TLS connection status for all clients
+  - Authentication method breakdown (md5, scram-sha-256, cert, etc.)
+  - Failed login attempt tracking
+  - Connection source IP analysis with geolocation
+  - Suspicious connection pattern detection
+- [ ] **Data Access Patterns**
+  - Table access frequency by role
+  - Sensitive table monitoring (PII indicators)
+  - After-hours access alerts
+  - Unusual query pattern detection
+  - Row-level security policy overview
+- [ ] **Compliance Dashboards**
+  - GDPR data subject access tracking
+  - SOC 2 relevant metrics (access controls, encryption)
+  - Audit trail completeness scoring
+  - Data retention policy monitoring
+  - Encryption-at-rest verification
+- [ ] **Security Recommendations**
+  - Weak password detection (if accessible)
+  - Overly permissive role warnings
+  - Public schema exposure alerts
+  - Extension security review
+  - pg_hba.conf analysis recommendations
+
+### Phase 11 — Intelligent Insights & Automation (Planned)
+- [ ] **Anomaly Detection**
+  - Statistical baseline learning for key metrics
+  - Automatic anomaly alerts (connections, query times, errors)
+  - Seasonal pattern recognition (daily, weekly cycles)
+  - Correlation detection between metrics
+  - Root cause suggestion for anomalies
+- [ ] **Predictive Analytics**
+  - Storage growth forecasting
+  - Connection pool exhaustion prediction
+  - Query performance degradation trends
+  - Maintenance window recommendations
+  - Capacity planning projections
+- [ ] **Automated Recommendations Engine**
+  - Priority-ranked action items dashboard
+  - One-click fix suggestions with SQL preview
+  - Impact estimation for recommendations
+  - Recommendation history and effectiveness tracking
+  - Configuration tuning suggestions (work_mem, shared_buffers, etc.)
+- [ ] **Natural Language Queries**
+  - "Show me slow queries from yesterday"
+  - "Which tables are growing fastest?"
+  - "Why is the database slow right now?"
+  - Query intent parsing to dashboard navigation
+  - Plain English explanations for technical metrics
+- [ ] **Runbook Integration**
+  - Predefined incident response playbooks
+  - Step-by-step guided troubleshooting
+  - Automated diagnostic data collection
+  - Integration with ticketing systems (Jira, ServiceNow)
+  - Post-incident report generation
+- [ ] **Scheduled Maintenance Automation**
+  - Intelligent vacuum scheduling based on table activity
+  - Automatic index rebuild recommendations
+  - Off-peak maintenance window detection
+  - Pre/post maintenance metric comparison
+  - Rollback capabilities for configuration changes
+
+### Phase 12 — Schema Comparison & Migration (Planned)
+- [ ] **Cross-Instance Schema Comparison**
+  - Compare schemas between different PostgreSQL instances (e.g., dev vs prod)
+  - Source and destination instance selection from configured instances
+  - Schema/namespace selection for comparison scope
+  - Side-by-side visual diff view with colour-coded changes
+- [ ] **Comprehensive Object Comparison**
+  - Tables: columns, data types, nullability, defaults, identity/serial
+  - Indexes: type, columns, unique, partial, expression indexes
+  - Constraints: primary keys, foreign keys, check constraints, unique constraints
+  - Views and materialised views with definition comparison
+  - Functions and procedures with body/signature comparison
+  - Triggers with timing, events, and function references
+  - Sequences with start, increment, min/max values
+  - Custom types (enums, composites, domains)
+  - Extensions with version comparison
+- [ ] **Flexible Filtering System**
+  - Table name pattern exclusions (e.g., `zz_*`, `temp_*`, `_backup`)
+  - Schema exclusions (e.g., `pg_catalog`, `information_schema`)
+  - Object type filters (include/exclude specific object types)
+  - Configurable filter patterns in text input fields
+  - Regex support for advanced pattern matching
+  - Filter presets for common exclusion patterns
+- [ ] **Difference Categorisation**
+  - Missing objects (exists in source, not in destination)
+  - Extra objects (exists in destination, not in source)
+  - Modified objects (exists in both but differs)
+  - Severity levels: Breaking (drops), Warning (alters), Info (additions)
+  - Summary statistics (X tables differ, Y indexes missing, etc.)
+- [ ] **DDL Migration Script Generation**
+  - Generate CREATE statements for missing objects
+  - Generate ALTER statements for modified objects
+  - Optional DROP statements for extra objects (with safety warnings)
+  - Dependency-aware script ordering (create referenced tables first)
+  - Transaction wrapping options (single transaction vs individual statements)
+  - Script preview before download
+  - Copy to clipboard functionality
+- [ ] **Comparison Profiles**
+  - Save named profiles with source, destination, and filter configurations
+  - Quick re-run of saved comparisons
+  - Profile sharing via export/import (JSON format)
+  - Default profile per instance pair
+  - Profile history with last run timestamp and result summary
+- [ ] **Comparison History & Audit**
+  - Log of all schema comparisons performed
+  - Comparison result snapshots for trend analysis
+  - Schema drift detection over time
+  - Scheduled comparison runs with email notifications
+- [ ] **Interactive Diff Viewer**
+  - Expandable/collapsible object tree
+  - Inline SQL definition diffs (unified or split view)
+  - Search and filter within diff results
+  - Export diff report as HTML, PDF, or Markdown
+  - Shareable comparison result URLs
+
 ---
 
 1. Purpose
@@ -847,6 +1021,122 @@ Event triggers listed with enabled status - DONE
 Partition trees displayed with size distribution and imbalance detection - DONE
 
 Foreign key relationships shown with cascade rules - DONE
+
+Phase 9 — Responsive UI & Navigation Redesign (Planned)
+
+Deliverables:
+
+Left-hand collapsible sidebar with icon-based navigation
+
+Mobile-responsive layouts with bottom navigation on small screens
+
+Progressive Web App (PWA) support with offline capability
+
+Adaptive dashboard layouts with responsive breakpoints
+
+Accessibility improvements (ARIA, keyboard navigation, screen reader support)
+
+Acceptance Criteria:
+
+Sidebar collapses to icons with tooltips on hover
+
+Mobile users see bottom navigation bar and card-based layouts
+
+PWA installable with "Add to Home Screen" functionality
+
+Dashboard adapts gracefully across mobile, tablet, and desktop
+
+WCAG 2.1 AA compliance for core functionality
+
+Phase 10 — Security & Compliance Monitoring (Planned)
+
+Deliverables:
+
+Role and permission auditing dashboard
+
+Connection security analysis (SSL, auth methods, failed logins)
+
+Data access pattern monitoring with sensitive table tracking
+
+Compliance dashboards (GDPR, SOC 2 metrics)
+
+Security recommendations engine
+
+Acceptance Criteria:
+
+Role hierarchy visualised with permission matrix
+
+SSL/TLS status visible for all connections
+
+Sensitive table access tracked with alerts
+
+Compliance scoring visible with actionable recommendations
+
+Security warnings displayed for common misconfigurations
+
+Phase 11 — Intelligent Insights & Automation (Planned)
+
+Deliverables:
+
+Anomaly detection with statistical baseline learning
+
+Predictive analytics for storage, connections, and performance
+
+Automated recommendations engine with priority ranking
+
+Natural language query interface
+
+Runbook integration with guided troubleshooting
+
+Scheduled maintenance automation
+
+Acceptance Criteria:
+
+Anomalies detected and alerted with root cause suggestions
+
+Storage and capacity forecasts displayed with confidence intervals
+
+Recommendations ranked by impact with one-click SQL preview
+
+Natural language queries parsed to relevant dashboard views
+
+Runbooks executed with step-by-step guidance
+
+Maintenance windows suggested based on activity patterns
+
+Phase 12 — Schema Comparison & Migration (Planned)
+
+Deliverables:
+
+Cross-instance schema comparison with source/destination selector
+
+Comprehensive object comparison (tables, indexes, constraints, views, functions, triggers, sequences, types, extensions)
+
+Flexible filtering system with pattern exclusions (e.g., `zz_*`, `temp_*`)
+
+Visual diff viewer with colour-coded changes and expandable object tree
+
+DDL migration script generation with dependency ordering
+
+Saveable comparison profiles for repeated use
+
+Comparison history and schema drift detection
+
+Acceptance Criteria:
+
+Users can select source and destination instances from configured list
+
+All major database objects compared with detailed attribute-level diffs
+
+Table exclusion patterns configurable via text input (supports wildcards and regex)
+
+Side-by-side diff view shows additions (green), deletions (red), modifications (yellow)
+
+Generated DDL scripts are syntactically correct and dependency-ordered
+
+Profiles persist and can be re-run with one click
+
+Comparison results exportable as HTML, PDF, or Markdown
 
 Configuration Specification (example)
 Required
