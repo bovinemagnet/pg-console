@@ -15,9 +15,15 @@ import com.bovinemagnet.pgconsole.model.TableStats;
 import com.bovinemagnet.pgconsole.model.WaitEventSummary;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.IncidentReportService;
+import com.bovinemagnet.pgconsole.service.IndexAdvisorService;
+import com.bovinemagnet.pgconsole.service.InfrastructureService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.QueryFingerprintService;
+import com.bovinemagnet.pgconsole.service.QueryRegressionService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
+import com.bovinemagnet.pgconsole.service.ReplicationService;
+import com.bovinemagnet.pgconsole.service.StatementsManagementService;
+import com.bovinemagnet.pgconsole.service.TableMaintenanceService;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -87,6 +93,24 @@ public class DashboardResource {
     Template waitEvents;
 
     @Inject
+    Template indexAdvisor;
+
+    @Inject
+    Template queryRegressions;
+
+    @Inject
+    Template tableMaintenance;
+
+    @Inject
+    Template statementsManagement;
+
+    @Inject
+    Template replication;
+
+    @Inject
+    Template infrastructure;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -100,6 +124,24 @@ public class DashboardResource {
 
     @Inject
     IncidentReportService incidentReportService;
+
+    @Inject
+    IndexAdvisorService indexAdvisorService;
+
+    @Inject
+    QueryRegressionService queryRegressionService;
+
+    @Inject
+    TableMaintenanceService tableMaintenanceService;
+
+    @Inject
+    StatementsManagementService statementsManagementService;
+
+    @Inject
+    ReplicationService replicationService;
+
+    @Inject
+    InfrastructureService infrastructureService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -235,6 +277,106 @@ public class DashboardResource {
                         .data("instances", dataSourceManager.getInstanceInfoList())
                         .data("currentInstance", instance)
                         .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/index-advisor")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance indexAdvisor(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var recommendations = indexAdvisorService.getRecommendations(instance);
+        var summary = indexAdvisorService.getSummary(instance);
+        return indexAdvisor.data("recommendations", recommendations)
+                          .data("summary", summary)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/query-regressions")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance queryRegressions(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("window") @DefaultValue("24") int windowHours,
+            @QueryParam("threshold") @DefaultValue("50") int thresholdPercent) {
+        var regressions = queryRegressionService.detectRegressions(instance, windowHours, thresholdPercent);
+        var improvements = queryRegressionService.detectImprovements(instance, windowHours, thresholdPercent);
+        var summary = queryRegressionService.getSummary(instance, windowHours, thresholdPercent);
+        return queryRegressions.data("regressions", regressions)
+                               .data("improvements", improvements)
+                               .data("summary", summary)
+                               .data("windowHours", windowHours)
+                               .data("thresholdPercent", thresholdPercent)
+                               .data("instances", dataSourceManager.getInstanceInfoList())
+                               .data("currentInstance", instance)
+                               .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/table-maintenance")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance tableMaintenance(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var recommendations = tableMaintenanceService.getRecommendations(instance);
+        var summary = tableMaintenanceService.getSummary(instance);
+        return tableMaintenance.data("recommendations", recommendations)
+                               .data("summary", summary)
+                               .data("instances", dataSourceManager.getInstanceInfoList())
+                               .data("currentInstance", instance)
+                               .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/statements-management")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance statementsManagement(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("window") @DefaultValue("24") int windowHours) {
+        var topMovers = statementsManagementService.getTopMovers(instance, windowHours);
+        var summary = statementsManagementService.getSummary(instance);
+        return statementsManagement.data("topMovers", topMovers)
+                                   .data("summary", summary)
+                                   .data("windowHours", windowHours)
+                                   .data("instances", dataSourceManager.getInstanceInfoList())
+                                   .data("currentInstance", instance)
+                                   .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/replication")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance replication(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var replicas = replicationService.getStreamingReplication(instance);
+        var slots = replicationService.getReplicationSlots(instance);
+        var walStats = replicationService.getWalStats(instance);
+        var summary = replicationService.getSummary(instance);
+        var isReplica = replicationService.isReplica(instance);
+        return replication.data("replicas", replicas)
+                          .data("slots", slots)
+                          .data("walStats", walStats)
+                          .data("summary", summary)
+                          .data("isReplica", isReplica)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/infrastructure")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance infrastructure(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var vacuumProgress = infrastructureService.getVacuumProgress(instance);
+        var bgProcessStats = infrastructureService.getBackgroundProcessStats(instance);
+        var storageStats = infrastructureService.getStorageStats(instance);
+        return infrastructure.data("vacuumProgress", vacuumProgress)
+                             .data("bgProcessStats", bgProcessStats)
+                             .data("storageStats", storageStats)
+                             .data("instances", dataSourceManager.getInstanceInfoList())
+                             .data("currentInstance", instance)
+                             .data("securityEnabled", config.security().enabled());
     }
 
     @GET

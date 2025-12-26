@@ -38,6 +38,90 @@ Product Specification: Postgres Insight Dashboard
 - [x] Cancel/Terminate query buttons (with confirmation modals)
 - [x] Export: download CSV (slow queries export with timestamp)
 
+### Phase 4 — Advanced Diagnostics ✅ COMPLETE
+- [x] Wait-event breakdown summary (Wait Events page with type summaries and detailed table)
+- [x] Query fingerprint grouping (normalisation service, grouped view on Slow Queries page)
+- [x] Explain Plan integration (EXPLAIN/ANALYZE/BUFFERS on Query Detail page)
+- [x] Incident report snapshot export (text-based report with full state capture)
+- [x] Alerting integration (webhook support, configurable thresholds, cooldown)
+
+### Phase 5 — Query & Index Optimisation (Complete)
+- [x] **Index Advisor** - Recommendations based on sequential scan patterns and query analysis
+  - Identify tables with high sequential scan ratios
+  - Detect duplicate/redundant indexes
+  - Highlight unused indexes (with safety warnings about recent usage)
+  - Summary cards showing missing indexes, unused indexes, and wasted space
+- [x] **Query Regression Detection** - Compare query performance across time windows
+  - Flag queries with significant mean_time increases
+  - Show before/after comparisons with percentage changes
+  - Configurable regression threshold and time window (6h/12h/24h/48h)
+  - Severity levels (Critical >100%, High >50%, Medium >25%)
+  - Also detects query improvements (faster queries)
+- [x] **Table Maintenance Recommendations**
+  - Vacuum/Analyse recommendations based on dead tuple ratios
+  - Bloat estimation with pg_stat_user_tables data
+  - Last vacuum/analyse timestamps with "overdue" warnings
+  - Support for VACUUM, ANALYSE, and VACUUM FULL recommendations
+- [x] **pg_stat_statements Management**
+  - Query baseline comparisons (current period vs previous period)
+  - Top movers report (queries with biggest delta in execution time)
+  - New, removed, increased, and decreased query detection
+  - Configurable comparison windows (6h/12h/24h/48h)
+
+### Phase 6 — Replication & Infrastructure Monitoring (Complete)
+- [x] **Replication Dashboard**
+  - Streaming replication lag monitoring (pg_stat_replication)
+  - Replication slot status and retained WAL size
+  - Logical replication subscriber status
+  - WAL configuration and statistics
+- [x] **Vacuum Progress Monitoring**
+  - Active vacuum operations (pg_stat_progress_vacuum)
+  - Estimated completion percentage with progress bars
+  - Phase tracking (heap scan, index vacuum, cleanup, etc.)
+  - Autovacuum worker identification
+- [x] **Background Process Monitoring**
+  - Autovacuum launcher/worker status and counts
+  - Background writer statistics (buffers cleaned)
+  - Checkpointer activity and timing (timed vs requested)
+  - Buffer allocation statistics with warnings
+- [x] **Storage Insights**
+  - Tablespace usage and sizes
+  - Database size breakdown
+  - WAL directory size and segment count
+  - Temp file usage warnings and recommendations
+- [ ] **Connection Pool Integration** (optional - future)
+  - PgBouncer stats integration (if accessible)
+  - Pool saturation warnings
+  - Client wait time metrics
+
+### Phase 7 — Enterprise & Collaboration Features (Planned)
+- [ ] **Scheduled Reports**
+  - Daily/weekly summary emails (top queries, incidents, recommendations)
+  - PDF/HTML report generation
+  - Configurable report recipients per instance
+- [ ] **Saved Queries & Bookmarks**
+  - Bookmark slow queries for tracking
+  - Add notes/annotations to queries
+  - Query tagging for categorisation
+- [ ] **Comparison Views**
+  - Side-by-side instance comparison
+  - Cross-instance query analysis (same query on different instances)
+  - Environment comparison (dev vs staging vs prod)
+- [ ] **Custom Dashboards**
+  - User-defined metric panels
+  - Custom SQL widget support (read-only queries)
+  - Dashboard templates (OLTP, OLAP, mixed workload)
+- [ ] **API & Integrations**
+  - REST API for metrics export
+  - Prometheus metrics endpoint (/q/metrics)
+  - Grafana datasource compatibility
+  - OpenTelemetry trace correlation
+- [ ] **Audit & Compliance**
+  - Action audit log (who did what, when)
+  - Query access logging
+  - Session history for forensics
+  - Data retention policies with compliance modes
+
 ---
 
 1. Purpose
@@ -595,19 +679,107 @@ Clear audit log for admin actions
 
 UI feels cohesive
 
-Phase 4 — Advanced Diagnostics (optional, depending on appetite)
+Phase 4 — Advanced Diagnostics ✅ COMPLETE
 
-Ideas:
+Deliverables:
 
-“Explain plan” integration (only on non-prod or with strict controls)
+Wait-event breakdown summary page
 
-wait-event breakdown summary
+Query fingerprint grouping with normalised view
 
-“query fingerprint” grouping / similarity
+Explain Plan integration on Query Detail page
 
-alerting integration (email/webhook) based on thresholds
+Incident report snapshot export
 
-simple incident report snapshot export (HTML/PDF)
+Alerting integration with webhook support
+
+Acceptance Criteria:
+
+Wait events page shows type summaries and detailed breakdown
+
+Slow queries can be viewed grouped by fingerprint
+
+EXPLAIN/ANALYZE can be run from Query Detail (SELECT only)
+
+Incident reports capture full database state
+
+Alerts fire when thresholds exceeded with cooldown
+
+Phase 5 — Query & Index Optimisation (Complete)
+
+Deliverables:
+
+Index Advisor page with recommendations for missing, unused, and duplicate indexes
+
+Query regression detection with configurable thresholds and time windows
+
+Table maintenance recommendations (vacuum/analyse) with bloat estimation
+
+pg_stat_statements baseline comparisons and top movers report
+
+Acceptance Criteria:
+
+Index suggestions based on sequential scan patterns - DONE
+
+Regression candidates flagged with performance deltas and severity levels - DONE
+
+Maintenance recommendations shown with urgency levels and SQL commands - DONE
+
+Query baselines enable period-over-period comparison with movement types - DONE
+
+Phase 6 — Replication & Infrastructure Monitoring ✅ COMPLETE
+
+Deliverables:
+
+Replication Dashboard (streaming and logical) - DONE
+
+Vacuum progress monitoring - DONE
+
+Background process status page - DONE
+
+Storage insights (tablespaces, WAL) - DONE
+
+Optional PgBouncer integration - Deferred to future phase
+
+Acceptance Criteria:
+
+Replication lag visible with sync state badges - DONE
+
+Active vacuums show progress with phase tracking - DONE
+
+Background workers status shown with buffer statistics - DONE
+
+Storage breakdown with tablespace, database, and WAL sizes - DONE
+
+Phase 7 — Enterprise & Collaboration Features (Planned)
+
+Deliverables:
+
+Scheduled email reports
+
+Query bookmarks and annotations
+
+Cross-instance comparison views
+
+Custom dashboard builder
+
+REST API and Prometheus metrics
+
+Audit logging
+
+Acceptance Criteria:
+
+Reports delivered on schedule
+
+Annotations persist and are searchable
+
+Instances can be compared side-by-side
+
+Custom widgets can be created and arranged
+
+Metrics available for external consumption
+
+All actions logged with user attribution
 
 Configuration Specification (example)
 Required

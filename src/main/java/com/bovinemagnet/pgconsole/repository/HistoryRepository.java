@@ -351,6 +351,61 @@ public class HistoryRepository {
         return totalDeleted;
     }
 
+    /**
+     * Gets aggregated query metrics for a time period.
+     * Returns the average mean_time, total calls, and latest query text for each query.
+     *
+     * @param instanceId the instance ID
+     * @param startHoursAgo hours ago for the start of the period
+     * @param endHoursAgo hours ago for the end of the period
+     * @return list of aggregated query metrics
+     */
+    public List<QueryMetricsHistory> getAggregatedQueryMetrics(String instanceId, int startHoursAgo, int endHoursAgo) {
+        List<QueryMetricsHistory> results = new ArrayList<>();
+        Instant startTime = Instant.now().minus(startHoursAgo, ChronoUnit.HOURS);
+        Instant endTime = Instant.now().minus(endHoursAgo, ChronoUnit.HOURS);
+
+        String sql = """
+            SELECT
+                query_id,
+                MAX(query_text) as query_text,
+                AVG(mean_time_ms) as avg_mean_time,
+                SUM(total_calls) as total_calls,
+                SUM(total_time_ms) as total_time,
+                COUNT(*) as sample_count
+            FROM pgconsole.query_metrics_history
+            WHERE instance_id = ?
+              AND sampled_at >= ? AND sampled_at < ?
+            GROUP BY query_id
+            HAVING COUNT(*) >= 2
+            ORDER BY AVG(mean_time_ms) DESC
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(startTime));
+            stmt.setTimestamp(3, Timestamp.from(endTime));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    QueryMetricsHistory m = new QueryMetricsHistory();
+                    m.setQueryId(rs.getString("query_id"));
+                    m.setQueryText(rs.getString("query_text"));
+                    m.setMeanTimeMs(rs.getDouble("avg_mean_time"));
+                    m.setTotalCalls(rs.getLong("total_calls"));
+                    m.setTotalTimeMs(rs.getDouble("total_time"));
+                    results.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get aggregated query metrics for " + instanceId, e);
+        }
+
+        return results;
+    }
+
     private Double getDoubleOrNull(ResultSet rs, String column) throws SQLException {
         double value = rs.getDouble(column);
         return rs.wasNull() ? null : value;

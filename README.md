@@ -9,8 +9,23 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 - **Slow Queries** - Query performance from `pg_stat_statements` with sortable columns, hover tooltips, and detailed statistics
 - **Activity Monitor** - Real-time view of current database connections, running queries, and wait events
 - **Lock Analysis** - Blocking tree visualisation, lock contention detection, and idle-in-transaction highlighting
+- **Wait Events** - Session wait state breakdown with type summaries and detailed event table
 - **Table Statistics** - Table sizes, sequential vs index scans, bloat indicators, and tuple counts
 - **Database Metrics** - Per-database statistics from `pg_stat_database` with comparison view and detailed breakdowns
+- **Replication Dashboard** - Streaming replication monitoring, replica lag, replication slot status, and WAL configuration
+- **Infrastructure** - Vacuum progress, background processes, checkpoint statistics, and storage insights
+
+### Advanced Diagnostics
+- **Query Fingerprinting** - Group similar queries by normalised structure for aggregated analysis
+- **Explain Plan** - Generate EXPLAIN/ANALYZE/BUFFERS plans for queries directly from the Query Detail page
+- **Incident Reports** - Capture point-in-time snapshots of database state for troubleshooting
+- **Alerting** - Webhook notifications when thresholds are exceeded (connections, blocked queries, cache hit ratio)
+
+### Query & Index Optimisation
+- **Index Advisor** - Recommendations for missing indexes (high seq scan ratio), unused indexes, and duplicate indexes
+- **Query Regression Detection** - Compare query performance across time windows, flag significant slowdowns with severity levels
+- **Table Maintenance** - Vacuum/Analyse recommendations based on dead tuple ratios and bloat estimation
+- **Statements Baselines** - Period-over-period query comparisons with top movers report
 
 ### User Experience
 - **Dark Mode** - Toggle between light and dark themes (persisted in browser)
@@ -94,6 +109,12 @@ export POSTGRES_PASSWORD=your-password
 | `PG_CONSOLE_HISTORY_TOP_QUERIES` | Number of top queries to sample | `50` |
 | `PG_CONSOLE_INSTANCES` | Comma-separated list of instance names | `default` |
 | `PG_CONSOLE_SECURITY_ENABLED` | Enable HTTP Basic authentication | `false` |
+| `PG_CONSOLE_ALERTING_ENABLED` | Enable alerting | `false` |
+| `PG_CONSOLE_WEBHOOK_URL` | Webhook URL for alerts | (none) |
+| `PG_CONSOLE_ALERTING_COOLDOWN` | Seconds between alerts of same type | `300` |
+| `PG_CONSOLE_ALERT_CONN_PERCENT` | Connection percentage threshold | `90` |
+| `PG_CONSOLE_ALERT_BLOCKED` | Blocked queries threshold | `5` |
+| `PG_CONSOLE_ALERT_CACHE_HIT` | Cache hit ratio threshold | `90` |
 
 ### Database Filter
 
@@ -223,13 +244,22 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 |------|-------------|
 | `/` | Overview dashboard with live metrics |
 | `/slow-queries` | Query performance from pg_stat_statements |
-| `/slow-queries/{id}` | Detailed query statistics with copy button |
+| `/slow-queries?view=grouped` | Queries grouped by fingerprint |
+| `/slow-queries/{id}` | Detailed query statistics with Explain Plan |
 | `/activity` | Current database connections and queries |
 | `/locks` | Lock contention and blocking tree |
+| `/wait-events` | Session wait state breakdown |
 | `/tables` | Table statistics and bloat indicators |
 | `/databases` | Per-database metrics comparison |
 | `/databases/{name}` | Detailed metrics for a single database |
+| `/index-advisor` | Index recommendations (missing, unused, duplicates) |
+| `/query-regressions` | Query performance regression detection |
+| `/table-maintenance` | Vacuum and analyse recommendations |
+| `/statements-management` | Query baselines and top movers report |
+| `/replication` | Streaming replication status and lag monitoring |
+| `/infrastructure` | Vacuum progress, background processes, and storage |
 | `/about` | Application and PostgreSQL server info |
+| `/incident-report/export` | Download point-in-time incident report |
 
 ## Building
 
