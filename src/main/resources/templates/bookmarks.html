@@ -1,0 +1,149 @@
+{#include base}
+{#title}Query Bookmarks - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/bookmarks?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Query Bookmarks</h1>
+        <p class="text-muted">Track and annotate slow queries for investigation</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Total</span>
+                <h3 class="mb-0">{summary.totalBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Active</span>
+                <h3 class="mb-0">{summary.activeBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Investigating</span>
+                <h3 class="mb-0">{summary.investigatingBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">Resolved</span>
+                <h3 class="mb-0">{summary.resolvedBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Critical</span>
+                <h3 class="mb-0">{summary.criticalBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">High</span>
+                <h3 class="mb-0">{summary.highPriorityBookmarks}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tags Filter -->
+{#if !tags.isEmpty()}
+<div class="row mb-3">
+    <div class="col">
+        <span class="me-2">Filter by tag:</span>
+        <a href="/bookmarks?instance={currentInstance ?: 'default'}" class="badge bg-secondary text-decoration-none me-1">All</a>
+        {#for tag in tags}
+        <a href="/bookmarks?instance={currentInstance ?: 'default'}&tag={tag}" class="badge bg-info text-decoration-none me-1">{tag}</a>
+        {/for}
+    </div>
+</div>
+{/if}
+
+<!-- Bookmarks Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Bookmarked Queries</h5>
+                <span class="badge bg-info">{bookmarks.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if bookmarks.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h4>No Bookmarks</h4>
+                    <p class="mb-0">Bookmark queries from the Slow Queries page to track them here</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Title</th>
+                                <th>Query</th>
+                                <th>Tags</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for bookmark in bookmarks}
+                            <tr>
+                                <td>
+                                    <span class="badge {bookmark.priority.cssClass}">{bookmark.priority.displayName}</span>
+                                </td>
+                                <td>
+                                    <span class="badge {bookmark.status.cssClass}">{bookmark.status.displayName}</span>
+                                </td>
+                                <td>
+                                    <strong>{bookmark.displayTitle}</strong>
+                                    {#if bookmark.notes != null}
+                                    <br><small class="text-muted">{bookmark.notes}</small>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <code class="small">{bookmark.queryTextPreview}</code>
+                                </td>
+                                <td>
+                                    {#if bookmark.tags != null}
+                                    {#for tag in bookmark.tags}
+                                    <span class="badge bg-secondary">{tag}</span>
+                                    {/for}
+                                    {/if}
+                                </td>
+                                <td><small>{bookmark.updatedAtFormatted}</small></td>
+                                <td>
+                                    <a href="/slow-queries/{bookmark.queryId}?instance={currentInstance ?: 'default'}"
+                                       class="btn btn-sm btn-outline-primary">View</a>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

@@ -149,6 +149,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}">Infrastructure</a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="enterpriseDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Enterprise
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="enterpriseDropdown">
+                            <li><a class="dropdown-item" href="/comparison?instance={currentInstance ?: 'default'}">Instance Comparison</a></li>
+                            <li><a class="dropdown-item" href="/bookmarks?instance={currentInstance ?: 'default'}">Bookmarks</a></li>
+                            <li><a class="dropdown-item" href="/audit-log?instance={currentInstance ?: 'default'}">Audit Log</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}">About</a>
                     </li>

@@ -48,6 +48,15 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 
 ### Data Export
 - **CSV Export** - Download slow queries as CSV files
+- **Incident Reports** - Point-in-time database state snapshots
+
+### Enterprise Features
+- **REST API** - Full JSON API at `/api/v1/*` for external integrations
+- **Prometheus Metrics** - Metrics endpoint at `/q/metrics` for Grafana dashboards
+- **Audit Logging** - Track admin actions (cancel/terminate queries, settings changes)
+- **Query Bookmarks** - Bookmark slow queries with notes, tags, priority, and status
+- **Instance Comparison** - Side-by-side comparison of metrics across instances
+- **Scheduled Reports** - Automated daily/weekly email reports with top queries and recommendations
 
 ## Technology Stack
 
@@ -115,6 +124,10 @@ export POSTGRES_PASSWORD=your-password
 | `PG_CONSOLE_ALERT_CONN_PERCENT` | Connection percentage threshold | `90` |
 | `PG_CONSOLE_ALERT_BLOCKED` | Blocked queries threshold | `5` |
 | `PG_CONSOLE_ALERT_CACHE_HIT` | Cache hit ratio threshold | `90` |
+| `PG_CONSOLE_REPORTS_ENABLED` | Enable scheduled reports | `false` |
+| `QUARKUS_MAILER_FROM` | Email sender address for reports | (required if reports enabled) |
+| `QUARKUS_MAILER_HOST` | SMTP server host | `localhost` |
+| `QUARKUS_MAILER_PORT` | SMTP server port | `25` |
 
 ### Database Filter
 
@@ -258,8 +271,13 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 | `/statements-management` | Query baselines and top movers report |
 | `/replication` | Streaming replication status and lag monitoring |
 | `/infrastructure` | Vacuum progress, background processes, and storage |
+| `/comparison` | Side-by-side instance comparison |
+| `/bookmarks` | Query bookmarks and annotations |
+| `/audit-log` | Admin action audit log |
 | `/about` | Application and PostgreSQL server info |
 | `/incident-report/export` | Download point-in-time incident report |
+| `/api/v1/*` | REST API for metrics (JSON) |
+| `/q/metrics` | Prometheus metrics endpoint |
 
 ## Building
 

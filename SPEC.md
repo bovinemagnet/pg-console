@@ -94,33 +94,69 @@ Product Specification: Postgres Insight Dashboard
   - Pool saturation warnings
   - Client wait time metrics
 
-### Phase 7 — Enterprise & Collaboration Features (Planned)
-- [ ] **Scheduled Reports**
-  - Daily/weekly summary emails (top queries, incidents, recommendations)
-  - PDF/HTML report generation
-  - Configurable report recipients per instance
-- [ ] **Saved Queries & Bookmarks**
+### Phase 7 — Enterprise & Collaboration Features ✅ COMPLETE
+- [x] **REST API for Metrics Export**
+  - Full REST API at `/api/v1/*` with JSON responses
+  - Endpoints for overview, activity, slow queries, locks, wait events
+  - Endpoints for tables, databases, index advisor, query regressions
+  - Health check and instance listing endpoints
+- [x] **Prometheus Metrics Endpoint**
+  - Micrometer integration with Prometheus registry
+  - Metrics available at `/q/metrics` for Grafana integration
+- [x] **Audit Logging**
+  - Comprehensive action audit log (who, what, when)
+  - Tracks query cancellations, terminations, and other admin actions
+  - Audit log viewer with summary statistics
+- [x] **Saved Queries & Bookmarks**
   - Bookmark slow queries for tracking
-  - Add notes/annotations to queries
-  - Query tagging for categorisation
-- [ ] **Comparison Views**
-  - Side-by-side instance comparison
+  - Add notes/annotations and tags to queries
+  - Priority levels (Critical, High, Medium, Low)
+  - Status tracking (Active, Investigating, Resolved, Ignored)
+- [x] **Comparison Views**
+  - Side-by-side instance comparison (overview stats)
   - Cross-instance query analysis (same query on different instances)
-  - Environment comparison (dev vs staging vs prod)
-- [ ] **Custom Dashboards**
+  - Performance variance detection and reporting
+- [x] **Scheduled Reports**
+  - Daily/weekly summary email reports
+  - HTML report generation with top queries and recommendations
+  - Configurable report recipients per instance
+  - Quarkus Mailer integration
+- [ ] **Custom Dashboards** (deferred to future phase)
   - User-defined metric panels
   - Custom SQL widget support (read-only queries)
   - Dashboard templates (OLTP, OLAP, mixed workload)
-- [ ] **API & Integrations**
-  - REST API for metrics export
-  - Prometheus metrics endpoint (/q/metrics)
-  - Grafana datasource compatibility
-  - OpenTelemetry trace correlation
-- [ ] **Audit & Compliance**
-  - Action audit log (who did what, when)
-  - Query access logging
-  - Session history for forensics
-  - Data retention policies with compliance modes
+
+### Phase 8 — Change Data Control & Schema Management (Planned)
+- [ ] **Logical Replication Management**
+  - Publication browser (tables, actions, row filters)
+  - Subscription status and lag monitoring
+  - Replication origin tracking
+  - Conflict detection and resolution recommendations
+- [ ] **Schema Change Detection**
+  - DDL event trigger monitoring (CREATE, ALTER, DROP)
+  - Schema version history with diff viewer
+  - Object dependency graph visualisation
+  - Breaking change warnings (dropped columns, type changes)
+- [ ] **Change Data Capture Dashboard**
+  - Table change activity heatmaps (INSERT/UPDATE/DELETE rates)
+  - Row change velocity trends (from pg_stat_user_tables)
+  - High-churn table identification
+  - Estimated WAL generation by table
+- [ ] **Event Trigger Management**
+  - List and status of DDL event triggers
+  - Event trigger execution history
+  - Create/disable event triggers (admin only)
+- [ ] **Table Partitioning Insights**
+  - Partition tree visualisation
+  - Partition size distribution and balance
+  - Orphan partition detection
+  - Partition pruning effectiveness analysis
+  - Recommendations for partition maintenance
+- [ ] **Data Lineage (Optional)**
+  - Foreign key relationship graph
+  - View and materialised view dependencies
+  - Function/procedure call chains
+  - Impact analysis for schema changes
 
 ---
 
@@ -751,35 +787,67 @@ Background workers status shown with buffer statistics - DONE
 
 Storage breakdown with tablespace, database, and WAL sizes - DONE
 
-Phase 7 — Enterprise & Collaboration Features (Planned)
+Phase 7 — Enterprise & Collaboration Features ✅ COMPLETE
 
 Deliverables:
 
-Scheduled email reports
+REST API for metrics export at /api/v1/* - DONE
 
-Query bookmarks and annotations
+Prometheus metrics endpoint (/q/metrics) - DONE
 
-Cross-instance comparison views
+Audit logging with viewer page - DONE
 
-Custom dashboard builder
+Query bookmarks with annotations and tags - DONE
 
-REST API and Prometheus metrics
+Cross-instance comparison views - DONE
 
-Audit logging
+Scheduled email reports - DONE
+
+Custom dashboard builder - Deferred to future phase
 
 Acceptance Criteria:
 
-Reports delivered on schedule
+REST API returns JSON for all major dashboard data - DONE
 
-Annotations persist and are searchable
+Prometheus metrics available for external consumption - DONE
 
-Instances can be compared side-by-side
+All admin actions logged with user attribution - DONE
 
-Custom widgets can be created and arranged
+Bookmarks persist with priority, status, and tags - DONE
 
-Metrics available for external consumption
+Instances compared side-by-side with variance detection - DONE
 
-All actions logged with user attribution
+Reports scheduled with configurable recipients - DONE
+
+Phase 8 — Change Data Control & Schema Management (Planned)
+
+Deliverables:
+
+Logical replication management dashboard (publications, subscriptions, origins)
+
+Schema change detection with DDL event monitoring
+
+Change data capture dashboard with table change heatmaps
+
+Event trigger management interface
+
+Table partitioning insights and recommendations
+
+Optional data lineage visualisation
+
+Acceptance Criteria:
+
+Publications and subscriptions visible with status and lag
+
+DDL changes tracked and displayed with object diffs
+
+Table change rates visualised with trends
+
+Event triggers listed with execution history
+
+Partition trees displayed with size distribution
+
+Foreign key relationships graphed for impact analysis
 
 Configuration Specification (example)
 Required

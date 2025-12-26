@@ -1,0 +1,192 @@
+{#include base}
+{#title}Instance Comparison - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/comparison?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Instance Comparison</h1>
+        <p class="text-muted">Compare metrics and queries across PostgreSQL instances</p>
+    </div>
+</div>
+
+<!-- Instance Overview Comparison -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Instance Overview</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Instance</th>
+                                <th>Status</th>
+                                <th>Version</th>
+                                <th class="text-end">Connections</th>
+                                <th class="text-end">Active Queries</th>
+                                <th class="text-end">Blocked</th>
+                                <th class="text-end">Cache Hit</th>
+                                <th class="text-end">Database Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for comp in comparisons}
+                            <tr class="{#if !comp.connected}table-danger{/if}">
+                                <td>
+                                    <strong>{comp.displayName}</strong>
+                                    <br><small class="text-muted">{comp.instanceId}</small>
+                                </td>
+                                <td>
+                                    {#if comp.connected}
+                                    <span class="badge bg-success">Connected</span>
+                                    {#else}
+                                    <span class="badge bg-danger">Disconnected</span>
+                                    {/if}
+                                </td>
+                                {#if comp.connected}
+                                <td>{comp.stats.version}</td>
+                                <td class="text-end">{comp.stats.activeConnections} / {comp.stats.maxConnections}</td>
+                                <td class="text-end">{comp.stats.activeQueries}</td>
+                                <td class="text-end">
+                                    {#if comp.stats.blockedQueries > 0}
+                                    <span class="text-danger">{comp.stats.blockedQueries}</span>
+                                    {#else}
+                                    0
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    <span class="{#if comp.stats.cacheHitRatio < 90}text-warning{/if}">
+                                        {comp.stats.cacheHitRatioFormatted}
+                                    </span>
+                                </td>
+                                <td class="text-end">{comp.stats.databaseSize}</td>
+                                {#else}
+                                <td colspan="6" class="text-danger">{comp.error}</td>
+                                {/if}
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Common Queries Across Instances -->
+{#if !commonQueries.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Common Queries Across Instances</h5>
+                <small class="text-muted">Queries found in multiple instances with performance variance</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Query</th>
+                                <th class="text-center">Instances</th>
+                                <th class="text-center">Variance</th>
+                                <th>Fastest</th>
+                                <th>Slowest</th>
+                                <th class="text-end">Ratio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for query in commonQueries}
+                            <tr class="{#if query.hasSignificantVariance}table-warning{/if}">
+                                <td>
+                                    <code class="small">{query.queryTextPreview}</code>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{query.instanceCount}</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge {query.varianceCssClass}">{query.performanceRatioFormatted}</span>
+                                </td>
+                                <td>
+                                    {#if query.fastestInstance != null}
+                                    <strong>{query.fastestInstance}</strong>
+                                    <br><small class="text-success">
+                                        {query.instanceMetrics.get(query.fastestInstance).meanTimeFormatted}
+                                    </small>
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#if query.slowestInstance != null}
+                                    <strong>{query.slowestInstance}</strong>
+                                    <br><small class="text-danger">
+                                        {query.instanceMetrics.get(query.slowestInstance).meanTimeFormatted}
+                                    </small>
+                                    {/if}
+                                </td>
+                                <td class="text-end">
+                                    {#if query.hasSignificantVariance}
+                                    <span class="text-warning">{query.performanceRatioFormatted} slower</span>
+                                    {#else}
+                                    <span class="text-success">Similar</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Help Text -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Comparison Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Performance Ratio</h6>
+                        <p class="text-muted small">
+                            Shows how much slower the slowest instance is compared to the fastest.
+                            A ratio of 5x means the query runs 5 times slower on one instance.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Variance Indicators</h6>
+                        <dl class="small mb-0">
+                            <dt><span class="badge bg-success">Similar</span></dt>
+                            <dd class="text-muted">Performance within 2x across instances</dd>
+                            <dt><span class="badge bg-warning text-dark">2-5x</span></dt>
+                            <dd class="text-muted">Moderate variance - investigate</dd>
+                            <dt><span class="badge bg-danger">5x+</span></dt>
+                            <dd class="text-muted">Significant variance - action needed</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Common Causes</h6>
+                        <ul class="text-muted small mb-0">
+                            <li>Missing indexes on specific instances</li>
+                            <li>Different PostgreSQL configurations</li>
+                            <li>Hardware differences (CPU, memory, I/O)</li>
+                            <li>Data volume differences</li>
+                            <li>Connection pooling configuration</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

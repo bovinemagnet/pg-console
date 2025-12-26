@@ -9,6 +9,7 @@ import java.util.List;
  * @version 0.0.0
  */
 public class OverviewStats {
+    private String version;
     private int connectionsUsed;
     private int connectionsMax;
     private int activeQueries;
@@ -18,6 +19,28 @@ public class OverviewStats {
     private String databaseSize;
     private List<TableSize> topTablesBySize;
     private List<IndexSize> topIndexesBySize;
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    /**
+     * Alias for getConnectionsUsed() for API compatibility.
+     */
+    public int getActiveConnections() {
+        return connectionsUsed;
+    }
+
+    /**
+     * Alias for getConnectionsMax() for API compatibility.
+     */
+    public int getMaxConnections() {
+        return connectionsMax;
+    }
 
     public int getConnectionsUsed() {
         return connectionsUsed;

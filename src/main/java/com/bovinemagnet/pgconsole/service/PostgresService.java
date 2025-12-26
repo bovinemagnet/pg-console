@@ -473,6 +473,30 @@ public class PostgresService {
             throw new RuntimeException("Failed to query connection stats on " + instanceName, e);
         }
 
+        // Get PostgreSQL version
+        String versionSql = "SELECT version()";
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(versionSql)) {
+
+            if (rs.next()) {
+                String fullVersion = rs.getString(1);
+                // Extract just the major version (e.g., "PostgreSQL 16.2")
+                if (fullVersion != null && fullVersion.startsWith("PostgreSQL")) {
+                    int endIdx = fullVersion.indexOf(" on ");
+                    if (endIdx > 0) {
+                        stats.setVersion(fullVersion.substring(0, endIdx));
+                    } else {
+                        stats.setVersion(fullVersion.split(",")[0]);
+                    }
+                } else {
+                    stats.setVersion(fullVersion);
+                }
+            }
+        } catch (SQLException e) {
+            stats.setVersion("Unknown");
+        }
+
         // Get longest running query duration
         String longestQuerySql = """
             SELECT

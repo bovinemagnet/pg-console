@@ -1,0 +1,117 @@
+{#include base}
+{#title}Audit Log - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/audit-log?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Audit Log</h1>
+        <p class="text-muted">Track admin actions and system events</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Last 24 Hours</span>
+                <h2 class="mb-0">{summary.actionsLast24h}</h2>
+                <small class="text-muted">actions recorded</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Last 7 Days</span>
+                <h2 class="mb-0">{summary.actionsLast7d}</h2>
+                <small class="text-muted">total actions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.failuresLast24h > 0}bg-danger{#else}bg-success{/if} mb-2">Failures</span>
+                <h2 class="mb-0">{summary.failuresLast24h}</h2>
+                <small class="text-muted">in last 24 hours</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Users</span>
+                <h2 class="mb-0">{summary.uniqueUsersLast24h}</h2>
+                <small class="text-muted">active in 24h</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit Log Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Activity</h5>
+                <span class="badge bg-info">{logs.size} entries</span>
+            </div>
+            <div class="card-body p-0">
+                {#if logs.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h4>No Audit Entries</h4>
+                    <p class="mb-0">No admin actions have been recorded yet</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Target</th>
+                                <th>Instance</th>
+                                <th>Status</th>
+                                <th>Client IP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for log in logs}
+                            <tr class="{#if !log.success}table-danger{/if}">
+                                <td><small>{log.timestampFormatted}</small></td>
+                                <td>{log.username ?: 'anonymous'}</td>
+                                <td>
+                                    <span class="badge {log.actionCssClass}">{log.actionDisplayName}</span>
+                                </td>
+                                <td>
+                                    {#if log.targetType != null}
+                                    <code class="small">{log.targetType}/{log.targetId}</code>
+                                    {#else}
+                                    <span class="text-muted">-</span>
+                                    {/if}
+                                </td>
+                                <td><small>{log.instanceId}</small></td>
+                                <td>
+                                    <span class="badge {log.statusCssClass}">{log.statusDisplay}</span>
+                                    {#if log.errorMessage != null}
+                                    <br><small class="text-danger">{log.errorMessage}</small>
+                                    {/if}
+                                </td>
+                                <td><small class="text-muted">{log.clientIp ?: '-'}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

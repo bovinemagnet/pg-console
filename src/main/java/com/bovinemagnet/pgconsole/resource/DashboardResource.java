@@ -13,6 +13,9 @@ import com.bovinemagnet.pgconsole.model.QueryFingerprint;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import com.bovinemagnet.pgconsole.model.TableStats;
 import com.bovinemagnet.pgconsole.model.WaitEventSummary;
+import com.bovinemagnet.pgconsole.service.AuditService;
+import com.bovinemagnet.pgconsole.service.BookmarkService;
+import com.bovinemagnet.pgconsole.service.ComparisonService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.IncidentReportService;
 import com.bovinemagnet.pgconsole.service.IndexAdvisorService;
@@ -111,6 +114,15 @@ public class DashboardResource {
     Template infrastructure;
 
     @Inject
+    Template auditLog;
+
+    @Inject
+    Template bookmarks;
+
+    @Inject
+    Template comparison;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -142,6 +154,15 @@ public class DashboardResource {
 
     @Inject
     InfrastructureService infrastructureService;
+
+    @Inject
+    AuditService auditService;
+
+    @Inject
+    BookmarkService bookmarkService;
+
+    @Inject
+    ComparisonService comparisonService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -377,6 +398,55 @@ public class DashboardResource {
                              .data("instances", dataSourceManager.getInstanceInfoList())
                              .data("currentInstance", instance)
                              .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/audit-log")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance auditLog(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var logs = auditService.getRecentLogs(100);
+        var summary = auditService.getSummary();
+        return auditLog.data("logs", logs)
+                       .data("summary", summary)
+                       .data("instances", dataSourceManager.getInstanceInfoList())
+                       .data("currentInstance", instance)
+                       .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/bookmarks")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance bookmarks(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("tag") String tag) {
+        var allBookmarks = bookmarkService.getBookmarks(instance, null, tag);
+        var summary = bookmarkService.getSummary(instance);
+        var tags = bookmarkService.getAllTags(instance);
+        return bookmarks.data("bookmarks", allBookmarks)
+                        .data("summary", summary)
+                        .data("tags", tags)
+                        .data("instances", dataSourceManager.getInstanceInfoList())
+                        .data("currentInstance", instance)
+                        .data("securityEnabled", config.security().enabled());
+    }
+
+    @GET
+    @Path("/comparison")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance comparison(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var comparisons = comparisonService.compareOverview();
+        // Get all instance IDs for finding common queries
+        var instanceIds = dataSourceManager.getInstanceInfoList().stream()
+                .map(info -> info.getName())
+                .toList();
+        var commonQueries = comparisonService.findCommonQueries(instanceIds, 20);
+        return comparison.data("comparisons", comparisons)
+                         .data("commonQueries", commonQueries)
+                         .data("instances", dataSourceManager.getInstanceInfoList())
+                         .data("currentInstance", instance)
+                         .data("securityEnabled", config.security().enabled());
     }
 
     @GET
