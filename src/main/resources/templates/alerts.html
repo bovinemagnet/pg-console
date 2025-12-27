@@ -1,0 +1,160 @@
+{#include base}
+{#title}Alerts{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-exclamation-triangle me-2"></i>Alerts
+        </h1>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Active</h6>
+                    <h2 class="mb-0 text-warning">{stats.activeCount}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Critical</h6>
+                    <h2 class="mb-0 text-danger">{stats.criticalCount}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Unacknowledged</h6>
+                    <h2 class="mb-0 text-info">{stats.unacknowledgedCount}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Resolved (24h)</h6>
+                    <h2 class="mb-0 text-success">{stats.resolvedLast24h}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Alerts -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-exclamation-circle me-2"></i>Active Alerts
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                            <th>Instance</th>
+                            <th>Fired</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for alert in activeAlerts}
+                        <tr>
+                            <td><span class="badge {alert.severityCssClass}">{alert.alertSeverity}</span></td>
+                            <td><strong>{alert.alertType}</strong></td>
+                            <td class="small">{alert.alertMessage}</td>
+                            <td><code>{alert.instanceName ?: 'N/A'}</code></td>
+                            <td class="small text-muted">{alert.firedAtFormatted}</td>
+                            <td>{alert.durationFormatted}</td>
+                            <td><span class="badge {alert.statusCssClass}">{alert.statusText}</span></td>
+                            <td>
+                                {#if !alert.acknowledged}
+                                <button class="btn btn-sm btn-outline-warning"
+                                        hx-post="/notifications/api/alerts/{alert.id}/acknowledge"
+                                        hx-swap="none"
+                                        title="Acknowledge">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                {/if}
+                                {#if !alert.resolved}
+                                <button class="btn btn-sm btn-outline-success"
+                                        hx-post="/notifications/api/alerts/{alert.id}/resolve"
+                                        hx-swap="none"
+                                        title="Resolve">
+                                    <i class="bi bi-check-all"></i>
+                                </button>
+                                {/if}
+                            </td>
+                        </tr>
+                        {#else}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="bi bi-check-circle text-success display-4"></i>
+                                <p class="mt-2 mb-0 text-muted">No active alerts</p>
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Alerts -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>Recent Alerts
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>Instance</th>
+                            <th>Fired</th>
+                            <th>Resolved</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for alert in recentAlerts}
+                        <tr class="{alert.resolved ? 'table-success' : ''}">
+                            <td><span class="badge {alert.severityCssClass}">{alert.alertSeverity}</span></td>
+                            <td>{alert.alertType}</td>
+                            <td><code class="small">{alert.instanceName ?: 'N/A'}</code></td>
+                            <td class="small">{alert.firedAtFormatted}</td>
+                            <td class="small">
+                                {#if alert.resolved}
+                                <i class="bi bi-check-circle text-success"></i>
+                                {#else}
+                                <span class="text-warning">Active</span>
+                                {/if}
+                            </td>
+                            <td class="small">{alert.durationFormatted}</td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Navigation -->
+    <div class="mt-4">
+        <a href="/notifications" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+{/content}
+{/include}

@@ -1,0 +1,222 @@
+{#include base}
+{#title}Security Overview - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/security?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-shield-check me-2"></i>Security Overview</h1>
+        <p class="text-muted">Role auditing, connection security, and compliance status</p>
+    </div>
+</div>
+
+<!-- Overall Security Score -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-2">Security Score</h6>
+                <div class="display-4 fw-bold {#if complianceSummary.overallPercentage >= 80}text-success{#else if complianceSummary.overallPercentage >= 60}text-warning{#else}text-danger{/if}">
+                    {complianceSummary.overallGrade}
+                </div>
+                <div class="progress mt-3" style="height: 8px;">
+                    <div class="progress-bar {#if complianceSummary.overallPercentage >= 80}bg-success{#else if complianceSummary.overallPercentage >= 60}bg-warning{#else}bg-danger{/if}"
+                         role="progressbar" style="width: {complianceSummary.overallPercentage}%"></div>
+                </div>
+                <small class="text-muted">{complianceSummary.overallPercentage.intValue()}% compliance</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Critical</span>
+                <h2 class="mb-0">{recommendationSummary.criticalCount}</h2>
+                <small class="text-muted">issues</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">High</span>
+                <h2 class="mb-0">{recommendationSummary.highCount}</h2>
+                <small class="text-muted">issues</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Medium</span>
+                <h2 class="mb-0">{recommendationSummary.mediumCount}</h2>
+                <small class="text-muted">issues</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Low</span>
+                <h2 class="mb-0">{recommendationSummary.lowCount}</h2>
+                <small class="text-muted">issues</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <a href="/security/roles?instance={currentInstance}" class="card h-100 text-decoration-none border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-people text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Roles & Permissions</h6>
+                        <p class="text-muted mb-0 small">{auditSummary.totalRoles} roles, {auditSummary.superuserCount} superusers</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="/security/connections?instance={currentInstance}" class="card h-100 text-decoration-none border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-shield-lock text-success fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Connection Security</h6>
+                        <p class="text-muted mb-0 small">{connectionSummary.sslPercentage.intValue()}% SSL, {connectionSummary.totalConnections} connections</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="/security/access?instance={currentInstance}" class="card h-100 text-decoration-none border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-warning bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-eye text-warning fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Data Access</h6>
+                        <p class="text-muted mb-0 small">{accessSummary.sensitiveTableCount} sensitive tables, {accessSummary.piiColumnCount} PII columns</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <a href="/security/compliance?instance={currentInstance}" class="card h-100 text-decoration-none border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-clipboard-check text-info fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Compliance Dashboard</h6>
+                        <p class="text-muted mb-0 small">{complianceSummary.passedChecks} passed, {complianceSummary.failedChecks} failed checks</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 mb-3">
+        <a href="/security/recommendations?instance={currentInstance}" class="card h-100 text-decoration-none border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="bg-danger bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-lightbulb text-danger fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Recommendations</h6>
+                        <p class="text-muted mb-0 small">{recommendationSummary.totalRecommendations} recommendations across {recommendationSummary.byCategory.size} categories</p>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Compliance Scores by Area -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Compliance by Area</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {#for score in complianceScores}
+                    <div class="col-md-4 col-lg mb-3">
+                        <div class="text-center">
+                            <i class="bi {score.areaIconClass} fs-2 mb-2 {#if score.percentage >= 80}text-success{#else if score.percentage >= 60}text-warning{#else}text-danger{/if}"></i>
+                            <h6>{score.areaDisplay}</h6>
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="{score.progressBarCssClass}" role="progressbar" style="width: {score.percentage}%"></div>
+                            </div>
+                            <small class="text-muted">{score.scoreDisplay} ({score.percentageDisplay})</small>
+                        </div>
+                    </div>
+                    {/for}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Warnings -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Recent Security Warnings</h5>
+                <a href="/security/recommendations?instance={currentInstance}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {#if warnings.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-shield-check fs-1 text-success mb-3 d-block"></i>
+                    <h5>No Critical Warnings</h5>
+                    <p class="mb-0">No critical or high-priority security warnings detected</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">Severity</th>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for warning in warnings}
+                            <tr>
+                                <td><span class="badge {warning.severityCssClass}">{warning.severity.displayName}</span></td>
+                                <td><i class="bi {warning.iconClass} me-1"></i>{warning.typeDisplay}</td>
+                                <td><code>{warning.subject}</code></td>
+                                <td class="text-truncate" style="max-width: 300px;">{warning.description}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+{/include}

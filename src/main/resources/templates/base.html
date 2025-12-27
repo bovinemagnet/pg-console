@@ -990,6 +990,10 @@
                     <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
                     <span class="nav-link-text">Comparison</span>
                 </a>
+                <a class="nav-link" href="/schema-comparison?instance={currentInstance ?: 'default'}" data-title="Schema Comparison">
+                    <i class="bi bi-file-diff" aria-hidden="true"></i>
+                    <span class="nav-link-text">Schema Diff</span>
+                </a>
                 <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
                     <i class="bi bi-bookmark-star" aria-hidden="true"></i>
                     <span class="nav-link-text">Bookmarks</span>
@@ -997,6 +1001,35 @@
                 <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
                     <i class="bi bi-journal-text" aria-hidden="true"></i>
                     <span class="nav-link-text">Audit Log</span>
+                </a>
+            </div>
+
+            <!-- Security Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-security">
+                <div class="nav-section-title" id="nav-security">Security</div>
+                <a class="nav-link" href="/security?instance={currentInstance ?: 'default'}" data-title="Security Overview">
+                    <i class="bi bi-shield-check" aria-hidden="true"></i>
+                    <span class="nav-link-text">Overview</span>
+                </a>
+                <a class="nav-link" href="/security/roles?instance={currentInstance ?: 'default'}" data-title="Roles & Permissions">
+                    <i class="bi bi-people" aria-hidden="true"></i>
+                    <span class="nav-link-text">Roles</span>
+                </a>
+                <a class="nav-link" href="/security/connections?instance={currentInstance ?: 'default'}" data-title="Connection Security">
+                    <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                    <span class="nav-link-text">Connections</span>
+                </a>
+                <a class="nav-link" href="/security/access?instance={currentInstance ?: 'default'}" data-title="Data Access">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                    <span class="nav-link-text">Access</span>
+                </a>
+                <a class="nav-link" href="/security/compliance?instance={currentInstance ?: 'default'}" data-title="Compliance">
+                    <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                    <span class="nav-link-text">Compliance</span>
+                </a>
+                <a class="nav-link" href="/security/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                    <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                    <span class="nav-link-text">Recommendations</span>
                 </a>
             </div>
 

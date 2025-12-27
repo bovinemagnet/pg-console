@@ -1,0 +1,264 @@
+{#include base}
+{#title}Notifications{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-bell me-2"></i>Notifications Dashboard
+        </h1>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card h-100 border-{alertStats.hasCriticalUnacknowledged ? 'danger' : 'secondary'}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Active Alerts</h6>
+                            <h2 class="mb-0">{alertStats.activeCount}</h2>
+                        </div>
+                        <i class="bi bi-exclamation-triangle text-{alertStats.activeCount > 0 ? 'warning' : 'muted'}" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        <span class="text-danger">{alertStats.criticalCount} critical</span> /
+                        <span class="text-warning">{alertStats.unacknowledgedCount} unacked</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Notifications (24h)</h6>
+                            <h2 class="mb-0">{notificationStats.total}</h2>
+                        </div>
+                        <i class="bi bi-send text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        <span class="text-success">{notificationStats.successCount} success</span> /
+                        <span class="text-danger">{notificationStats.failureCount} failed</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Active Silences</h6>
+                            <h2 class="mb-0">{alertStats.activeSilences}</h2>
+                        </div>
+                        <i class="bi bi-volume-mute text-info" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Maintenance Windows</h6>
+                            <h2 class="mb-0">{alertStats.activeMaintenanceWindows}</h2>
+                        </div>
+                        <i class="bi bi-tools text-secondary" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning-charge me-2"></i>Quick Actions
+                </div>
+                <div class="card-body">
+                    <div class="btn-group me-2">
+                        <a href="/notifications/channels" class="btn btn-outline-primary">
+                            <i class="bi bi-broadcast me-1"></i>Manage Channels
+                        </a>
+                        <a href="/notifications/alerts" class="btn btn-outline-warning">
+                            <i class="bi bi-exclamation-circle me-1"></i>View Alerts
+                        </a>
+                        <a href="/notifications/silences" class="btn btn-outline-info">
+                            <i class="bi bi-volume-mute me-1"></i>Manage Silences
+                        </a>
+                        <a href="/notifications/maintenance" class="btn btn-outline-secondary">
+                            <i class="bi bi-tools me-1"></i>Maintenance Windows
+                        </a>
+                        <a href="/notifications/escalation" class="btn btn-outline-success">
+                            <i class="bi bi-diagram-3 me-1"></i>Escalation Policies
+                        </a>
+                        <a href="/notifications/history" class="btn btn-outline-dark">
+                            <i class="bi bi-clock-history me-1"></i>History
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Active Alerts -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-exclamation-triangle me-2"></i>Active Alerts</span>
+                    <a href="/notifications/alerts" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    {#if activeAlerts.isEmpty}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-check-circle display-4 text-success"></i>
+                        <p class="mt-2 mb-0">No active alerts</p>
+                    </div>
+                    {#else}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>Type</th>
+                                    <th>Instance</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#for alert in activeAlerts}
+                                <tr>
+                                    <td><span class="badge {alert.severityCssClass}">{alert.alertSeverity}</span></td>
+                                    <td>{alert.alertType}</td>
+                                    <td><code>{alert.instanceName ?: 'N/A'}</code></td>
+                                    <td>{alert.durationFormatted}</td>
+                                    <td><span class="badge {alert.statusCssClass}">{alert.statusText}</span></td>
+                                </tr>
+                                {/for}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/if}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Notifications -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-2"></i>Recent Notifications</span>
+                    <a href="/notifications/history" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    {#if recentHistory.isEmpty}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-inbox display-4"></i>
+                        <p class="mt-2 mb-0">No recent notifications</p>
+                    </div>
+                    {#else}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Channel</th>
+                                    <th>Alert</th>
+                                    <th>Status</th>
+                                    <th>Sent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#for result in recentHistory}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{result.channelType}</span>
+                                        <span class="small">{result.channelName}</span>
+                                    </td>
+                                    <td><span class="badge bg-{result.alertSeverity == 'CRITICAL' ? 'danger' : 'warning'}">{result.alertType}</span></td>
+                                    <td>
+                                        {#if result.success}
+                                        <i class="bi bi-check-circle text-success"></i>
+                                        {#else}
+                                        <i class="bi bi-x-circle text-danger" title="{result.errorMessage}"></i>
+                                        {/if}
+                                    </td>
+                                    <td class="small text-muted">{result.sentAtFormatted}</td>
+                                </tr>
+                                {/for}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Silences and Maintenance Windows -->
+    <div class="row g-3 mt-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-volume-mute me-2"></i>Active Silences</span>
+                    <a href="/notifications/silences" class="btn btn-sm btn-outline-primary">Manage</a>
+                </div>
+                <div class="card-body p-0">
+                    {#if activeSilences.isEmpty}
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-0">No active silences</p>
+                    </div>
+                    {#else}
+                    <ul class="list-group list-group-flush">
+                        {#for silence in activeSilences}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{silence.name}</strong>
+                                <br><small class="text-muted">Expires: {silence.endTimeFormatted}</small>
+                            </div>
+                            <span class="badge bg-warning">{silence.remainingMinutes}m remaining</span>
+                        </li>
+                        {/for}
+                    </ul>
+                    {/if}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-tools me-2"></i>Active Maintenance Windows</span>
+                    <a href="/notifications/maintenance" class="btn btn-sm btn-outline-primary">Manage</a>
+                </div>
+                <div class="card-body p-0">
+                    {#if activeMaintenanceWindows.isEmpty}
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-0">No active maintenance windows</p>
+                    </div>
+                    {#else}
+                    <ul class="list-group list-group-flush">
+                        {#for window in activeMaintenanceWindows}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{window.name}</strong>
+                                <br><small class="text-muted">Ends: {window.endTimeFormatted}</small>
+                            </div>
+                            <span class="badge bg-warning">{window.statusText}</span>
+                        </li>
+                        {/for}
+                    </ul>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/content}
+{/include}

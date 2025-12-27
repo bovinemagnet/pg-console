@@ -1,0 +1,247 @@
+{#include base}
+{#title}Schema Comparison - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-file-diff me-2"></i>Schema Comparison</h1>
+        <p class="text-muted">Compare database schemas across PostgreSQL instances and generate migration scripts</p>
+    </div>
+</div>
+
+{#if error}
+<div class="alert alert-danger" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{error}
+</div>
+{/if}
+
+<!-- Quick Run Profiles -->
+{#if !profiles.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-bookmark me-2"></i>Saved Profiles</h5>
+                <a href="/schema-comparison/profiles" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-gear me-1"></i>Manage
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {#for profile in profiles}
+                    <div class="col-md-4 col-lg-3">
+                        <div class="card h-100 {#if profile.default}border-primary{/if}">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    {profile.name}
+                                    {#if profile.default}
+                                    <span class="badge bg-primary ms-1">Default</span>
+                                    {/if}
+                                </h6>
+                                <p class="card-text small text-muted mb-2">{profile.comparisonDescription}</p>
+                                {#if profile.hasBeenRun}
+                                <small class="text-muted">Last run: {profile.lastRunAtFormatted}</small>
+                                {#if profile.lastRunSummary}
+                                <br><span class="badge bg-secondary">{profile.lastRunSummaryText}</span>
+                                {/if}
+                                {/if}
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <a href="/schema-comparison/run-profile/{profile.id}" class="btn btn-sm btn-primary w-100">
+                                    <i class="bi bi-play-fill me-1"></i>Run
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {/for}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- New Comparison Form -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>New Comparison</h5>
+            </div>
+            <div class="card-body">
+                <form action="/schema-comparison/compare" method="post">
+                    <div class="row g-3">
+                        <!-- Source Instance -->
+                        <div class="col-md-6">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-database me-2"></i>Source</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="sourceInstance" class="form-label">Instance</label>
+                                        <select class="form-select" id="sourceInstance" name="sourceInstance" required
+                                                hx-get="/schema-comparison/schemas"
+                                                hx-target="#sourceSchemaSelect"
+                                                hx-trigger="change">
+                                            {#for inst in instances}
+                                            <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+                                    <div class="mb-0">
+                                        <label for="sourceSchema" class="form-label">Schema</label>
+                                        <select class="form-select" id="sourceSchemaSelect" name="sourceSchema" required>
+                                            {#for schema in schemas}
+                                            <option value="{schema}" {#if schema == 'public'}selected{/if}>{schema}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+                                    <div id="sourceSummary" class="mt-2"
+                                         hx-get="/schema-comparison/schema-summary?instance={currentInstance}&schema=public"
+                                         hx-trigger="load"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Destination Instance -->
+                        <div class="col-md-6">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-database-check me-2"></i>Destination</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="destInstance" class="form-label">Instance</label>
+                                        <select class="form-select" id="destInstance" name="destInstance" required
+                                                hx-get="/schema-comparison/schemas"
+                                                hx-target="#destSchemaSelect"
+                                                hx-trigger="change">
+                                            {#for inst in instances}
+                                            <option value="{inst}">{inst}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+                                    <div class="mb-0">
+                                        <label for="destSchema" class="form-label">Schema</label>
+                                        <select class="form-select" id="destSchemaSelect" name="destSchema" required>
+                                            {#for schema in schemas}
+                                            <option value="{schema}" {#if schema == 'public'}selected{/if}>{schema}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+                                    <div id="destSummary" class="mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Options -->
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Filter Options</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label for="filterPreset" class="form-label">Filter Preset</label>
+                                            <select class="form-select" id="filterPreset" name="filterPreset">
+                                                <option value="">No preset</option>
+                                                {#for preset in filterPresets}
+                                                <option value="{preset.name()}">{preset.displayName}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <label for="excludePatterns" class="form-label">Exclude Patterns (one per line)</label>
+                                            <textarea class="form-control" id="excludePatterns" name="excludePatterns" rows="2"
+                                                      placeholder="temp_*&#10;*_backup"></textarea>
+                                            <div class="form-text">Use * for wildcards</div>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label">Include Object Types</label>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTables" id="includeTables" value="true" checked>
+                                                <label class="form-check-label" for="includeTables">Tables</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeViews" id="includeViews" value="true" checked>
+                                                <label class="form-check-label" for="includeViews">Views</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeFunctions" id="includeFunctions" value="true" checked>
+                                                <label class="form-check-label" for="includeFunctions">Functions</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeSequences" id="includeSequences" value="true" checked>
+                                                <label class="form-check-label" for="includeSequences">Sequences</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTypes" id="includeTypes" value="true" checked>
+                                                <label class="form-check-label" for="includeTypes">Types</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeExtensions" id="includeExtensions" value="true">
+                                                <label class="form-check-label" for="includeExtensions">Extensions</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeIndexes" id="includeIndexes" value="true" checked>
+                                                <label class="form-check-label" for="includeIndexes">Indexes</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTriggers" id="includeTriggers" value="true" checked>
+                                                <label class="form-check-label" for="includeTriggers">Triggers</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeConstraints" id="includeConstraints" value="true" checked>
+                                                <label class="form-check-label" for="includeConstraints">Constraints</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col text-end">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-play-fill me-2"></i>Compare Schemas
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

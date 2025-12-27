@@ -1,0 +1,113 @@
+{#include base}
+{#title}Notification History{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-clock-history me-2"></i>Notification History
+        </h1>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total (24h)</h6>
+                    <h2 class="mb-0">{stats.total}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Successful</h6>
+                    <h2 class="mb-0">{stats.successCount}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Failed</h6>
+                    <h2 class="mb-0">{stats.failureCount}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Success Rate</h6>
+                    <h2 class="mb-0">{stats.successRate.intValue}%</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Sent At</th>
+                            <th>Channel</th>
+                            <th>Alert Type</th>
+                            <th>Severity</th>
+                            <th>Instance</th>
+                            <th>Status</th>
+                            <th>Tier</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for result in history}
+                        <tr class="{result.success ? '' : 'table-danger'}">
+                            <td class="small">{result.sentAtFormatted}</td>
+                            <td>
+                                <span class="badge bg-secondary">{result.channelType}</span>
+                                <span class="small">{result.channelName}</span>
+                            </td>
+                            <td>{result.alertType ?: '-'}</td>
+                            <td><span class="badge bg-{result.alertSeverity == 'CRITICAL' ? 'danger' : 'warning'}">{result.alertSeverity ?: '-'}</span></td>
+                            <td><code class="small">{result.instanceName ?: '-'}</code></td>
+                            <td>
+                                {#if result.success}
+                                <i class="bi bi-check-circle text-success" title="Success"></i>
+                                <span class="small text-muted">({result.responseCode})</span>
+                                {#else}
+                                <i class="bi bi-x-circle text-danger" title="{result.errorMessage}"></i>
+                                <span class="small text-danger" title="{result.errorMessage}">Failed</span>
+                                {/if}
+                            </td>
+                            <td>
+                                {#if result.escalationTier != null}
+                                <span class="badge bg-info">Tier {result.escalationTier}</span>
+                                {#else}
+                                <span class="text-muted">-</span>
+                                {/if}
+                            </td>
+                        </tr>
+                        {#else}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                No notification history found
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Navigation -->
+    <div class="mt-4">
+        <a href="/notifications" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+{/content}
+{/include}

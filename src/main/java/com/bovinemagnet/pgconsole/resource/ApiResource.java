@@ -9,12 +9,23 @@ import com.bovinemagnet.pgconsole.model.OverviewStats;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import com.bovinemagnet.pgconsole.model.TableStats;
 import com.bovinemagnet.pgconsole.model.WaitEventSummary;
+import com.bovinemagnet.pgconsole.model.ComparisonHistory;
+import com.bovinemagnet.pgconsole.model.ComparisonProfile;
+import com.bovinemagnet.pgconsole.model.SchemaComparisonResult;
+import com.bovinemagnet.pgconsole.service.ComparisonHistoryService;
+import com.bovinemagnet.pgconsole.service.ComparisonProfileService;
+import com.bovinemagnet.pgconsole.service.ComplianceService;
+import com.bovinemagnet.pgconsole.service.ConnectionSecurityService;
+import com.bovinemagnet.pgconsole.service.DataAccessPatternService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.SchemaComparisonService;
 import com.bovinemagnet.pgconsole.service.IndexAdvisorService;
 import com.bovinemagnet.pgconsole.service.InfrastructureService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.QueryRegressionService;
 import com.bovinemagnet.pgconsole.service.ReplicationService;
+import com.bovinemagnet.pgconsole.service.SecurityAuditService;
+import com.bovinemagnet.pgconsole.service.SecurityRecommendationService;
 import com.bovinemagnet.pgconsole.service.TableMaintenanceService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
@@ -63,6 +74,30 @@ public class ApiResource {
 
     @Inject
     InfrastructureService infrastructureService;
+
+    @Inject
+    SecurityAuditService securityAuditService;
+
+    @Inject
+    ConnectionSecurityService connectionSecurityService;
+
+    @Inject
+    DataAccessPatternService dataAccessPatternService;
+
+    @Inject
+    ComplianceService complianceService;
+
+    @Inject
+    SecurityRecommendationService securityRecommendationService;
+
+    @Inject
+    SchemaComparisonService schemaComparisonService;
+
+    @Inject
+    ComparisonProfileService comparisonProfileService;
+
+    @Inject
+    ComparisonHistoryService comparisonHistoryService;
 
     /**
      * Returns overview statistics for a PostgreSQL instance as JSON.
@@ -404,6 +439,284 @@ public class ApiResource {
             response.put("status", "unhealthy");
             response.put("error", e.getMessage());
         }
+        return response;
+    }
+
+    // --- Phase 10: Security & Compliance Monitoring ---
+
+    /**
+     * Returns security summary as JSON.
+     * <p>
+     * Provides an overview of security status including role audit summary,
+     * connection security summary, data access patterns, compliance scores,
+     * and recommendation counts by priority.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, and security summaries
+     */
+    @GET
+    @Path("/security/summary")
+    public Map<String, Object> getSecuritySummary(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var auditSummary = securityAuditService.getSummary(instance);
+        var connectionSummary = connectionSecurityService.getSummary(instance);
+        var accessSummary = dataAccessPatternService.getSummary(instance);
+        var complianceSummary = complianceService.getSummary(instance);
+        var recommendationSummary = securityRecommendationService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("roles", auditSummary);
+        response.put("connections", connectionSummary);
+        response.put("dataAccess", accessSummary);
+        response.put("compliance", complianceSummary);
+        response.put("recommendations", recommendationSummary);
+        return response;
+    }
+
+    /**
+     * Returns role and permission audit data as JSON.
+     * <p>
+     * Retrieves all database roles with their privileges, role memberships,
+     * and security warnings about elevated privileges or password issues.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, roles, memberships, warnings, and summary
+     */
+    @GET
+    @Path("/security/roles")
+    public Map<String, Object> getSecurityRoles(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var roles = securityAuditService.getAllRoles(instance);
+        var memberships = securityAuditService.getRoleMemberships(instance);
+        var warnings = securityAuditService.getAllWarnings(instance);
+        var summary = securityAuditService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("count", roles.size());
+        response.put("roles", roles);
+        response.put("memberships", memberships);
+        response.put("warnings", warnings);
+        response.put("summary", summary);
+        return response;
+    }
+
+    /**
+     * Returns connection security data as JSON.
+     * <p>
+     * Retrieves SSL connection status, pg_hba.conf rules, authentication methods,
+     * and connection security warnings.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, SSL connections, HBA rules, warnings, and summary
+     */
+    @GET
+    @Path("/security/connections")
+    public Map<String, Object> getSecurityConnections(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var sslConnections = connectionSecurityService.getSslConnections(instance);
+        var hbaRules = connectionSecurityService.getHbaRules(instance);
+        var warnings = connectionSecurityService.getWarnings(instance);
+        var summary = connectionSecurityService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("sslConnections", sslConnections);
+        response.put("hbaRules", hbaRules);
+        response.put("warnings", warnings);
+        response.put("summary", summary);
+        return response;
+    }
+
+    /**
+     * Returns data access pattern data as JSON.
+     * <p>
+     * Retrieves sensitive tables with PII detection, PII column indicators,
+     * row-level security policies, and data access summary.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, sensitive tables, PII columns, RLS policies, and summary
+     */
+    @GET
+    @Path("/security/access")
+    public Map<String, Object> getSecurityAccess(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var sensitiveTables = dataAccessPatternService.getSensitiveTables(instance);
+        var piiColumns = dataAccessPatternService.getPiiColumns(instance);
+        var rlsPolicies = dataAccessPatternService.getRlsPolicies(instance);
+        var summary = dataAccessPatternService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("sensitiveTables", sensitiveTables);
+        response.put("piiColumns", piiColumns);
+        response.put("rlsPolicies", rlsPolicies);
+        response.put("summary", summary);
+        return response;
+    }
+
+    /**
+     * Returns compliance scores as JSON.
+     * <p>
+     * Retrieves compliance scores across multiple areas including access control,
+     * encryption, audit logging, data protection, and authentication.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, scores, and summary
+     */
+    @GET
+    @Path("/security/compliance")
+    public Map<String, Object> getSecurityCompliance(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var scores = complianceService.getAllComplianceScores(instance);
+        var summary = complianceService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("scores", scores);
+        response.put("summary", summary);
+        return response;
+    }
+
+    /**
+     * Returns security recommendations as JSON.
+     * <p>
+     * Retrieves actionable security recommendations organised by priority
+     * (critical, high, medium, low) with suggested actions and rationale.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return JSON map containing timestamp, instance name, recommendations, and summary
+     */
+    @GET
+    @Path("/security/recommendations")
+    public Map<String, Object> getSecurityRecommendations(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var recommendations = securityRecommendationService.getAllRecommendations(instance);
+        var summary = securityRecommendationService.getSummary(instance);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("count", recommendations.size());
+        response.put("recommendations", recommendations);
+        response.put("summary", summary);
+        return response;
+    }
+
+    // --- Phase 12: Schema Comparison & Migration ---
+
+    /**
+     * Compares schemas between two PostgreSQL instances.
+     * <p>
+     * Returns detailed differences including missing, extra, and modified objects.
+     * Supports filtering by object types.
+     *
+     * @param sourceInstance source instance name
+     * @param destInstance destination instance name
+     * @param sourceSchema source schema (default: public)
+     * @param destSchema destination schema (default: public)
+     * @return JSON containing comparison result with all differences
+     */
+    @GET
+    @Path("/schema-comparison/compare")
+    public Map<String, Object> compareSchemas(
+            @QueryParam("sourceInstance") @DefaultValue("default") String sourceInstance,
+            @QueryParam("destInstance") @DefaultValue("default") String destInstance,
+            @QueryParam("sourceSchema") @DefaultValue("public") String sourceSchema,
+            @QueryParam("destSchema") @DefaultValue("public") String destSchema) {
+
+        SchemaComparisonResult result = schemaComparisonService.compare(
+                sourceInstance, destInstance, sourceSchema, destSchema, null);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("sourceInstance", sourceInstance);
+        response.put("destInstance", destInstance);
+        response.put("sourceSchema", sourceSchema);
+        response.put("destSchema", destSchema);
+        response.put("success", result.isSuccess());
+        response.put("summary", result.getSummary());
+        response.put("differences", result.getDifferences());
+
+        if (!result.isSuccess()) {
+            response.put("error", result.getErrorMessage());
+        }
+
+        return response;
+    }
+
+    /**
+     * Returns available schemas for an instance.
+     *
+     * @param instance instance name
+     * @return JSON list of schema names
+     */
+    @GET
+    @Path("/schema-comparison/schemas")
+    public Map<String, Object> getSchemas(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("schemas", schemaComparisonService.getSchemas(instance));
+        return response;
+    }
+
+    /**
+     * Returns saved comparison profiles.
+     *
+     * @return JSON list of comparison profiles
+     */
+    @GET
+    @Path("/schema-comparison/profiles")
+    public Map<String, Object> getProfiles() {
+        List<ComparisonProfile> profiles = comparisonProfileService.findAll();
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("count", profiles.size());
+        response.put("profiles", profiles);
+        return response;
+    }
+
+    /**
+     * Returns comparison history records.
+     *
+     * @param limit maximum records to return (default: 50)
+     * @return JSON list of history records
+     */
+    @GET
+    @Path("/schema-comparison/history")
+    public Map<String, Object> getHistory(
+            @QueryParam("limit") @DefaultValue("50") int limit) {
+
+        List<ComparisonHistory> history = comparisonHistoryService.getHistory(limit);
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("count", history.size());
+        response.put("totalCount", comparisonHistoryService.count());
+        response.put("history", history);
+        return response;
+    }
+
+    /**
+     * Returns schema summary statistics.
+     *
+     * @param instance instance name
+     * @param schema schema name (default: public)
+     * @return JSON map of object type to count
+     */
+    @GET
+    @Path("/schema-comparison/summary")
+    public Map<String, Object> getSchemaSummary(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("schema") @DefaultValue("public") String schema) {
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("instance", instance);
+        response.put("schema", schema);
+        response.put("summary", schemaComparisonService.getSchemaSummary(instance, schema));
         return response;
     }
 }

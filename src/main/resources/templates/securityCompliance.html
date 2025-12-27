@@ -1,0 +1,156 @@
+{#include base}
+{#title}Compliance Dashboard - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/security/compliance?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/security?instance={currentInstance}">Security</a></li>
+                <li class="breadcrumb-item active">Compliance</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-clipboard-check me-2"></i>Compliance Dashboard</h1>
+        <p class="text-muted">Security compliance assessment against best practices</p>
+    </div>
+</div>
+
+<!-- Overall Score -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-3">Overall Compliance Score</h6>
+                <div class="display-1 fw-bold {#if summary.overallPercentage >= 80}text-success{#else if summary.overallPercentage >= 60}text-warning{#else}text-danger{/if}">
+                    {summary.overallGrade}
+                </div>
+                <div class="progress mt-3 mb-2" style="height: 12px;">
+                    <div class="progress-bar {#if summary.overallPercentage >= 80}bg-success{#else if summary.overallPercentage >= 60}bg-warning{#else}bg-danger{/if}"
+                         role="progressbar" style="width: {summary.overallPercentage}%"></div>
+                </div>
+                <h4>{summary.overallScore} / {summary.maxScore}</h4>
+                <small class="text-muted">{summary.overallPercentage.intValue()}% compliance</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm bg-success bg-opacity-10">
+            <div class="card-body text-center">
+                <i class="bi bi-check-circle text-success fs-1 mb-2"></i>
+                <h3 class="text-success">{summary.passedChecks}</h3>
+                <small class="text-muted">Passed Checks</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm bg-danger bg-opacity-10">
+            <div class="card-body text-center">
+                <i class="bi bi-x-circle text-danger fs-1 mb-2"></i>
+                <h3 class="text-danger">{summary.failedChecks}</h3>
+                <small class="text-muted">Failed Checks</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compliance Scores by Area -->
+<div class="row mb-4">
+    {#for score in scores}
+    <div class="col-md-6 col-lg mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header bg-transparent text-center border-0 pt-3">
+                <i class="bi {score.areaIconClass} fs-2 {#if score.percentage >= 80}text-success{#else if score.percentage >= 60}text-warning{#else}text-danger{/if}"></i>
+                <h6 class="mt-2 mb-0">{score.areaDisplay}</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <span class="badge {score.gradeCssClass} fs-5">{score.grade}</span>
+                </div>
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="{score.progressBarCssClass}" role="progressbar" style="width: {score.percentage}%"></div>
+                </div>
+                <div class="text-center">
+                    <small class="text-muted">{score.scoreDisplay} ({score.percentageDisplay})</small>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent border-0">
+                <div class="d-flex justify-content-between">
+                    <small class="text-success"><i class="bi bi-check-circle me-1"></i>{score.passedCount} passed</small>
+                    <small class="text-danger"><i class="bi bi-x-circle me-1"></i>{score.failedCount} failed</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {/for}
+</div>
+
+<!-- Detailed Results by Area -->
+{#for score in scores}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi {score.areaIconClass} me-2"></i>{score.areaDisplay}
+                </h5>
+                <span class="badge {score.gradeCssClass}">{score.grade} - {score.percentageDisplay}</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">{score.description}</p>
+
+                <!-- Passed Checks -->
+                {#if !score.passedChecks.isEmpty()}
+                <h6 class="text-success"><i class="bi bi-check-circle me-2"></i>Passed Checks</h6>
+                <ul class="list-group list-group-flush mb-3">
+                    {#for check in score.passedChecks}
+                    <li class="list-group-item bg-success bg-opacity-10 border-0 py-2">
+                        <i class="bi bi-check text-success me-2"></i>{check}
+                    </li>
+                    {/for}
+                </ul>
+                {/if}
+
+                <!-- Failed Checks -->
+                {#if !score.failedChecks.isEmpty()}
+                <h6 class="text-danger"><i class="bi bi-x-circle me-2"></i>Failed Checks</h6>
+                <ul class="list-group list-group-flush mb-3">
+                    {#for check in score.failedChecks}
+                    <li class="list-group-item bg-danger bg-opacity-10 border-0 py-2">
+                        <i class="bi bi-x text-danger me-2"></i>{check}
+                    </li>
+                    {/for}
+                </ul>
+                {/if}
+
+                <!-- Recommendations -->
+                {#if !score.recommendations.isEmpty()}
+                <h6 class="text-info"><i class="bi bi-lightbulb me-2"></i>Recommendations</h6>
+                <ul class="list-group list-group-flush">
+                    {#for rec in score.recommendations}
+                    <li class="list-group-item bg-info bg-opacity-10 border-0 py-2">
+                        <i class="bi bi-arrow-right text-info me-2"></i>{rec}
+                    </li>
+                    {/for}
+                </ul>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+{/for}
+
+<!-- Compliance Information -->
+<div class="row">
+    <div class="col">
+        <div class="alert alert-info border-0">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>About Compliance Scores:</strong> These scores are based on PostgreSQL security best practices
+            and align with common compliance frameworks (SOC 2, GDPR). Actual compliance requirements depend on
+            your specific regulatory context. Consider consulting with a security professional for formal assessments.
+        </div>
+    </div>
+</div>
+
+</div>
+{/include}

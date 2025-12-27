@@ -205,37 +205,39 @@ Product Specification: Postgres Insight Dashboard
   - Rounded corners and softer visual edges
   - Loading skeletons instead of spinners
 
-### Phase 10 — Security & Compliance Monitoring (Planned)
-- [ ] **Role & Permission Auditing**
+### Phase 10 — Security & Compliance Monitoring ✅ COMPLETE
+- [x] **Role & Permission Auditing**
   - Database role hierarchy visualisation
-  - Permission matrix (role × object × privilege)
+  - Permission matrix (role × object × privilege via ACL parsing)
   - Superuser and elevated privilege warnings
-  - Role membership changes over time
-  - Password policy compliance checks
-- [ ] **Connection Security Analysis**
-  - SSL/TLS connection status for all clients
-  - Authentication method breakdown (md5, scram-sha-256, cert, etc.)
-  - Failed login attempt tracking
-  - Connection source IP analysis with geolocation
-  - Suspicious connection pattern detection
-- [ ] **Data Access Patterns**
-  - Table access frequency by role
-  - Sensitive table monitoring (PII indicators)
-  - After-hours access alerts
-  - Unusual query pattern detection
+  - Password policy compliance checks (expiry monitoring)
+  - Note: Role membership changes over time requires history tracking (not implemented)
+- [x] **Connection Security Analysis**
+  - SSL/TLS connection status for all clients (pg_stat_ssl)
+  - Authentication method breakdown (md5, scram-sha-256, trust, etc.)
+  - pg_hba.conf rules display (PostgreSQL 10+)
+  - Connection source analysis (internal/external/local classification)
+  - Note: Failed login tracking not available in PostgreSQL without special logging
+  - Note: Geolocation not implemented; uses simple IP classification
+- [x] **Data Access Patterns**
+  - Sensitive table detection via heuristic PII column analysis
+  - PII column indicators (email, phone, SSN, password, DOB, address, financial, etc.)
   - Row-level security policy overview
-- [ ] **Compliance Dashboards**
-  - GDPR data subject access tracking
-  - SOC 2 relevant metrics (access controls, encryption)
-  - Audit trail completeness scoring
-  - Data retention policy monitoring
-  - Encryption-at-rest verification
-- [ ] **Security Recommendations**
-  - Weak password detection (if accessible)
-  - Overly permissive role warnings
+  - Tables needing RLS protection highlighted
+  - Note: Table access by role requires pg_stat_statements or audit extension
+- [x] **Compliance Dashboards**
+  - SOC 2 relevant metrics (access controls, encryption settings)
+  - Security scoring by compliance area (5 areas)
+  - Audit trail completeness scoring (pgaudit detection)
+  - Encryption status verification (SSL, password encryption method)
+  - Note: GDPR data subject access tracking requires application-layer implementation
+- [x] **Security Recommendations**
+  - Overly permissive role warnings (superuser, bypass RLS)
   - Public schema exposure alerts
-  - Extension security review
+  - Extension security review (dangerous extensions)
   - pg_hba.conf analysis recommendations
+  - Priority-based categorisation (Critical, High, Medium, Low)
+  - Note: Weak password detection not possible (passwords not accessible)
 
 ### Phase 11 — Intelligent Insights & Automation (Planned)
 - [ ] **Anomaly Detection**
@@ -275,13 +277,13 @@ Product Specification: Postgres Insight Dashboard
   - Pre/post maintenance metric comparison
   - Rollback capabilities for configuration changes
 
-### Phase 12 — Schema Comparison & Migration (Planned)
-- [ ] **Cross-Instance Schema Comparison**
+### Phase 12 — Schema Comparison & Migration ✅ COMPLETE
+- [x] **Cross-Instance Schema Comparison**
   - Compare schemas between different PostgreSQL instances (e.g., dev vs prod)
   - Source and destination instance selection from configured instances
   - Schema/namespace selection for comparison scope
   - Side-by-side visual diff view with colour-coded changes
-- [ ] **Comprehensive Object Comparison**
+- [x] **Comprehensive Object Comparison**
   - Tables: columns, data types, nullability, defaults, identity/serial
   - Indexes: type, columns, unique, partial, expression indexes
   - Constraints: primary keys, foreign keys, check constraints, unique constraints
@@ -291,20 +293,20 @@ Product Specification: Postgres Insight Dashboard
   - Sequences with start, increment, min/max values
   - Custom types (enums, composites, domains)
   - Extensions with version comparison
-- [ ] **Flexible Filtering System**
+- [x] **Flexible Filtering System**
   - Table name pattern exclusions (e.g., `zz_*`, `temp_*`, `_backup`)
   - Schema exclusions (e.g., `pg_catalog`, `information_schema`)
   - Object type filters (include/exclude specific object types)
   - Configurable filter patterns in text input fields
   - Regex support for advanced pattern matching
   - Filter presets for common exclusion patterns
-- [ ] **Difference Categorisation**
+- [x] **Difference Categorisation**
   - Missing objects (exists in source, not in destination)
   - Extra objects (exists in destination, not in source)
   - Modified objects (exists in both but differs)
   - Severity levels: Breaking (drops), Warning (alters), Info (additions)
   - Summary statistics (X tables differ, Y indexes missing, etc.)
-- [ ] **DDL Migration Script Generation**
+- [x] **DDL Migration Script Generation**
   - Generate CREATE statements for missing objects
   - Generate ALTER statements for modified objects
   - Optional DROP statements for extra objects (with safety warnings)
@@ -312,23 +314,292 @@ Product Specification: Postgres Insight Dashboard
   - Transaction wrapping options (single transaction vs individual statements)
   - Script preview before download
   - Copy to clipboard functionality
-- [ ] **Comparison Profiles**
+- [x] **Comparison Profiles**
   - Save named profiles with source, destination, and filter configurations
   - Quick re-run of saved comparisons
   - Profile sharing via export/import (JSON format)
   - Default profile per instance pair
   - Profile history with last run timestamp and result summary
-- [ ] **Comparison History & Audit**
+- [x] **Comparison History & Audit**
   - Log of all schema comparisons performed
   - Comparison result snapshots for trend analysis
   - Schema drift detection over time
-  - Scheduled comparison runs with email notifications
-- [ ] **Interactive Diff Viewer**
+  - [ ] Scheduled comparison runs with email notifications (deferred to future phase)
+- [x] **Interactive Diff Viewer**
   - Expandable/collapsible object tree
   - Inline SQL definition diffs (unified or split view)
   - Search and filter within diff results
-  - Export diff report as HTML, PDF, or Markdown
-  - Shareable comparison result URLs
+  - Export diff report as HTML or Markdown
+  - [ ] Export as PDF (deferred to future phase)
+  - [ ] Shareable comparison result URLs (deferred to future phase)
+
+### Phase 13 — Dashboard Feature Toggles & Modular Configuration (Planned)
+- [ ] **Section-Level Dashboard Toggles**
+  - Enable/disable entire dashboard sections via configuration
+  - Sections: Monitoring, Analysis, Infrastructure, Data Control, Enterprise
+  - Security section uses existing `pg-console.security.enabled` toggle
+  - System section (About) always enabled
+- [ ] **Individual Page Toggles**
+  - Fine-grained control over individual pages within sections
+  - Override section-level settings (disable specific pages)
+  - 23 individual page toggles across 5 configurable sections
+- [ ] **Environment Variable Support**
+  - All toggles configurable via environment variables
+  - Pattern: `PG_CONSOLE_DASH_{FEATURE}` (e.g., `PG_CONSOLE_DASH_MONITORING`)
+  - Defaults to enabled (opt-out model)
+- [ ] **Navigation Integration**
+  - Disabled pages hidden from sidebar navigation
+  - Disabled sections collapse navigation groups
+  - Clean UI without dead links
+- [ ] **Access Control**
+  - Disabled pages return HTTP 404 when accessed directly
+  - Disabled API endpoints return HTTP 404
+  - Prevents information leakage about disabled features
+- [ ] **Configuration Hierarchy**
+  - Page enabled only if: section enabled AND page enabled
+  - Section toggle is master switch for all pages within
+  - Individual page toggles provide granular control
+
+### Phase 14 — Command-Line Interface (CLI) Support (Planned)
+- [ ] **Picocli Integration**
+  - Add Quarkus Picocli extension for CLI framework
+  - Support both server mode and command mode
+  - Automatic help generation and bash/zsh completion scripts
+- [ ] **Standard Flags**
+  - `--help` / `-h` - Display usage information with all options
+  - `--version` / `-v` - Show application and PostgreSQL client version
+  - `--config` / `-c` - Specify alternate configuration file path
+  - `--verbose` - Enable verbose logging output
+- [ ] **Server Startup Flags**
+  - `--port` / `-p` - Override HTTP server port
+  - `--host` - Override HTTP bind address
+  - `--no-history` - Disable history sampling at startup
+  - `--no-alerting` - Disable alerting at startup
+  - `--instance` - Specify default instance to connect to
+- [ ] **Database Admin Commands**
+  - `init-schema` - Initialise pgconsole history schema on target database
+  - `reset-stats` - Reset pg_stat_statements counters (with confirmation)
+  - `health-check` - Test database connectivity and extension availability
+  - `list-instances` - List all configured PostgreSQL instances with status
+- [ ] **Reporting Commands**
+  - `export-report` - Generate incident report snapshot and exit
+  - `export-config` - Export current effective configuration as properties/YAML
+  - `validate-config` - Validate configuration without starting server
+- [ ] **Configuration Priority**
+  - Priority order: CLI arguments > environment variables > application.properties
+  - CLI flags map to existing configuration properties
+  - Clear precedence documented in --help output
+
+### Phase 15 — Enhanced Logging & Observability ✅ COMPLETE
+- [x] **Structured Logging**
+  - JSON format for production (machine-readable for log aggregation)
+  - Plain text format for development (human-readable)
+  - Configurable format switching via environment variable (PG_CONSOLE_LOG_FORMAT)
+  - Compatible with ELK Stack, Splunk, CloudWatch, Loki
+- [x] **Log Output Destinations**
+  - Console output (stdout/stderr)
+  - Rotating file appender with configurable size and retention
+  - Separate error log file for warnings and above
+  - Configurable log directory path
+- [x] **MDC Context Propagation**
+  - Request correlation IDs (UUID per request)
+  - User/principal context in all log entries
+  - Instance name context for multi-instance deployments
+  - Client IP address tracking
+- [x] **Performance Metrics Logging**
+  - Database query execution time logging
+  - Request/response latency tracking
+  - Slow operation warnings (configurable threshold)
+  - Memory and resource usage periodic logging
+- [x] **SQL Query Logging**
+  - Configurable enable/disable for SQL statement logging
+  - Query execution time in milliseconds
+  - Parameter binding logging (with redaction option)
+  - Slow query threshold alerts
+- [x] **Security & Redaction**
+  - Automatic password/secret redaction in logs
+  - Connection string sanitisation
+  - Configurable sensitive field patterns
+  - PII detection and masking options (email, phone, SSN, credit card)
+- [x] **Async Logging**
+  - Asynchronous log appender for high-throughput scenarios
+  - Configurable buffer size and overflow policy
+  - Non-blocking logging to prevent performance impact
+- [x] **Log Level Management**
+  - Runtime log level adjustment via API endpoint (/api/v1/logging/*)
+  - Per-package log level configuration
+  - Temporary debug mode with auto-revert
+  - Log level presets (minimal, standard, verbose, debug)
+
+### Phase 16 — Notification Channels & Alerting Integration ✅ COMPLETE
+- [x] **Slack Integration**
+  - Native Slack webhook support
+  - Rich message formatting with alert severity colours
+  - Channel routing based on alert type/severity
+  - Block Kit support for structured messages
+- [x] **Microsoft Teams Integration**
+  - Teams webhook connector support
+  - Adaptive card formatting for alerts
+  - Channel and user mention support
+- [x] **PagerDuty Integration**
+  - PagerDuty Events API v2 integration
+  - Incident creation and resolution
+  - Service routing and escalation policies
+  - Deduplication key support
+- [x] **Discord Integration**
+  - Discord webhook support
+  - Embedded message formatting
+  - Role mention support for critical alerts
+- [x] **Email Enhancements**
+  - HTML email templates with branding
+  - Digest mode (batch multiple alerts)
+  - Per-recipient preferences
+  - Attachment support for reports
+- [x] **Escalation Policies**
+  - Multi-tier escalation chains
+  - Time-based escalation (escalate after N minutes)
+  - Repeat cycles for unacknowledged alerts
+  - Fallback notification channels
+- [x] **Alert Management**
+  - Alert acknowledgement and silencing
+  - Maintenance windows (suppress alerts)
+  - Alert grouping and deduplication
+  - Alert history and analytics
+  - Note: On-call schedule integration deferred to future phase
+
+### Phase 17 — Connection Pool Monitoring (Planned)
+- [ ] **PgBouncer Integration**
+  - Connect to PgBouncer admin console
+  - Pool statistics (active, waiting, idle connections)
+  - Database and user pool metrics
+  - Client and server connection counts
+  - Average query time per pool
+- [ ] **Pgpool-II Integration**
+  - Pgpool-II PCP interface support
+  - Backend node status monitoring
+  - Load balancing statistics
+  - Connection pool utilisation
+  - Watchdog cluster status
+- [ ] **Pool Health Monitoring**
+  - Pool saturation warnings (configurable threshold)
+  - Client wait time alerts
+  - Connection churn detection
+  - Pool exhaustion prediction
+- [ ] **Pool Configuration Display**
+  - Current pool settings visualisation
+  - Configuration recommendations
+  - Pool sizing suggestions based on workload
+- [ ] **Multi-Pooler Support**
+  - Support multiple pooler instances
+  - Pooler-to-database mapping
+  - Aggregate pool statistics across instances
+
+### Phase 18 — Testing Framework (Planned)
+- [ ] **Unit Testing**
+  - JUnit 5 test framework with Quarkus Test
+  - Service layer unit tests with mocking
+  - Repository layer tests with test containers
+  - Model/DTO validation tests
+  - Minimum 80% code coverage target
+- [ ] **Integration Testing**
+  - Quarkus @QuarkusTest integration tests
+  - Real PostgreSQL via Testcontainers
+  - REST endpoint testing with RestAssured
+  - Database migration testing
+  - Multi-instance scenario testing
+- [ ] **End-to-End Testing**
+  - Playwright or Selenium browser automation
+  - Critical user journey tests
+  - Cross-browser compatibility testing
+  - Mobile responsive testing
+  - Accessibility testing (axe-core)
+- [ ] **Performance Testing**
+  - JMeter or Gatling load test scripts
+  - Baseline performance benchmarks
+  - Stress testing for concurrent users
+  - Database query performance regression tests
+  - Memory leak detection
+- [ ] **Test Infrastructure**
+  - CI/CD pipeline integration (GitHub Actions)
+  - Test result reporting and trends
+  - Code coverage reporting (JaCoCo)
+  - Mutation testing (PIT)
+  - Test data factories and fixtures
+
+### Phase 19 — Documentation Generation (Planned)
+- [ ] **Antora Documentation Site**
+  - Full Antora documentation structure
+  - Multiple modules (user guide, admin guide, API reference, developer guide)
+  - Navigation hierarchy with nav.adoc files
+  - Cross-module references and linking
+  - Versioned documentation support
+- [ ] **AsciiDoc Content**
+  - Comprehensive user documentation
+  - Installation and configuration guides
+  - Feature documentation with examples
+  - Troubleshooting guides
+  - Best practices and recommendations
+- [ ] **Mermaid Diagram Generation**
+  - Architecture diagrams (component, deployment)
+  - Entity-relationship diagrams from schema
+  - Sequence diagrams for key workflows
+  - Flowcharts for decision processes
+  - Diagrams externalised to examples directory
+- [ ] **Schema Documentation**
+  - Automated data dictionary generation
+  - Table and column descriptions
+  - Foreign key relationship documentation
+  - Index documentation with usage statistics
+  - Export as AsciiDoc tables
+- [ ] **API Documentation**
+  - OpenAPI/Swagger specification generation
+  - REST endpoint documentation
+  - Request/response examples
+  - Authentication documentation
+  - Rate limiting and error codes
+- [ ] **Interactive Examples**
+  - Code snippets with syntax highlighting
+  - Copy-to-clipboard functionality
+  - Runnable curl examples
+  - Configuration file templates
+
+### Phase 20 — Plugin & Extension System (Planned)
+- [ ] **Plugin Architecture**
+  - Plugin discovery and loading mechanism
+  - Plugin lifecycle management (install, enable, disable, uninstall)
+  - Plugin isolation and sandboxing
+  - Plugin dependency resolution
+  - Hot reload support for development
+- [ ] **Custom Dashboard Widgets**
+  - Widget plugin API for custom metrics
+  - Custom visualisation components
+  - Widget configuration UI
+  - Widget placement and sizing
+  - Widget data refresh management
+- [ ] **Custom Metric Collectors**
+  - Metric collector plugin interface
+  - Custom SQL query metrics
+  - External data source integration
+  - Metric aggregation and transformation
+  - Metric storage and retention
+- [ ] **Third-Party Integrations**
+  - Integration plugin framework
+  - OAuth/API key management for integrations
+  - Webhook receiver plugins
+  - External alerting system connectors
+  - Cloud provider integrations (AWS RDS, Azure, GCP)
+- [ ] **Plugin Marketplace**
+  - Plugin registry and discovery
+  - Plugin versioning and updates
+  - Plugin ratings and reviews
+  - Official vs community plugins
+  - Plugin security scanning
+- [ ] **Plugin Development Kit**
+  - Plugin SDK with TypeScript/Java support
+  - Plugin scaffolding CLI tool
+  - Development mode with hot reload
+  - Plugin testing utilities
+  - Documentation and examples
 
 ---
 
@@ -1049,31 +1320,41 @@ Dashboard adapts gracefully across mobile, tablet, and desktop - DONE
 
 WCAG 2.1 AA compliance for core functionality - DONE
 
-Phase 10 — Security & Compliance Monitoring (Planned)
+Phase 10 — Security & Compliance Monitoring ✅ COMPLETE
 
 Deliverables:
 
-Role and permission auditing dashboard
+Role and permission auditing dashboard - DONE
 
-Connection security analysis (SSL, auth methods, failed logins)
+Connection security analysis (SSL, auth methods, pg_hba.conf) - DONE
 
-Data access pattern monitoring with sensitive table tracking
+Data access pattern monitoring with PII detection and RLS policies - DONE
 
-Compliance dashboards (GDPR, SOC 2 metrics)
+Compliance dashboards (SOC 2 metrics, security scoring) - DONE
 
-Security recommendations engine
+Security recommendations engine with priority categorisation - DONE
 
 Acceptance Criteria:
 
-Role hierarchy visualised with permission matrix
+Role hierarchy visualised with permission matrix and membership tree - DONE
 
-SSL/TLS status visible for all connections
+SSL/TLS status visible for all connections via pg_stat_ssl - DONE
 
-Sensitive table access tracked with alerts
+Sensitive tables detected via heuristic PII column analysis - DONE
 
-Compliance scoring visible with actionable recommendations
+Compliance scoring visible across 5 security areas with grades - DONE
 
-Security warnings displayed for common misconfigurations
+Security recommendations displayed by priority with suggested actions - DONE
+
+Known Limitations:
+
+Failed login tracking requires PostgreSQL log parsing (not implemented)
+
+Geolocation uses simple IP classification (internal/external/local)
+
+GDPR data subject tracking requires application-layer implementation
+
+Weak password detection not possible (passwords not accessible)
 
 Phase 11 — Intelligent Insights & Automation (Planned)
 
@@ -1105,39 +1386,506 @@ Runbooks executed with step-by-step guidance
 
 Maintenance windows suggested based on activity patterns
 
-Phase 12 — Schema Comparison & Migration (Planned)
+Phase 12 — Schema Comparison & Migration ✅ COMPLETE
 
 Deliverables:
 
-Cross-instance schema comparison with source/destination selector
+Cross-instance schema comparison with source/destination selector - DONE
 
-Comprehensive object comparison (tables, indexes, constraints, views, functions, triggers, sequences, types, extensions)
+Comprehensive object comparison (tables, indexes, constraints, views, functions, triggers, sequences, types, extensions) - DONE
 
-Flexible filtering system with pattern exclusions (e.g., `zz_*`, `temp_*`)
+Flexible filtering system with pattern exclusions (e.g., `zz_*`, `temp_*`) - DONE
 
-Visual diff viewer with colour-coded changes and expandable object tree
+Visual diff viewer with colour-coded changes and expandable object tree - DONE
 
-DDL migration script generation with dependency ordering
+DDL migration script generation with dependency ordering - DONE
 
-Saveable comparison profiles for repeated use
+Saveable comparison profiles for repeated use - DONE
 
-Comparison history and schema drift detection
+Comparison history and schema drift detection - DONE
 
 Acceptance Criteria:
 
-Users can select source and destination instances from configured list
+Users can select source and destination instances from configured list - DONE
 
-All major database objects compared with detailed attribute-level diffs
+All major database objects compared with detailed attribute-level diffs - DONE
 
-Table exclusion patterns configurable via text input (supports wildcards and regex)
+Table exclusion patterns configurable via text input (supports wildcards and regex) - DONE
 
-Side-by-side diff view shows additions (green), deletions (red), modifications (yellow)
+Side-by-side diff view shows additions (green), deletions (red), modifications (yellow) - DONE
 
-Generated DDL scripts are syntactically correct and dependency-ordered
+Generated DDL scripts are syntactically correct and dependency-ordered - DONE
 
-Profiles persist and can be re-run with one click
+Profiles persist and can be re-run with one click - DONE
 
-Comparison results exportable as HTML, PDF, or Markdown
+Comparison results exportable as HTML or Markdown - DONE
+
+Known Limitations:
+
+Scheduled comparison runs with email notifications deferred to future phase
+
+PDF export deferred to future phase
+
+Shareable comparison result URLs deferred to future phase
+
+Phase 13 — Dashboard Feature Toggles & Modular Configuration (Planned)
+
+Deliverables:
+
+Configuration interface for dashboard toggles in InstanceConfig.java
+
+Section-level toggles for Monitoring, Analysis, Infrastructure, Data Control, Enterprise
+
+Individual page toggles (23 pages) with environment variable support
+
+Navigation conditional rendering in base.html
+
+Route guards in DashboardResource.java and ApiResource.java returning 404
+
+Documentation updates for new environment variables
+
+Acceptance Criteria:
+
+Section toggles disable all pages within that section
+
+Individual page toggles can override section settings
+
+Disabled pages return HTTP 404 when accessed directly
+
+Disabled pages hidden from sidebar navigation
+
+Disabled API endpoints return HTTP 404
+
+All features enabled by default (opt-out model)
+
+Configuration via application.properties and environment variables
+
+About page always accessible regardless of settings
+
+Configuration Properties:
+
+```properties
+# Section toggles
+pg-console.dashboards.monitoring.enabled=${PG_CONSOLE_DASH_MONITORING:true}
+pg-console.dashboards.analysis.enabled=${PG_CONSOLE_DASH_ANALYSIS:true}
+pg-console.dashboards.infrastructure.enabled=${PG_CONSOLE_DASH_INFRASTRUCTURE:true}
+pg-console.dashboards.data-control.enabled=${PG_CONSOLE_DASH_DATA_CONTROL:true}
+pg-console.dashboards.enterprise.enabled=${PG_CONSOLE_DASH_ENTERPRISE:true}
+
+# Individual page toggles (examples)
+pg-console.dashboards.monitoring.slow-queries.enabled=${PG_CONSOLE_DASH_SLOW_QUERIES:true}
+pg-console.dashboards.analysis.index-advisor.enabled=${PG_CONSOLE_DASH_INDEX_ADVISOR:true}
+```
+
+Phase 14 — Command-Line Interface (CLI) Support (Planned)
+
+Deliverables:
+
+Picocli integration via Quarkus Picocli extension
+
+Standard flags (--help, --version, --config, --verbose)
+
+Server startup flags (--port, --host, --no-history, --no-alerting, --instance)
+
+Database admin commands (init-schema, reset-stats, health-check, list-instances)
+
+Reporting commands (export-report, export-config, validate-config)
+
+Bash/zsh completion script generation
+
+Acceptance Criteria:
+
+Application supports both server mode and command mode
+
+CLI arguments take highest priority over env vars and properties
+
+--help displays all available options with descriptions
+
+--version shows application version and build info
+
+Admin commands can run without starting web server
+
+health-check validates database connectivity and pg_stat_statements availability
+
+validate-config exits with appropriate return codes (0 = valid, 1 = invalid)
+
+Shell completion scripts generated for bash and zsh
+
+Example Usage:
+
+```bash
+# Start server with CLI overrides
+java -jar pg-console.jar --port 9090 --no-alerting
+
+# Run admin commands
+java -jar pg-console.jar health-check --instance production
+java -jar pg-console.jar list-instances
+java -jar pg-console.jar export-report --output incident-2024.txt
+java -jar pg-console.jar validate-config --config /etc/pg-console/app.properties
+
+# Get help
+java -jar pg-console.jar --help
+java -jar pg-console.jar health-check --help
+```
+
+CLI Flags Reference:
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--help` | `-h` | Display usage information |
+| `--version` | `-v` | Show application version |
+| `--config` | `-c` | Alternate config file path |
+| `--verbose` | | Enable verbose logging |
+| `--port` | `-p` | HTTP server port |
+| `--host` | | HTTP bind address |
+| `--no-history` | | Disable history sampling |
+| `--no-alerting` | | Disable alerting |
+| `--instance` | `-i` | Default instance name |
+
+Phase 15 — Enhanced Logging & Observability ✅ COMPLETE
+
+Deliverables:
+
+Structured JSON logging for production environments - DONE
+
+Plain text logging for development with configurable switching - DONE
+
+Rotating file appender with size limits and retention policies - DONE
+
+MDC context propagation with correlation IDs and user context - DONE
+
+Performance metrics logging for database operations and requests - DONE
+
+Configurable SQL query logging with execution times - DONE
+
+Sensitive data redaction (passwords, connection strings, PII) - DONE
+
+Async logging appender for high-throughput scenarios - DONE
+
+Runtime log level management via API endpoint - DONE
+
+Acceptance Criteria:
+
+JSON and plain text formats switchable via PG_CONSOLE_LOG_FORMAT - DONE
+
+File logging writes to configurable directory with rotation - DONE
+
+Each request gets unique correlation ID visible in all related logs - DONE
+
+Database query times logged when SQL logging enabled - DONE
+
+Passwords and secrets automatically redacted from all log output - DONE
+
+Async logging does not block request processing - DONE
+
+Log levels adjustable at runtime without restart - DONE
+
+Slow operation warnings triggered above configurable threshold - DONE
+
+Configuration Properties:
+
+```properties
+# Log format (json or plain)
+pg-console.logging.format=${PG_CONSOLE_LOG_FORMAT:plain}
+
+# File logging
+pg-console.logging.file.enabled=${PG_CONSOLE_LOG_FILE_ENABLED:false}
+pg-console.logging.file.path=${PG_CONSOLE_LOG_FILE_PATH:/var/log/pg-console}
+pg-console.logging.file.max-size=${PG_CONSOLE_LOG_FILE_SIZE:10M}
+pg-console.logging.file.max-backup=${PG_CONSOLE_LOG_FILE_BACKUP:5}
+
+# SQL logging
+pg-console.logging.sql.enabled=${PG_CONSOLE_LOG_SQL_ENABLED:false}
+pg-console.logging.sql.slow-threshold-ms=${PG_CONSOLE_LOG_SQL_SLOW_MS:1000}
+
+# Async logging
+pg-console.logging.async.enabled=${PG_CONSOLE_LOG_ASYNC:true}
+pg-console.logging.async.queue-size=${PG_CONSOLE_LOG_ASYNC_QUEUE:1024}
+
+# Redaction
+pg-console.logging.redact.enabled=${PG_CONSOLE_LOG_REDACT:true}
+pg-console.logging.redact.patterns=${PG_CONSOLE_LOG_REDACT_PATTERNS:password,secret,token,key}
+```
+
+Example Log Output (JSON):
+
+```json
+{
+  "timestamp": "2024-12-27T10:15:30.123Z",
+  "level": "INFO",
+  "logger": "c.b.p.service.PostgresService",
+  "message": "Query executed successfully",
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "user": "admin",
+  "instance": "production",
+  "duration_ms": 45,
+  "thread": "executor-1"
+}
+```
+
+Phase 16 — Notification Channels & Alerting Integration ✅ COMPLETE
+
+Deliverables:
+
+Slack webhook integration with rich message formatting - DONE
+
+Microsoft Teams adaptive card support - DONE
+
+PagerDuty Events API v2 integration with incident management - DONE
+
+Discord webhook support with embedded messages - DONE
+
+Enhanced email templates with HTML formatting and digests - DONE
+
+Multi-tier escalation policies with time-based escalation - DONE
+
+Alert acknowledgement, silencing, and maintenance windows - DONE
+
+Acceptance Criteria:
+
+Slack alerts display with severity colours using Block Kit - DONE
+
+Teams messages render as adaptive cards with proper formatting - DONE
+
+PagerDuty incidents created with deduplication and service routing - DONE
+
+Discord embeds include all relevant alert information - DONE
+
+Email notifications support HTML templates and digest mode - DONE
+
+Escalation chains progress after configurable timeout periods - DONE
+
+Maintenance windows suppress alerts for specified duration - DONE
+
+Known Limitations:
+
+On-call schedule integration deferred to future phase
+
+Interactive acknowledgement buttons in Slack/Teams deferred to future phase
+
+Configuration Properties:
+
+```properties
+# Slack
+pg-console.notifications.slack.enabled=${PG_CONSOLE_SLACK_ENABLED:false}
+pg-console.notifications.slack.webhook-url=${PG_CONSOLE_SLACK_WEBHOOK}
+pg-console.notifications.slack.channel=${PG_CONSOLE_SLACK_CHANNEL:#alerts}
+
+# PagerDuty
+pg-console.notifications.pagerduty.enabled=${PG_CONSOLE_PAGERDUTY_ENABLED:false}
+pg-console.notifications.pagerduty.routing-key=${PG_CONSOLE_PAGERDUTY_KEY}
+
+# Teams
+pg-console.notifications.teams.enabled=${PG_CONSOLE_TEAMS_ENABLED:false}
+pg-console.notifications.teams.webhook-url=${PG_CONSOLE_TEAMS_WEBHOOK}
+
+# Escalation
+pg-console.notifications.escalation.timeout-minutes=${PG_CONSOLE_ESCALATION_TIMEOUT:15}
+```
+
+Phase 17 — Connection Pool Monitoring (Planned)
+
+Deliverables:
+
+PgBouncer admin console integration
+
+Pgpool-II PCP interface support
+
+Pool health monitoring with saturation warnings
+
+Pool configuration display and recommendations
+
+Multi-pooler support with aggregate statistics
+
+Acceptance Criteria:
+
+PgBouncer stats displayed (active, waiting, idle, server connections)
+
+Pgpool-II backend status and load balancing visible
+
+Pool saturation warnings trigger at configurable threshold
+
+Configuration recommendations based on observed workload
+
+Multiple pooler instances configurable and monitored
+
+Configuration Properties:
+
+```properties
+# PgBouncer
+pg-console.pooler.pgbouncer.enabled=${PG_CONSOLE_PGBOUNCER_ENABLED:false}
+pg-console.pooler.pgbouncer.host=${PG_CONSOLE_PGBOUNCER_HOST:localhost}
+pg-console.pooler.pgbouncer.port=${PG_CONSOLE_PGBOUNCER_PORT:6432}
+
+# Pgpool-II
+pg-console.pooler.pgpool.enabled=${PG_CONSOLE_PGPOOL_ENABLED:false}
+pg-console.pooler.pgpool.pcp-host=${PG_CONSOLE_PGPOOL_PCP_HOST:localhost}
+pg-console.pooler.pgpool.pcp-port=${PG_CONSOLE_PGPOOL_PCP_PORT:9898}
+
+# Thresholds
+pg-console.pooler.saturation-warning-percent=${PG_CONSOLE_POOL_WARN_PERCENT:80}
+```
+
+Phase 18 — Testing Framework (Planned)
+
+Deliverables:
+
+JUnit 5 unit test suite with Quarkus Test
+
+Integration tests using Testcontainers for PostgreSQL
+
+End-to-end tests with Playwright browser automation
+
+Performance tests with JMeter/Gatling scripts
+
+CI/CD pipeline with GitHub Actions
+
+Code coverage reporting with JaCoCo (80% target)
+
+Acceptance Criteria:
+
+All service classes have corresponding unit tests
+
+Integration tests verify REST endpoints with real database
+
+E2E tests cover critical user journeys (login, view queries, cancel query)
+
+Performance baseline established with documented metrics
+
+CI pipeline runs all tests on pull requests
+
+Coverage reports generated and tracked over time
+
+Test Commands:
+
+```bash
+# Run unit tests
+gradle21w test
+
+# Run integration tests
+gradle21w integrationTest
+
+# Run E2E tests
+gradle21w e2eTest
+
+# Generate coverage report
+gradle21w jacocoTestReport
+
+# Run performance tests
+gradle21w gatlingRun
+```
+
+Phase 19 — Documentation Generation (Planned)
+
+Deliverables:
+
+Antora documentation site with versioned modules
+
+AsciiDoc content for user, admin, and developer guides
+
+Mermaid diagrams for architecture, ERD, and workflows
+
+Automated schema documentation (data dictionary)
+
+OpenAPI/Swagger API specification
+
+Acceptance Criteria:
+
+Antora site builds with `gradle21w antora` command
+
+Documentation modules: user-guide, admin-guide, api-reference, developer-guide
+
+Mermaid diagrams render in documentation and externalised to examples/
+
+Schema documentation auto-generated from database metadata
+
+OpenAPI spec available at /q/openapi endpoint
+
+Documentation Structure:
+
+```
+docs/
+├── antora.yml
+├── modules/
+│   ├── ROOT/
+│   │   ├── nav.adoc
+│   │   └── pages/
+│   ├── user-guide/
+│   │   ├── nav.adoc
+│   │   └── pages/
+│   ├── admin-guide/
+│   │   ├── nav.adoc
+│   │   └── pages/
+│   ├── api-reference/
+│   │   ├── nav.adoc
+│   │   └── pages/
+│   └── developer-guide/
+│       ├── nav.adoc
+│       └── pages/
+└── examples/
+    ├── architecture.mmd
+    ├── erd.mmd
+    └── workflow-*.mmd
+```
+
+Phase 20 — Plugin & Extension System (Planned)
+
+Deliverables:
+
+Plugin architecture with discovery and lifecycle management
+
+Custom dashboard widget API
+
+Custom metric collector interface
+
+Third-party integration framework
+
+Plugin marketplace with registry
+
+Plugin development kit (SDK)
+
+Acceptance Criteria:
+
+Plugins discovered from designated directory on startup
+
+Widget plugins render custom visualisations on dashboards
+
+Metric collectors execute custom SQL and store results
+
+Integration plugins connect to external services (AWS RDS, etc.)
+
+Plugin registry lists available plugins with versions
+
+SDK scaffolds new plugin projects with templates
+
+Plugin API Example:
+
+```java
+@Plugin(id = "custom-metrics", version = "1.0.0")
+public class CustomMetricsPlugin implements MetricCollector {
+
+    @Override
+    public List<Metric> collect(DataSource ds) {
+        // Custom metric collection logic
+        return List.of(
+            new Metric("custom.connection.count", queryConnectionCount(ds))
+        );
+    }
+}
+```
+
+Configuration Properties:
+
+```properties
+# Plugin system
+pg-console.plugins.enabled=${PG_CONSOLE_PLUGINS_ENABLED:false}
+pg-console.plugins.directory=${PG_CONSOLE_PLUGINS_DIR:./plugins}
+pg-console.plugins.auto-update=${PG_CONSOLE_PLUGINS_AUTO_UPDATE:false}
+
+# Marketplace
+pg-console.plugins.marketplace.enabled=${PG_CONSOLE_MARKETPLACE_ENABLED:false}
+pg-console.plugins.marketplace.url=${PG_CONSOLE_MARKETPLACE_URL:https://plugins.pg-console.io}
+```
 
 Configuration Specification (example)
 Required

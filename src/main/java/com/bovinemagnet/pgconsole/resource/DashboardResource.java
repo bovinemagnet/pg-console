@@ -17,6 +17,9 @@ import com.bovinemagnet.pgconsole.service.AuditService;
 import com.bovinemagnet.pgconsole.service.BookmarkService;
 import com.bovinemagnet.pgconsole.service.ChangeDataCaptureService;
 import com.bovinemagnet.pgconsole.service.ComparisonService;
+import com.bovinemagnet.pgconsole.service.ComplianceService;
+import com.bovinemagnet.pgconsole.service.ConnectionSecurityService;
+import com.bovinemagnet.pgconsole.service.DataAccessPatternService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.LogicalReplicationService;
 import com.bovinemagnet.pgconsole.service.PartitioningService;
@@ -27,6 +30,8 @@ import com.bovinemagnet.pgconsole.service.InfrastructureService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.QueryFingerprintService;
 import com.bovinemagnet.pgconsole.service.QueryRegressionService;
+import com.bovinemagnet.pgconsole.service.SecurityAuditService;
+import com.bovinemagnet.pgconsole.service.SecurityRecommendationService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import com.bovinemagnet.pgconsole.service.ReplicationService;
 import com.bovinemagnet.pgconsole.service.StatementsManagementService;
@@ -139,6 +144,24 @@ public class DashboardResource {
     Template partitions;
 
     @Inject
+    Template security;
+
+    @Inject
+    Template securityRoles;
+
+    @Inject
+    Template securityConnections;
+
+    @Inject
+    Template securityAccess;
+
+    @Inject
+    Template securityCompliance;
+
+    @Inject
+    Template securityRecommendations;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -191,6 +214,21 @@ public class DashboardResource {
 
     @Inject
     PartitioningService partitioningService;
+
+    @Inject
+    SecurityAuditService securityAuditService;
+
+    @Inject
+    ConnectionSecurityService connectionSecurityService;
+
+    @Inject
+    DataAccessPatternService dataAccessPatternService;
+
+    @Inject
+    ComplianceService complianceService;
+
+    @Inject
+    SecurityRecommendationService securityRecommendationService;
 
     /**
      * Renders the main dashboard overview page with key PostgreSQL metrics and sparklines.
@@ -745,6 +783,168 @@ public class DashboardResource {
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled());
+    }
+
+    // --- Phase 10: Security & Compliance Monitoring ---
+
+    /**
+     * Renders the main security dashboard showing security overview.
+     * <p>
+     * Displays security score, critical warnings count, SSL coverage percentage,
+     * privileged roles count, and quick links to detailed security pages.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing security overview data
+     */
+    @GET
+    @Path("/security")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance security(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var auditSummary = securityAuditService.getSummary(instance);
+        var connectionSummary = connectionSecurityService.getSummary(instance);
+        var accessSummary = dataAccessPatternService.getSummary(instance);
+        var complianceSummary = complianceService.getSummary(instance);
+        var recommendationSummary = securityRecommendationService.getSummary(instance);
+        var warnings = securityAuditService.getAllWarnings(instance);
+        var complianceScores = complianceService.getAllComplianceScores(instance);
+        return security.data("auditSummary", auditSummary)
+                       .data("connectionSummary", connectionSummary)
+                       .data("accessSummary", accessSummary)
+                       .data("complianceSummary", complianceSummary)
+                       .data("recommendationSummary", recommendationSummary)
+                       .data("warnings", warnings)
+                       .data("complianceScores", complianceScores)
+                       .data("instances", dataSourceManager.getInstanceInfoList())
+                       .data("currentInstance", instance)
+                       .data("securityEnabled", config.security().enabled());
+    }
+
+    /**
+     * Renders the security roles page showing role and permission auditing.
+     * <p>
+     * Displays all database roles with their privileges, role hierarchy,
+     * membership information, and security warnings about elevated privileges.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing role audit data
+     */
+    @GET
+    @Path("/security/roles")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance securityRoles(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var roles = securityAuditService.getAllRoles(instance);
+        var memberships = securityAuditService.getRoleMemberships(instance);
+        var warnings = securityAuditService.getAllWarnings(instance);
+        var summary = securityAuditService.getSummary(instance);
+        return securityRoles.data("roles", roles)
+                            .data("memberships", memberships)
+                            .data("warnings", warnings)
+                            .data("summary", summary)
+                            .data("instances", dataSourceManager.getInstanceInfoList())
+                            .data("currentInstance", instance)
+                            .data("securityEnabled", config.security().enabled());
+    }
+
+    /**
+     * Renders the connection security page showing SSL and authentication analysis.
+     * <p>
+     * Displays current SSL connections, pg_hba.conf rules, authentication methods,
+     * and connection source analysis with security warnings.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing connection security data
+     */
+    @GET
+    @Path("/security/connections")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance securityConnections(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var sslConnections = connectionSecurityService.getSslConnections(instance);
+        var hbaRules = connectionSecurityService.getHbaRules(instance);
+        var warnings = connectionSecurityService.getWarnings(instance);
+        var summary = connectionSecurityService.getSummary(instance);
+        return securityConnections.data("sslConnections", sslConnections)
+                                  .data("hbaRules", hbaRules)
+                                  .data("warnings", warnings)
+                                  .data("summary", summary)
+                                  .data("instances", dataSourceManager.getInstanceInfoList())
+                                  .data("currentInstance", instance)
+                                  .data("securityEnabled", config.security().enabled());
+    }
+
+    /**
+     * Renders the data access patterns page showing PII detection and RLS policies.
+     * <p>
+     * Displays sensitive tables with potential PII, detected PII columns,
+     * row-level security policies, and tables needing additional protection.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing data access pattern data
+     */
+    @GET
+    @Path("/security/access")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance securityAccess(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var sensitiveTables = dataAccessPatternService.getSensitiveTables(instance);
+        var piiColumns = dataAccessPatternService.getPiiColumns(instance);
+        var rlsPolicies = dataAccessPatternService.getRlsPolicies(instance);
+        var summary = dataAccessPatternService.getSummary(instance);
+        return securityAccess.data("sensitiveTables", sensitiveTables)
+                             .data("piiColumns", piiColumns)
+                             .data("rlsPolicies", rlsPolicies)
+                             .data("summary", summary)
+                             .data("instances", dataSourceManager.getInstanceInfoList())
+                             .data("currentInstance", instance)
+                             .data("securityEnabled", config.security().enabled());
+    }
+
+    /**
+     * Renders the compliance dashboard showing security compliance scores.
+     * <p>
+     * Displays compliance scores across multiple areas including access control,
+     * encryption, audit logging, data protection, and authentication.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing compliance score data
+     */
+    @GET
+    @Path("/security/compliance")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance securityCompliance(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var scores = complianceService.getAllComplianceScores(instance);
+        var summary = complianceService.getSummary(instance);
+        return securityCompliance.data("scores", scores)
+                                 .data("summary", summary)
+                                 .data("instances", dataSourceManager.getInstanceInfoList())
+                                 .data("currentInstance", instance)
+                                 .data("securityEnabled", config.security().enabled());
+    }
+
+    /**
+     * Renders the security recommendations page showing actionable improvements.
+     * <p>
+     * Displays security recommendations organised by priority (critical, high,
+     * medium, low) with suggested actions and rationale for each recommendation.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing security recommendations
+     */
+    @GET
+    @Path("/security/recommendations")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance securityRecommendations(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var recommendations = securityRecommendationService.getAllRecommendations(instance);
+        var summary = securityRecommendationService.getSummary(instance);
+        return securityRecommendations.data("recommendations", recommendations)
+                                      .data("summary", summary)
+                                      .data("instances", dataSourceManager.getInstanceInfoList())
+                                      .data("currentInstance", instance)
+                                      .data("securityEnabled", config.security().enabled());
     }
 
     /**
