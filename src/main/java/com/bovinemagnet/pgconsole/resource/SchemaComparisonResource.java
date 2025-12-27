@@ -395,7 +395,8 @@ public class SchemaComparisonResource {
             @QueryParam("limit") @DefaultValue("50") int limit) {
         return schemaComparisonHistory
                 .data("history", historyService.getHistory(limit))
-                .data("totalCount", historyService.count());
+                .data("totalCount", historyService.count())
+                .data("instances", dataSourceManager.getAvailableInstances());
     }
 
     /**
@@ -410,13 +411,15 @@ public class SchemaComparisonResource {
             return schemaComparisonHistory
                     .data("error", "History record not found")
                     .data("history", historyService.getHistory(50))
-                    .data("totalCount", historyService.count());
+                    .data("totalCount", historyService.count())
+                    .data("instances", dataSourceManager.getAvailableInstances());
         }
 
         return schemaComparisonHistory
                 .data("detail", historyOpt.get())
                 .data("history", historyService.getHistory(50))
-                .data("totalCount", historyService.count());
+                .data("totalCount", historyService.count())
+                .data("instances", dataSourceManager.getAvailableInstances());
     }
 
     /**

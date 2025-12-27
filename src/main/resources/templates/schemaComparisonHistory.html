@@ -16,7 +16,7 @@
     </div>
 </div>
 
-{#if error}
+{#if error??}
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
     <i class="bi bi-exclamation-triangle me-2"></i>{error}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -24,7 +24,7 @@
 {/if}
 
 <!-- History Detail Modal -->
-{#if detail}
+{#if detail??}
 <div class="modal fade show" id="detailModal" tabindex="-1" style="display: block;" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
