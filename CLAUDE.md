@@ -100,7 +100,7 @@ Located in `src/main/resources/templates/`:
 - `/about` - Application version and PostgreSQL server information
 - `/api/sparkline` - SVG sparkline generation endpoint
 
-
+test-enpoints.sh can be used to test endpoints, remember to update it when new apis and dasbboards are added.
 
 # Remember to
 
