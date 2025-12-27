@@ -413,6 +413,39 @@
             white-space: nowrap;
             overflow: hidden;
             transition: opacity var(--transition-speed) ease, height var(--transition-speed) ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            border-radius: var(--radius-sm);
+        }
+
+        .nav-section-title:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-body-color);
+        }
+
+        .nav-section-title .section-chevron {
+            font-size: 0.65rem;
+            transition: transform 0.2s ease;
+            opacity: 0.7;
+        }
+
+        .nav-section.collapsed .nav-section-title .section-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .nav-section-items {
+            overflow: hidden;
+            transition: max-height 0.25s ease-out, opacity 0.2s ease;
+            max-height: 500px;
+            opacity: 1;
+        }
+
+        .nav-section.collapsed .nav-section-items {
+            max-height: 0;
+            opacity: 0;
         }
 
         .sidebar-collapsed .nav-section-title {
@@ -421,6 +454,11 @@
             padding: 0;
             margin: 0;
             overflow: hidden;
+        }
+
+        .sidebar-collapsed .nav-section-items {
+            max-height: none;
+            opacity: 1;
         }
 
         .nav-link {
@@ -897,252 +935,296 @@
         <nav class="sidebar-nav" aria-label="Primary">
             <!-- Monitoring Section -->
             {#if toggles.monitoringSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-monitoring">
-                <div class="nav-section-title" id="nav-monitoring">Monitoring</div>
-                {#if toggles.dashboard}
-                <a class="nav-link" href="/?instance={currentInstance ?: 'default'}" data-title="Dashboard">
-                    <i class="bi bi-speedometer2" aria-hidden="true"></i>
-                    <span class="nav-link-text">Dashboard</span>
-                </a>
-                {/if}
-                {#if toggles.activity}
-                <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
-                    <i class="bi bi-activity" aria-hidden="true"></i>
-                    <span class="nav-link-text">Activity</span>
-                </a>
-                {/if}
-                {#if toggles.slowQueries}
-                <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" data-title="Slow Queries">
-                    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                    <span class="nav-link-text">Slow Queries</span>
-                </a>
-                {/if}
-                {#if toggles.locks}
-                <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}" data-title="Locks">
-                    <i class="bi bi-lock-fill" aria-hidden="true"></i>
-                    <span class="nav-link-text">Locks</span>
-                </a>
-                {/if}
-                {#if toggles.waitEvents}
-                <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
-                    <i class="bi bi-clock-history" aria-hidden="true"></i>
-                    <span class="nav-link-text">Wait Events</span>
-                </a>
-                {/if}
-                {#if toggles.tables}
-                <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}" data-title="Tables">
-                    <i class="bi bi-table" aria-hidden="true"></i>
-                    <span class="nav-link-text">Tables</span>
-                </a>
-                {/if}
-                {#if toggles.databases}
-                <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}" data-title="Databases">
-                    <i class="bi bi-database" aria-hidden="true"></i>
-                    <span class="nav-link-text">Databases</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-monitoring" data-section="monitoring">
+                <div class="nav-section-title" id="nav-monitoring">
+                    <span>Monitoring</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.dashboard}
+                    <a class="nav-link" href="/?instance={currentInstance ?: 'default'}" data-title="Dashboard">
+                        <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Dashboard</span>
+                    </a>
+                    {/if}
+                    {#if toggles.activity}
+                    <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
+                        <i class="bi bi-activity" aria-hidden="true"></i>
+                        <span class="nav-link-text">Activity</span>
+                    </a>
+                    {/if}
+                    {#if toggles.slowQueries}
+                    <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" data-title="Slow Queries">
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                        <span class="nav-link-text">Slow Queries</span>
+                    </a>
+                    {/if}
+                    {#if toggles.locks}
+                    <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}" data-title="Locks">
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        <span class="nav-link-text">Locks</span>
+                    </a>
+                    {/if}
+                    {#if toggles.waitEvents}
+                    <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <span class="nav-link-text">Wait Events</span>
+                    </a>
+                    {/if}
+                    {#if toggles.tables}
+                    <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}" data-title="Tables">
+                        <i class="bi bi-table" aria-hidden="true"></i>
+                        <span class="nav-link-text">Tables</span>
+                    </a>
+                    {/if}
+                    {#if toggles.databases}
+                    <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}" data-title="Databases">
+                        <i class="bi bi-database" aria-hidden="true"></i>
+                        <span class="nav-link-text">Databases</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Analysis Section -->
             {#if toggles.analysisSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-analysis">
-                <div class="nav-section-title" id="nav-analysis">Analysis</div>
-                {#if toggles.indexAdvisor}
-                <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}" data-title="Index Advisor">
-                    <i class="bi bi-lightbulb" aria-hidden="true"></i>
-                    <span class="nav-link-text">Index Advisor</span>
-                </a>
-                {/if}
-                {#if toggles.queryRegressions}
-                <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}" data-title="Regressions">
-                    <i class="bi bi-graph-down-arrow" aria-hidden="true"></i>
-                    <span class="nav-link-text">Regressions</span>
-                </a>
-                {/if}
-                {#if toggles.tableMaintenance}
-                <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}" data-title="Maintenance">
-                    <i class="bi bi-wrench" aria-hidden="true"></i>
-                    <span class="nav-link-text">Maintenance</span>
-                </a>
-                {/if}
-                {#if toggles.baselines}
-                <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}" data-title="Baselines">
-                    <i class="bi bi-clipboard-data" aria-hidden="true"></i>
-                    <span class="nav-link-text">Baselines</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-analysis" data-section="analysis">
+                <div class="nav-section-title" id="nav-analysis">
+                    <span>Analysis</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.indexAdvisor}
+                    <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}" data-title="Index Advisor">
+                        <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                        <span class="nav-link-text">Index Advisor</span>
+                    </a>
+                    {/if}
+                    {#if toggles.queryRegressions}
+                    <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}" data-title="Regressions">
+                        <i class="bi bi-graph-down-arrow" aria-hidden="true"></i>
+                        <span class="nav-link-text">Regressions</span>
+                    </a>
+                    {/if}
+                    {#if toggles.tableMaintenance}
+                    <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}" data-title="Maintenance">
+                        <i class="bi bi-wrench" aria-hidden="true"></i>
+                        <span class="nav-link-text">Maintenance</span>
+                    </a>
+                    {/if}
+                    {#if toggles.baselines}
+                    <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}" data-title="Baselines">
+                        <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+                        <span class="nav-link-text">Baselines</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Insights Section -->
             {#if toggles.insightsSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-insights">
-                <div class="nav-section-title" id="nav-insights">Insights</div>
-                {#if toggles.insights}
-                <a class="nav-link" href="/insights?instance={currentInstance ?: 'default'}" data-title="Insights">
-                    <i class="bi bi-stars" aria-hidden="true"></i>
-                    <span class="nav-link-text">Dashboard</span>
-                </a>
-                {/if}
-                {#if toggles.anomalies}
-                <a class="nav-link" href="/insights/anomalies?instance={currentInstance ?: 'default'}" data-title="Anomalies">
-                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-                    <span class="nav-link-text">Anomalies</span>
-                </a>
-                {/if}
-                {#if toggles.forecasts}
-                <a class="nav-link" href="/insights/forecasts?instance={currentInstance ?: 'default'}" data-title="Forecasts">
-                    <i class="bi bi-graph-up" aria-hidden="true"></i>
-                    <span class="nav-link-text">Forecasts</span>
-                </a>
-                {/if}
-                {#if toggles.insightsRecommendations}
-                <a class="nav-link" href="/insights/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
-                    <i class="bi bi-lightbulb-fill" aria-hidden="true"></i>
-                    <span class="nav-link-text">Recommendations</span>
-                </a>
-                {/if}
-                {#if toggles.runbooks}
-                <a class="nav-link" href="/insights/runbooks?instance={currentInstance ?: 'default'}" data-title="Runbooks">
-                    <i class="bi bi-journal-code" aria-hidden="true"></i>
-                    <span class="nav-link-text">Runbooks</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-insights" data-section="insights">
+                <div class="nav-section-title" id="nav-insights">
+                    <span>Insights</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.insights}
+                    <a class="nav-link" href="/insights?instance={currentInstance ?: 'default'}" data-title="Insights">
+                        <i class="bi bi-stars" aria-hidden="true"></i>
+                        <span class="nav-link-text">Dashboard</span>
+                    </a>
+                    {/if}
+                    {#if toggles.anomalies}
+                    <a class="nav-link" href="/insights/anomalies?instance={currentInstance ?: 'default'}" data-title="Anomalies">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <span class="nav-link-text">Anomalies</span>
+                    </a>
+                    {/if}
+                    {#if toggles.forecasts}
+                    <a class="nav-link" href="/insights/forecasts?instance={currentInstance ?: 'default'}" data-title="Forecasts">
+                        <i class="bi bi-graph-up" aria-hidden="true"></i>
+                        <span class="nav-link-text">Forecasts</span>
+                    </a>
+                    {/if}
+                    {#if toggles.insightsRecommendations}
+                    <a class="nav-link" href="/insights/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                        <i class="bi bi-lightbulb-fill" aria-hidden="true"></i>
+                        <span class="nav-link-text">Recommendations</span>
+                    </a>
+                    {/if}
+                    {#if toggles.runbooks}
+                    <a class="nav-link" href="/insights/runbooks?instance={currentInstance ?: 'default'}" data-title="Runbooks">
+                        <i class="bi bi-journal-code" aria-hidden="true"></i>
+                        <span class="nav-link-text">Runbooks</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Infrastructure Section -->
             {#if toggles.infrastructureSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-infra">
-                <div class="nav-section-title" id="nav-infra">Infrastructure</div>
-                {#if toggles.replication}
-                <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}" data-title="Replication">
-                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-                    <span class="nav-link-text">Replication</span>
-                </a>
-                {/if}
-                {#if toggles.infrastructure}
-                <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}" data-title="Infrastructure">
-                    <i class="bi bi-server" aria-hidden="true"></i>
-                    <span class="nav-link-text">Infrastructure</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-infra" data-section="infrastructure">
+                <div class="nav-section-title" id="nav-infra">
+                    <span>Infrastructure</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.replication}
+                    <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}" data-title="Replication">
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                        <span class="nav-link-text">Replication</span>
+                    </a>
+                    {/if}
+                    {#if toggles.infrastructure}
+                    <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}" data-title="Infrastructure">
+                        <i class="bi bi-server" aria-hidden="true"></i>
+                        <span class="nav-link-text">Infrastructure</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Data Control Section -->
             {#if toggles.dataControlSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-data">
-                <div class="nav-section-title" id="nav-data">Data Control</div>
-                {#if toggles.logicalReplication}
-                <a class="nav-link" href="/logical-replication?instance={currentInstance ?: 'default'}" data-title="Logical Replication">
-                    <i class="bi bi-diagram-3" aria-hidden="true"></i>
-                    <span class="nav-link-text">Logical Replication</span>
-                </a>
-                {/if}
-                {#if toggles.cdc}
-                <a class="nav-link" href="/cdc?instance={currentInstance ?: 'default'}" data-title="Change Data Capture">
-                    <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
-                    <span class="nav-link-text">Change Data Capture</span>
-                </a>
-                {/if}
-                {#if toggles.dataLineage}
-                <a class="nav-link" href="/data-lineage?instance={currentInstance ?: 'default'}" data-title="Data Lineage">
-                    <i class="bi bi-bezier2" aria-hidden="true"></i>
-                    <span class="nav-link-text">Data Lineage</span>
-                </a>
-                {/if}
-                {#if toggles.partitions}
-                <a class="nav-link" href="/partitions?instance={currentInstance ?: 'default'}" data-title="Partitions">
-                    <i class="bi bi-grid-3x3" aria-hidden="true"></i>
-                    <span class="nav-link-text">Partitions</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-data" data-section="data-control">
+                <div class="nav-section-title" id="nav-data">
+                    <span>Data Control</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.logicalReplication}
+                    <a class="nav-link" href="/logical-replication?instance={currentInstance ?: 'default'}" data-title="Logical Replication">
+                        <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                        <span class="nav-link-text">Logical Replication</span>
+                    </a>
+                    {/if}
+                    {#if toggles.cdc}
+                    <a class="nav-link" href="/cdc?instance={currentInstance ?: 'default'}" data-title="Change Data Capture">
+                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                        <span class="nav-link-text">Change Data Capture</span>
+                    </a>
+                    {/if}
+                    {#if toggles.dataLineage}
+                    <a class="nav-link" href="/data-lineage?instance={currentInstance ?: 'default'}" data-title="Data Lineage">
+                        <i class="bi bi-bezier2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Data Lineage</span>
+                    </a>
+                    {/if}
+                    {#if toggles.partitions}
+                    <a class="nav-link" href="/partitions?instance={currentInstance ?: 'default'}" data-title="Partitions">
+                        <i class="bi bi-grid-3x3" aria-hidden="true"></i>
+                        <span class="nav-link-text">Partitions</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Enterprise Section -->
             {#if toggles.enterpriseSection}
-            <div class="nav-section" role="group" aria-labelledby="nav-enterprise">
-                <div class="nav-section-title" id="nav-enterprise">Enterprise</div>
-                {#if toggles.comparison}
-                <a class="nav-link" href="/comparison?instance={currentInstance ?: 'default'}" data-title="Instance Comparison">
-                    <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
-                    <span class="nav-link-text">Comparison</span>
-                </a>
-                {/if}
-                {#if toggles.schemaComparison}
-                <a class="nav-link" href="/schema-comparison?instance={currentInstance ?: 'default'}" data-title="Schema Comparison">
-                    <i class="bi bi-file-diff" aria-hidden="true"></i>
-                    <span class="nav-link-text">Schema Diff</span>
-                </a>
-                {/if}
-                {#if toggles.bookmarks}
-                <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
-                    <i class="bi bi-bookmark-star" aria-hidden="true"></i>
-                    <span class="nav-link-text">Bookmarks</span>
-                </a>
-                {/if}
-                {#if toggles.auditLog}
-                <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
-                    <i class="bi bi-journal-text" aria-hidden="true"></i>
-                    <span class="nav-link-text">Audit Log</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-enterprise" data-section="enterprise">
+                <div class="nav-section-title" id="nav-enterprise">
+                    <span>Enterprise</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.comparison}
+                    <a class="nav-link" href="/comparison?instance={currentInstance ?: 'default'}" data-title="Instance Comparison">
+                        <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+                        <span class="nav-link-text">Comparison</span>
+                    </a>
+                    {/if}
+                    {#if toggles.schemaComparison}
+                    <a class="nav-link" href="/schema-comparison?instance={currentInstance ?: 'default'}" data-title="Schema Comparison">
+                        <i class="bi bi-file-diff" aria-hidden="true"></i>
+                        <span class="nav-link-text">Schema Diff</span>
+                    </a>
+                    {/if}
+                    {#if toggles.bookmarks}
+                    <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
+                        <i class="bi bi-bookmark-star" aria-hidden="true"></i>
+                        <span class="nav-link-text">Bookmarks</span>
+                    </a>
+                    {/if}
+                    {#if toggles.auditLog}
+                    <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
+                        <i class="bi bi-journal-text" aria-hidden="true"></i>
+                        <span class="nav-link-text">Audit Log</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- Security Section -->
             {#if toggles.securitySection}
-            <div class="nav-section" role="group" aria-labelledby="nav-security">
-                <div class="nav-section-title" id="nav-security">Security</div>
-                {#if toggles.securityOverview}
-                <a class="nav-link" href="/security?instance={currentInstance ?: 'default'}" data-title="Security Overview">
-                    <i class="bi bi-shield-check" aria-hidden="true"></i>
-                    <span class="nav-link-text">Overview</span>
-                </a>
-                {/if}
-                {#if toggles.roles}
-                <a class="nav-link" href="/security/roles?instance={currentInstance ?: 'default'}" data-title="Roles & Permissions">
-                    <i class="bi bi-people" aria-hidden="true"></i>
-                    <span class="nav-link-text">Roles</span>
-                </a>
-                {/if}
-                {#if toggles.securityConnections}
-                <a class="nav-link" href="/security/connections?instance={currentInstance ?: 'default'}" data-title="Connection Security">
-                    <i class="bi bi-shield-lock" aria-hidden="true"></i>
-                    <span class="nav-link-text">Connections</span>
-                </a>
-                {/if}
-                {#if toggles.access}
-                <a class="nav-link" href="/security/access?instance={currentInstance ?: 'default'}" data-title="Data Access">
-                    <i class="bi bi-eye" aria-hidden="true"></i>
-                    <span class="nav-link-text">Access</span>
-                </a>
-                {/if}
-                {#if toggles.compliance}
-                <a class="nav-link" href="/security/compliance?instance={currentInstance ?: 'default'}" data-title="Compliance">
-                    <i class="bi bi-clipboard-check" aria-hidden="true"></i>
-                    <span class="nav-link-text">Compliance</span>
-                </a>
-                {/if}
-                {#if toggles.securityRecommendations}
-                <a class="nav-link" href="/security/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
-                    <i class="bi bi-lightbulb" aria-hidden="true"></i>
-                    <span class="nav-link-text">Recommendations</span>
-                </a>
-                {/if}
+            <div class="nav-section" role="group" aria-labelledby="nav-security" data-section="security">
+                <div class="nav-section-title" id="nav-security">
+                    <span>Security</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.securityOverview}
+                    <a class="nav-link" href="/security?instance={currentInstance ?: 'default'}" data-title="Security Overview">
+                        <i class="bi bi-shield-check" aria-hidden="true"></i>
+                        <span class="nav-link-text">Overview</span>
+                    </a>
+                    {/if}
+                    {#if toggles.roles}
+                    <a class="nav-link" href="/security/roles?instance={currentInstance ?: 'default'}" data-title="Roles & Permissions">
+                        <i class="bi bi-people" aria-hidden="true"></i>
+                        <span class="nav-link-text">Roles</span>
+                    </a>
+                    {/if}
+                    {#if toggles.securityConnections}
+                    <a class="nav-link" href="/security/connections?instance={currentInstance ?: 'default'}" data-title="Connection Security">
+                        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                        <span class="nav-link-text">Connections</span>
+                    </a>
+                    {/if}
+                    {#if toggles.access}
+                    <a class="nav-link" href="/security/access?instance={currentInstance ?: 'default'}" data-title="Data Access">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                        <span class="nav-link-text">Access</span>
+                    </a>
+                    {/if}
+                    {#if toggles.compliance}
+                    <a class="nav-link" href="/security/compliance?instance={currentInstance ?: 'default'}" data-title="Compliance">
+                        <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                        <span class="nav-link-text">Compliance</span>
+                    </a>
+                    {/if}
+                    {#if toggles.securityRecommendations}
+                    <a class="nav-link" href="/security/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                        <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                        <span class="nav-link-text">Recommendations</span>
+                    </a>
+                    {/if}
+                </div>
             </div>
             {/if}
 
             <!-- System Section -->
-            <div class="nav-section" role="group" aria-labelledby="nav-system">
-                <div class="nav-section-title" id="nav-system">System</div>
-                <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}" data-title="About">
-                    <i class="bi bi-info-circle" aria-hidden="true"></i>
-                    <span class="nav-link-text">About</span>
-                </a>
+            <div class="nav-section" role="group" aria-labelledby="nav-system" data-section="system">
+                <div class="nav-section-title" id="nav-system">
+                    <span>System</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    <a class="nav-link" href="/notifications?instance={currentInstance ?: 'default'}" data-title="Notifications">
+                        <i class="bi bi-bell" aria-hidden="true"></i>
+                        <span class="nav-link-text">Notifications</span>
+                    </a>
+                    <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}" data-title="About">
+                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                        <span class="nav-link-text">About</span>
+                    </a>
+                </div>
             </div>
         </nav>
     </aside>
@@ -1271,6 +1353,92 @@
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && sidebar.classList.contains('show')) {
                     closeMobileSidebar();
+                }
+            });
+        })();
+
+        // ============================================
+        // Collapsible Navigation Sections
+        // ============================================
+        (function() {
+            const STORAGE_KEY = 'pg-console-nav-collapsed';
+
+            // Load collapsed state from localStorage
+            function getCollapsedSections() {
+                try {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    return stored ? JSON.parse(stored) : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            // Save collapsed state to localStorage
+            function saveCollapsedSections(sections) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+                } catch (e) {
+                    // Ignore storage errors
+                }
+            }
+
+            // Toggle section collapsed state
+            function toggleSection(sectionElement) {
+                const sectionName = sectionElement.getAttribute('data-section');
+                if (!sectionName) return;
+
+                const isCollapsed = sectionElement.classList.toggle('collapsed');
+                const collapsedSections = getCollapsedSections();
+
+                if (isCollapsed) {
+                    if (!collapsedSections.includes(sectionName)) {
+                        collapsedSections.push(sectionName);
+                    }
+                    announce(sectionName + ' section collapsed');
+                } else {
+                    const index = collapsedSections.indexOf(sectionName);
+                    if (index > -1) {
+                        collapsedSections.splice(index, 1);
+                    }
+                    announce(sectionName + ' section expanded');
+                }
+
+                saveCollapsedSections(collapsedSections);
+            }
+
+            // Initialise collapsed sections from localStorage
+            const collapsedSections = getCollapsedSections();
+            document.querySelectorAll('.nav-section[data-section]').forEach(function(section) {
+                const sectionName = section.getAttribute('data-section');
+                if (collapsedSections.includes(sectionName)) {
+                    section.classList.add('collapsed');
+                }
+
+                // Add click handler to section title
+                const title = section.querySelector('.nav-section-title');
+                if (title) {
+                    title.addEventListener('click', function(e) {
+                        // Don't toggle if sidebar is collapsed (icons only mode)
+                        if (document.documentElement.classList.contains('sidebar-collapsed')) {
+                            return;
+                        }
+                        e.preventDefault();
+                        toggleSection(section);
+                    });
+
+                    // Keyboard accessibility
+                    title.setAttribute('tabindex', '0');
+                    title.setAttribute('role', 'button');
+                    title.setAttribute('aria-expanded', !section.classList.contains('collapsed'));
+                    title.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            if (!document.documentElement.classList.contains('sidebar-collapsed')) {
+                                e.preventDefault();
+                                toggleSection(section);
+                                title.setAttribute('aria-expanded', !section.classList.contains('collapsed'));
+                            }
+                        }
+                    });
                 }
             });
         })();
