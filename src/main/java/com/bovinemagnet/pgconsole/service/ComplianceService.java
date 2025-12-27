@@ -286,8 +286,8 @@ public class ComplianceService {
         Map<String, Object> accessSummary = dataAccessPatternService.getSummary(instanceName);
 
         // Check: RLS enabled for sensitive tables (4 points)
-        Long tablesNeedingRls = (Long) accessSummary.get("tablesNeedingRls");
-        Long sensitiveTableCount = (Long) accessSummary.get("sensitiveTableCount");
+        Long tablesNeedingRls = toLong(accessSummary.get("tablesNeedingRls"));
+        Long sensitiveTableCount = toLong(accessSummary.get("sensitiveTableCount"));
         if (tablesNeedingRls != null && sensitiveTableCount != null) {
             if (tablesNeedingRls == 0) {
                 points += 4;
@@ -303,7 +303,7 @@ public class ComplianceService {
         }
 
         // Check: RLS policies exist (3 points)
-        Long policyCount = (Long) accessSummary.get("rlsPolicyCount");
+        Long policyCount = toLong(accessSummary.get("rlsPolicyCount"));
         if (policyCount != null && policyCount > 0) {
             points += 3;
             score.addPassedCheck(policyCount + " RLS policies configured");
@@ -313,8 +313,8 @@ public class ComplianceService {
         }
 
         // Check: PII awareness (3 points)
-        Long piiColumnCount = (Long) accessSummary.get("piiColumnCount");
-        Long highSensitivity = (Long) accessSummary.get("highSensitivityCount");
+        Long piiColumnCount = toLong(accessSummary.get("piiColumnCount"));
+        Long highSensitivity = toLong(accessSummary.get("highSensitivityCount"));
         if (piiColumnCount != null && piiColumnCount > 0) {
             points += 2;
             score.addPassedCheck(piiColumnCount + " potential PII columns identified");
@@ -502,5 +502,26 @@ public class ComplianceService {
         }
 
         return false;
+    }
+
+    /**
+     * Safely converts a Number object to Long.
+     * <p>
+     * JDBC may return Integer or Long depending on database types.
+     *
+     * @param value the value from a Map
+     * @return Long value or null
+     */
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Long) {
+            return (Long) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return null;
     }
 }

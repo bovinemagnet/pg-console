@@ -1,0 +1,242 @@
+{#include base}
+{#title}Recommendations - PostgreSQL Console{/title}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">
+            <i class="bi bi-lightbulb text-warning me-2" aria-hidden="true"></i>
+            Unified Recommendations
+        </h1>
+        <p class="text-muted mb-0">AI-powered recommendations from all analysis sources</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/insights?instance={instance}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            Back to Insights
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3 mb-md-0">
+        <a href="/insights/recommendations?instance={instance}&severity=CRITICAL" class="text-decoration-none">
+            <div class="card border-danger h-100 hover-card">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-0">{summary.get('CRITICAL') ?: 0}</h3>
+                    <small class="text-muted">Critical</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 mb-3 mb-md-0">
+        <a href="/insights/recommendations?instance={instance}&severity=HIGH" class="text-decoration-none">
+            <div class="card border-warning h-100 hover-card">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-0">{summary.get('HIGH') ?: 0}</h3>
+                    <small class="text-muted">High</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 mb-3 mb-md-0">
+        <a href="/insights/recommendations?instance={instance}&severity=MEDIUM" class="text-decoration-none">
+            <div class="card border-info h-100 hover-card">
+                <div class="card-body text-center">
+                    <h3 class="text-info mb-0">{summary.get('MEDIUM') ?: 0}</h3>
+                    <small class="text-muted">Medium</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/insights/recommendations?instance={instance}&severity=LOW" class="text-decoration-none">
+            <div class="card border-secondary h-100 hover-card">
+                <div class="card-body text-center">
+                    <h3 class="text-secondary mb-0">{summary.get('LOW') ?: 0}</h3>
+                    <small class="text-muted">Low</small>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-md-6 mb-2 mb-md-0">
+                <label class="form-label small text-muted mb-1">Filter by Source:</label>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Source filter">
+                    <a href="/insights/recommendations?instance={instance}"
+                       class="btn {#if sourceFilter == null}btn-primary{#else}btn-outline-primary{/if}">All</a>
+                    {#for src in sources}
+                    <a href="/insights/recommendations?instance={instance}&source={src.name}"
+                       class="btn {#if sourceFilter == src.name}btn-primary{#else}btn-outline-primary{/if}">{src}</a>
+                    {/for}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">Filter by Severity:</label>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Severity filter">
+                    <a href="/insights/recommendations?instance={instance}"
+                       class="btn {#if severityFilter == null}btn-primary{#else}btn-outline-primary{/if}">All</a>
+                    {#for sev in severities}
+                    <a href="/insights/recommendations?instance={instance}&severity={sev.name}"
+                       class="btn {#if severityFilter == sev.name}btn-primary{#else}btn-outline-primary{/if}">{sev}</a>
+                    {/for}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations List -->
+<div class="card">
+    <div class="card-body p-0">
+        {#if recommendations.isEmpty}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-check-circle display-1 text-success" aria-hidden="true"></i>
+            <p class="mt-3 mb-0">No recommendations at this time</p>
+            <small>Your database is well-optimised!</small>
+        </div>
+        {#else}
+        <div class="accordion" id="recommendationsAccordion">
+            {#for rec in recommendations}
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#rec{rec.id}"
+                            aria-expanded="false" aria-controls="rec{rec.id}">
+                        <div class="d-flex align-items-center flex-grow-1 me-3">
+                            <span class="badge me-2 {#if rec.severity.name == 'CRITICAL'}bg-danger{#else if rec.severity.name == 'HIGH'}bg-warning text-dark{#else if rec.severity.name == 'MEDIUM'}bg-info{#else}bg-secondary{/if}">
+                                {rec.severity}
+                            </span>
+                            <span class="badge bg-secondary me-2">{rec.source}</span>
+                            <strong class="me-auto">{rec.title}</strong>
+                            <span class="badge bg-primary me-2">Score: {rec.priorityScore}</span>
+                        </div>
+                    </button>
+                </h2>
+                <div id="rec{rec.id}" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6>Description</h6>
+                                <p>{rec.description}</p>
+
+                                {#if rec.actionSql}
+                                <h6>Recommended Action</h6>
+                                <pre class="bg-dark text-light p-3 rounded"><code>{rec.actionSql}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary mb-3"
+                                        onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim())">
+                                    <i class="bi bi-clipboard me-1" aria-hidden="true"></i>
+                                    Copy SQL
+                                </button>
+                                {/if}
+
+                                {#if rec.relatedObject}
+                                <h6>Related Object</h6>
+                                <p class="text-muted">{rec.relatedObject}</p>
+                                {/if}
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-body-tertiary">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Impact Assessment</h6>
+                                        <ul class="list-unstyled mb-0">
+                                            <li class="mb-2">
+                                                <strong>Impact:</strong>
+                                                <span class="badge {#if rec.impact.name == 'HIGH'}bg-success{#else if rec.impact.name == 'MEDIUM'}bg-info{#else}bg-secondary{/if}">
+                                                    {rec.impact}
+                                                </span>
+                                            </li>
+                                            <li class="mb-2">
+                                                <strong>Effort:</strong>
+                                                <span class="badge {#if rec.effort.name == 'LOW'}bg-success{#else if rec.effort.name == 'MEDIUM'}bg-warning text-dark{#else}bg-danger{/if}">
+                                                    {rec.effort}
+                                                </span>
+                                            </li>
+                                            <li class="mb-2">
+                                                <strong>Status:</strong>
+                                                <span class="badge bg-secondary">{rec.status}</span>
+                                            </li>
+                                            <li>
+                                                <strong>Created:</strong>
+                                                <small class="text-muted">{rec.createdAt}</small>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2 mt-3">
+                                    <button class="btn btn-success"
+                                            hx-post="/insights/recommendations/{rec.id}/apply?instance={instance}"
+                                            hx-swap="none"
+                                            hx-on::after-request="location.reload()">
+                                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                                        Mark as Applied
+                                    </button>
+                                    <button class="btn btn-outline-secondary" data-bs-toggle="modal"
+                                            data-bs-target="#dismissModal{rec.id}">
+                                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dismiss Modal -->
+            <div class="modal fade" id="dismissModal{rec.id}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Dismiss Recommendation</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form hx-post="/insights/recommendations/{rec.id}/dismiss?instance={instance}" hx-swap="none"
+                              hx-on::after-request="location.reload()">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Reason for dismissing:</label>
+                                    <select class="form-select" name="reason">
+                                        <option value="NOT_APPLICABLE">Not applicable to our use case</option>
+                                        <option value="ALREADY_DONE">Already addressed</option>
+                                        <option value="TOO_RISKY">Too risky to implement</option>
+                                        <option value="LOW_PRIORITY">Low priority, will address later</option>
+                                        <option value="FALSE_POSITIVE">False positive</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                    Dismiss
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {/for}
+        </div>
+        {/if}
+    </div>
+</div>
+
+<style>
+    .hover-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .hover-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+</style>
+
+{/include}

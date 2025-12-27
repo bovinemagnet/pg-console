@@ -173,13 +173,13 @@
 </div>
 {/if}
 
-<!-- Password Warnings -->
-{#if !passwordWarnings.isEmpty()}
+<!-- Security Warnings -->
+{#if !warnings.isEmpty()}
 <div class="row mb-4">
     <div class="col">
         <div class="card border-0 shadow-sm border-start border-4 border-warning">
             <div class="card-header bg-transparent">
-                <h5 class="mb-0"><i class="bi bi-key me-2"></i>Password Policy Warnings</h5>
+                <h5 class="mb-0"><i class="bi bi-shield-exclamation me-2"></i>Security Warnings</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -193,44 +193,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#for warning in passwordWarnings}
-                            <tr>
-                                <td><span class="badge {warning.severityCssClass}">{warning.severity.displayName}</span></td>
-                                <td><code>{warning.subject}</code></td>
-                                <td>{warning.description}</td>
-                                <td class="text-muted">{warning.recommendation}</td>
-                            </tr>
-                            {/for}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{/if}
-
-<!-- Privilege Warnings -->
-{#if !privilegeWarnings.isEmpty()}
-<div class="row mb-4">
-    <div class="col">
-        <div class="card border-0 shadow-sm border-start border-4 border-danger">
-            <div class="card-header bg-transparent">
-                <h5 class="mb-0"><i class="bi bi-shield-exclamation me-2"></i>Privilege Warnings</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width: 100px;">Severity</th>
-                                <th>Role</th>
-                                <th>Issue</th>
-                                <th>Recommendation</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#for warning in privilegeWarnings}
+                            {#for warning in warnings}
                             <tr>
                                 <td><span class="badge {warning.severityCssClass}">{warning.severity.displayName}</span></td>
                                 <td><code>{warning.subject}</code></td>

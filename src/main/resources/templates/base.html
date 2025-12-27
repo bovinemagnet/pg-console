@@ -975,6 +975,43 @@
             </div>
             {/if}
 
+            <!-- Insights Section -->
+            {#if toggles.insightsSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-insights">
+                <div class="nav-section-title" id="nav-insights">Insights</div>
+                {#if toggles.insights}
+                <a class="nav-link" href="/insights?instance={currentInstance ?: 'default'}" data-title="Insights">
+                    <i class="bi bi-stars" aria-hidden="true"></i>
+                    <span class="nav-link-text">Dashboard</span>
+                </a>
+                {/if}
+                {#if toggles.anomalies}
+                <a class="nav-link" href="/insights/anomalies?instance={currentInstance ?: 'default'}" data-title="Anomalies">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    <span class="nav-link-text">Anomalies</span>
+                </a>
+                {/if}
+                {#if toggles.forecasts}
+                <a class="nav-link" href="/insights/forecasts?instance={currentInstance ?: 'default'}" data-title="Forecasts">
+                    <i class="bi bi-graph-up" aria-hidden="true"></i>
+                    <span class="nav-link-text">Forecasts</span>
+                </a>
+                {/if}
+                {#if toggles.insightsRecommendations}
+                <a class="nav-link" href="/insights/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                    <i class="bi bi-lightbulb-fill" aria-hidden="true"></i>
+                    <span class="nav-link-text">Recommendations</span>
+                </a>
+                {/if}
+                {#if toggles.runbooks}
+                <a class="nav-link" href="/insights/runbooks?instance={currentInstance ?: 'default'}" data-title="Runbooks">
+                    <i class="bi bi-journal-code" aria-hidden="true"></i>
+                    <span class="nav-link-text">Runbooks</span>
+                </a>
+                {/if}
+            </div>
+            {/if}
+
             <!-- Infrastructure Section -->
             {#if toggles.infrastructureSection}
             <div class="nav-section" role="group" aria-labelledby="nav-infra">

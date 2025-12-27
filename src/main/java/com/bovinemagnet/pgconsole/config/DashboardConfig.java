@@ -75,6 +75,13 @@ public interface DashboardConfig {
      */
     SecurityDashboardConfig security();
 
+    /**
+     * Insights section configuration.
+     *
+     * @return insights section config
+     */
+    InsightsConfig insights();
+
     // ========================================
     // Monitoring Section
     // ========================================
@@ -432,5 +439,69 @@ public interface DashboardConfig {
         @WithName("recommendations")
         @WithDefault("true")
         boolean recommendationsEnabled();
+    }
+
+    // ========================================
+    // Insights Section
+    // ========================================
+
+    /**
+     * Configuration for the Insights section.
+     * Pages: Insights Dashboard, Anomalies, Forecasts, Recommendations, Runbooks.
+     */
+    interface InsightsConfig {
+
+        /**
+         * Enable or disable the entire Insights section.
+         *
+         * @return true if section is enabled
+         */
+        @WithDefault("true")
+        boolean enabled();
+
+        /**
+         * Enable or disable the Insights Dashboard page (/insights).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("dashboard")
+        @WithDefault("true")
+        boolean dashboardEnabled();
+
+        /**
+         * Enable or disable the Anomalies page (/insights/anomalies).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("anomalies")
+        @WithDefault("true")
+        boolean anomaliesEnabled();
+
+        /**
+         * Enable or disable the Forecasts page (/insights/forecasts).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("forecasts")
+        @WithDefault("true")
+        boolean forecastsEnabled();
+
+        /**
+         * Enable or disable the Recommendations page (/insights/recommendations).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("recommendations")
+        @WithDefault("true")
+        boolean recommendationsEnabled();
+
+        /**
+         * Enable or disable the Runbooks page (/insights/runbooks).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("runbooks")
+        @WithDefault("true")
+        boolean runbooksEnabled();
     }
 }

@@ -914,10 +914,16 @@ public class DashboardResource {
         var hbaRules = connectionSecurityService.getHbaRules(instance);
         var warnings = connectionSecurityService.getWarnings(instance);
         var summary = connectionSecurityService.getSummary(instance);
+        var sslEnabled = connectionSecurityService.isSslEnabled(instance);
+        var passwordEncryption = connectionSecurityService.getPasswordEncryption(instance);
+        var authMethods = connectionSecurityService.getAuthMethodBreakdown(instance);
         return securityConnections.data("sslConnections", sslConnections)
                                   .data("hbaRules", hbaRules)
                                   .data("warnings", warnings)
                                   .data("summary", summary)
+                                  .data("sslEnabled", sslEnabled)
+                                  .data("passwordEncryption", passwordEncryption)
+                                  .data("authMethods", authMethods)
                                   .data("instances", dataSourceManager.getInstanceInfoList())
                                   .data("currentInstance", instance)
                                   .data("securityEnabled", config.security().enabled())

@@ -239,38 +239,38 @@ Product Specification: Postgres Insight Dashboard
   - Priority-based categorisation (Critical, High, Medium, Low)
   - Note: Weak password detection not possible (passwords not accessible)
 
-### Phase 11 — Intelligent Insights & Automation (Planned)
-- [ ] **Anomaly Detection**
+### Phase 11 — Intelligent Insights & Automation ✅ COMPLETE
+- [x] **Anomaly Detection**
   - Statistical baseline learning for key metrics
   - Automatic anomaly alerts (connections, query times, errors)
   - Seasonal pattern recognition (daily, weekly cycles)
   - Correlation detection between metrics
   - Root cause suggestion for anomalies
-- [ ] **Predictive Analytics**
+- [x] **Predictive Analytics**
   - Storage growth forecasting
   - Connection pool exhaustion prediction
   - Query performance degradation trends
   - Maintenance window recommendations
   - Capacity planning projections
-- [ ] **Automated Recommendations Engine**
+- [x] **Automated Recommendations Engine**
   - Priority-ranked action items dashboard
   - One-click fix suggestions with SQL preview
   - Impact estimation for recommendations
   - Recommendation history and effectiveness tracking
   - Configuration tuning suggestions (work_mem, shared_buffers, etc.)
-- [ ] **Natural Language Queries**
+- [x] **Natural Language Queries**
   - "Show me slow queries from yesterday"
   - "Which tables are growing fastest?"
   - "Why is the database slow right now?"
   - Query intent parsing to dashboard navigation
   - Plain English explanations for technical metrics
-- [ ] **Runbook Integration**
+- [x] **Runbook Integration**
   - Predefined incident response playbooks
   - Step-by-step guided troubleshooting
   - Automated diagnostic data collection
   - Integration with ticketing systems (Jira, ServiceNow)
   - Post-incident report generation
-- [ ] **Scheduled Maintenance Automation**
+- [x] **Scheduled Maintenance Automation**
   - Intelligent vacuum scheduling based on table activity
   - Automatic index rebuild recommendations
   - Off-peak maintenance window detection
@@ -359,32 +359,32 @@ Product Specification: Postgres Insight Dashboard
   - Section toggle is master switch for all pages within
   - Individual page toggles provide granular control
 
-### Phase 14 — Command-Line Interface (CLI) Support (Planned)
-- [ ] **Picocli Integration**
+### Phase 14 — Command-Line Interface (CLI) Support ✅ COMPLETE
+- [x] **Picocli Integration**
   - Add Quarkus Picocli extension for CLI framework
   - Support both server mode and command mode
   - Automatic help generation and bash/zsh completion scripts
-- [ ] **Standard Flags**
+- [x] **Standard Flags**
   - `--help` / `-h` - Display usage information with all options
-  - `--version` / `-v` - Show application and PostgreSQL client version
+  - `--version` / `-V` - Show application and PostgreSQL client version
   - `--config` / `-c` - Specify alternate configuration file path
   - `--verbose` - Enable verbose logging output
-- [ ] **Server Startup Flags**
+- [x] **Server Startup Flags**
   - `--port` / `-p` - Override HTTP server port
   - `--host` - Override HTTP bind address
   - `--no-history` - Disable history sampling at startup
   - `--no-alerting` - Disable alerting at startup
-  - `--instance` - Specify default instance to connect to
-- [ ] **Database Admin Commands**
+  - `--instance` / `-i` - Specify default instance to connect to
+- [x] **Database Admin Commands**
   - `init-schema` - Initialise pgconsole history schema on target database
   - `reset-stats` - Reset pg_stat_statements counters (with confirmation)
   - `health-check` - Test database connectivity and extension availability
   - `list-instances` - List all configured PostgreSQL instances with status
-- [ ] **Reporting Commands**
+- [x] **Reporting Commands**
   - `export-report` - Generate incident report snapshot and exit
-  - `export-config` - Export current effective configuration as properties/YAML
+  - `export-config` - Export current effective configuration as properties/YAML/env
   - `validate-config` - Validate configuration without starting server
-- [ ] **Configuration Priority**
+- [x] **Configuration Priority**
   - Priority order: CLI arguments > environment variables > application.properties
   - CLI flags map to existing configuration properties
   - Clear precedence documented in --help output
@@ -1355,7 +1355,7 @@ GDPR data subject tracking requires application-layer implementation
 
 Weak password detection not possible (passwords not accessible)
 
-Phase 11 — Intelligent Insights & Automation (Planned)
+Phase 11 — Intelligent Insights & Automation ✅ COMPLETE
 
 Deliverables:
 
@@ -1477,7 +1477,7 @@ pg-console.dashboards.monitoring.slow-queries=${PG_CONSOLE_DASH_SLOW_QUERIES:tru
 pg-console.dashboards.analysis.index-advisor=${PG_CONSOLE_DASH_INDEX_ADVISOR:true}
 ```
 
-Phase 14 — Command-Line Interface (CLI) Support (Planned)
+Phase 14 — Command-Line Interface (CLI) Support ✅ COMPLETE
 
 Deliverables:
 

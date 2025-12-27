@@ -88,6 +88,15 @@ public class FeatureToggleService {
         return dashboardConfig.security().enabled();
     }
 
+    /**
+     * Checks if the Insights section is enabled.
+     *
+     * @return true if section is enabled
+     */
+    public boolean isInsightsSectionEnabled() {
+        return dashboardConfig.insights().enabled();
+    }
+
     // ========================================
     // Monitoring Section Pages
     // ========================================
@@ -356,6 +365,55 @@ public class FeatureToggleService {
     }
 
     // ========================================
+    // Insights Section Pages
+    // ========================================
+
+    /**
+     * Checks if the Insights Dashboard page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isInsightsEnabled() {
+        return isInsightsSectionEnabled() && dashboardConfig.insights().dashboardEnabled();
+    }
+
+    /**
+     * Checks if the Anomalies page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isAnomaliesEnabled() {
+        return isInsightsSectionEnabled() && dashboardConfig.insights().anomaliesEnabled();
+    }
+
+    /**
+     * Checks if the Forecasts page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isForecastsEnabled() {
+        return isInsightsSectionEnabled() && dashboardConfig.insights().forecastsEnabled();
+    }
+
+    /**
+     * Checks if the Insights Recommendations page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isInsightsRecommendationsEnabled() {
+        return isInsightsSectionEnabled() && dashboardConfig.insights().recommendationsEnabled();
+    }
+
+    /**
+     * Checks if the Runbooks page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isRunbooksEnabled() {
+        return isInsightsSectionEnabled() && dashboardConfig.insights().runbooksEnabled();
+    }
+
+    // ========================================
     // Guard methods
     // ========================================
 
@@ -413,6 +471,12 @@ public class FeatureToggleService {
             case "security-access" -> isAccessEnabled();
             case "security-compliance" -> isComplianceEnabled();
             case "security-recommendations" -> isSecurityRecommendationsEnabled();
+            // Insights
+            case "insights" -> isInsightsEnabled();
+            case "anomalies" -> isAnomaliesEnabled();
+            case "forecasts" -> isForecastsEnabled();
+            case "recommendations" -> isInsightsRecommendationsEnabled();
+            case "runbooks" -> isRunbooksEnabled();
             // System (always enabled)
             case "about" -> true;
             default -> true;
@@ -474,6 +538,16 @@ public class FeatureToggleService {
         toggles.put("access", isAccessEnabled());
         toggles.put("compliance", isComplianceEnabled());
         toggles.put("securityRecommendations", isSecurityRecommendationsEnabled());
+
+        // Insights section
+        toggles.put("insightsSection", isInsightsSectionEnabled());
+
+        // Insights pages
+        toggles.put("insights", isInsightsEnabled());
+        toggles.put("anomalies", isAnomaliesEnabled());
+        toggles.put("forecasts", isForecastsEnabled());
+        toggles.put("insightsRecommendations", isInsightsRecommendationsEnabled());
+        toggles.put("runbooks", isRunbooksEnabled());
 
         return toggles;
     }
