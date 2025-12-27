@@ -1001,7 +1001,27 @@ public class DashboardResource {
         featureToggleService.requirePageEnabled("security-recommendations");
         var recommendations = securityRecommendationService.getAllRecommendations(instance);
         var summary = securityRecommendationService.getSummary(instance);
+
+        // Pre-filter by priority for template display
+        var criticalRecs = recommendations.stream()
+                .filter(r -> r.getPriority() == com.bovinemagnet.pgconsole.model.SecurityRecommendation.Priority.CRITICAL)
+                .toList();
+        var highRecs = recommendations.stream()
+                .filter(r -> r.getPriority() == com.bovinemagnet.pgconsole.model.SecurityRecommendation.Priority.HIGH)
+                .toList();
+        var mediumRecs = recommendations.stream()
+                .filter(r -> r.getPriority() == com.bovinemagnet.pgconsole.model.SecurityRecommendation.Priority.MEDIUM)
+                .toList();
+        var lowRecs = recommendations.stream()
+                .filter(r -> r.getPriority() == com.bovinemagnet.pgconsole.model.SecurityRecommendation.Priority.LOW
+                        || r.getPriority() == com.bovinemagnet.pgconsole.model.SecurityRecommendation.Priority.INFORMATIONAL)
+                .toList();
+
         return securityRecommendations.data("recommendations", recommendations)
+                                      .data("criticalRecs", criticalRecs)
+                                      .data("highRecs", highRecs)
+                                      .data("mediumRecs", mediumRecs)
+                                      .data("lowRecs", lowRecs)
                                       .data("summary", summary)
                                       .data("instances", dataSourceManager.getInstanceInfoList())
                                       .data("currentInstance", instance)

@@ -72,7 +72,6 @@
 {#else}
 
 <!-- Critical Recommendations -->
-{#set criticalRecs = recommendations.stream().filter(r -> r.priority.displayName == 'Critical').toList()}
 {#if !criticalRecs.isEmpty()}
 <div class="row mb-4">
     <div class="col">
@@ -111,7 +110,6 @@
 {/if}
 
 <!-- High Priority Recommendations -->
-{#set highRecs = recommendations.stream().filter(r -> r.priority.displayName == 'High').toList()}
 {#if !highRecs.isEmpty()}
 <div class="row mb-4">
     <div class="col">
@@ -150,7 +148,6 @@
 {/if}
 
 <!-- Medium Priority Recommendations -->
-{#set mediumRecs = recommendations.stream().filter(r -> r.priority.displayName == 'Medium').toList()}
 {#if !mediumRecs.isEmpty()}
 <div class="row mb-4">
     <div class="col">
@@ -186,7 +183,6 @@
 {/if}
 
 <!-- Low Priority & Informational -->
-{#set lowRecs = recommendations.stream().filter(r -> r.priority.displayName == 'Low' || r.priority.displayName == 'Info').toList()}
 {#if !lowRecs.isEmpty()}
 <div class="row mb-4">
     <div class="col">

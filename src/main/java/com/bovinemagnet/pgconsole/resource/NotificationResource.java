@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.resource;
 
+import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.ActiveAlert;
 import com.bovinemagnet.pgconsole.model.AlertSilence;
 import com.bovinemagnet.pgconsole.model.EscalationPolicy;
@@ -9,6 +10,7 @@ import com.bovinemagnet.pgconsole.model.NotificationResult;
 import com.bovinemagnet.pgconsole.repository.NotificationChannelRepository;
 import com.bovinemagnet.pgconsole.repository.NotificationHistoryRepository;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.notification.AlertManagementService;
 import com.bovinemagnet.pgconsole.service.notification.EscalationService;
 import com.bovinemagnet.pgconsole.service.notification.NotificationDispatcher;
@@ -66,6 +68,12 @@ public class NotificationResource {
     EscalationService escalationService;
 
     @Inject
+    FeatureToggleService featureToggleService;
+
+    @Inject
+    InstanceConfig config;
+
+    @Inject
     Template notifications;
 
     @Inject
@@ -105,7 +113,9 @@ public class NotificationResource {
             .data("activeSilences", alertService.getActiveSilences())
             .data("activeMaintenanceWindows", alertService.getActiveMaintenanceWindows())
             .data("recentHistory", dispatcher.getRecentHistory(10))
-            .data("title", "Notifications");
+            .data("title", "Notifications")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -119,7 +129,9 @@ public class NotificationResource {
             .data("instances", dataSourceManager.getInstanceInfoList())
             .data("channels", channelRepository.findAll())
             .data("channelTypes", NotificationChannel.ChannelType.values())
-            .data("title", "Notification Channels");
+            .data("title", "Notification Channels")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -136,7 +148,9 @@ public class NotificationResource {
             .data("instances", dataSourceManager.getInstanceInfoList())
             .data("history", historyRepository.findRecent(limit))
             .data("stats", dispatcher.getStats(24))
-            .data("title", "Notification History");
+            .data("title", "Notification History")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -151,7 +165,9 @@ public class NotificationResource {
             .data("activeAlerts", alertService.getActiveAlerts())
             .data("recentAlerts", alertService.getRecentAlerts(50))
             .data("stats", alertService.getAlertStats())
-            .data("title", "Alerts");
+            .data("title", "Alerts")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -165,7 +181,9 @@ public class NotificationResource {
             .data("instances", dataSourceManager.getInstanceInfoList())
             .data("silences", alertService.getAllSilences())
             .data("activeSilences", alertService.getActiveSilences())
-            .data("title", "Alert Silences");
+            .data("title", "Alert Silences")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -180,7 +198,9 @@ public class NotificationResource {
             .data("windows", alertService.getAllMaintenanceWindows())
             .data("activeWindows", alertService.getActiveMaintenanceWindows())
             .data("upcomingWindows", alertService.getUpcomingMaintenanceWindows())
-            .data("title", "Maintenance Windows");
+            .data("title", "Maintenance Windows")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -194,7 +214,9 @@ public class NotificationResource {
             .data("instances", dataSourceManager.getInstanceInfoList())
             .data("policies", escalationService.listPolicies())
             .data("channels", channelRepository.findEnabled())
-            .data("title", "Escalation Policies");
+            .data("title", "Escalation Policies")
+            .data("securityEnabled", config.security().enabled())
+            .data("toggles", featureToggleService.getAllToggles());
     }
 
     // ===== REST API Endpoints =====

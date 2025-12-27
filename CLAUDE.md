@@ -99,3 +99,9 @@ Located in `src/main/resources/templates/`:
 - `/databases/{dbName}` - Detailed metrics for a single database
 - `/about` - Application version and PostgreSQL server information
 - `/api/sparkline` - SVG sparkline generation endpoint
+
+
+
+# Remember to
+
+- test the dashboards and api endpoints that have been updated, to ensure it returns 200 and no exceptions in the dashboard.
