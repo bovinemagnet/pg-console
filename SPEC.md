@@ -333,29 +333,28 @@ Product Specification: Postgres Insight Dashboard
   - [ ] Export as PDF (deferred to future phase)
   - [ ] Shareable comparison result URLs (deferred to future phase)
 
-### Phase 13 — Dashboard Feature Toggles & Modular Configuration (Planned)
-- [ ] **Section-Level Dashboard Toggles**
+### Phase 13 — Dashboard Feature Toggles & Modular Configuration (Completed)
+- [x] **Section-Level Dashboard Toggles**
   - Enable/disable entire dashboard sections via configuration
-  - Sections: Monitoring, Analysis, Infrastructure, Data Control, Enterprise
-  - Security section uses existing `pg-console.security.enabled` toggle
+  - Sections: Monitoring, Analysis, Infrastructure, Data Control, Enterprise, Security
   - System section (About) always enabled
-- [ ] **Individual Page Toggles**
+- [x] **Individual Page Toggles**
   - Fine-grained control over individual pages within sections
   - Override section-level settings (disable specific pages)
-  - 23 individual page toggles across 5 configurable sections
-- [ ] **Environment Variable Support**
+  - 27 individual page toggles across 6 configurable sections
+- [x] **Environment Variable Support**
   - All toggles configurable via environment variables
   - Pattern: `PG_CONSOLE_DASH_{FEATURE}` (e.g., `PG_CONSOLE_DASH_MONITORING`)
   - Defaults to enabled (opt-out model)
-- [ ] **Navigation Integration**
+- [x] **Navigation Integration**
   - Disabled pages hidden from sidebar navigation
   - Disabled sections collapse navigation groups
   - Clean UI without dead links
-- [ ] **Access Control**
+- [x] **Access Control**
   - Disabled pages return HTTP 404 when accessed directly
   - Disabled API endpoints return HTTP 404
   - Prevents information leakage about disabled features
-- [ ] **Configuration Hierarchy**
+- [x] **Configuration Hierarchy**
   - Page enabled only if: section enabled AND page enabled
   - Section toggle is master switch for all pages within
   - Individual page toggles provide granular control
@@ -1428,39 +1427,39 @@ PDF export deferred to future phase
 
 Shareable comparison result URLs deferred to future phase
 
-Phase 13 — Dashboard Feature Toggles & Modular Configuration (Planned)
+Phase 13 — Dashboard Feature Toggles & Modular Configuration (Completed)
 
 Deliverables:
 
-Configuration interface for dashboard toggles in InstanceConfig.java
+DashboardConfig.java - SmallRye Config mapping interface for dashboard toggles
 
-Section-level toggles for Monitoring, Analysis, Infrastructure, Data Control, Enterprise
+FeatureToggleService.java - Service for checking page enablement with hierarchical logic
 
-Individual page toggles (23 pages) with environment variable support
+Section-level toggles for Monitoring, Analysis, Infrastructure, Data Control, Enterprise, Security
 
-Navigation conditional rendering in base.html
+Individual page toggles (27 pages) with environment variable support
 
-Route guards in DashboardResource.java and ApiResource.java returning 404
+Navigation conditional rendering in base.html using Qute {#if} directives
 
-Documentation updates for new environment variables
+Route guards in DashboardResource.java, ApiResource.java, and SchemaComparisonResource.java returning 404
 
 Acceptance Criteria:
 
-Section toggles disable all pages within that section
+[x] Section toggles disable all pages within that section
 
-Individual page toggles can override section settings
+[x] Individual page toggles can override section settings
 
-Disabled pages return HTTP 404 when accessed directly
+[x] Disabled pages return HTTP 404 when accessed directly
 
-Disabled pages hidden from sidebar navigation
+[x] Disabled pages hidden from sidebar navigation
 
-Disabled API endpoints return HTTP 404
+[x] Disabled API endpoints return HTTP 404
 
-All features enabled by default (opt-out model)
+[x] All features enabled by default (opt-out model)
 
-Configuration via application.properties and environment variables
+[x] Configuration via application.properties and environment variables
 
-About page always accessible regardless of settings
+[x] About page always accessible regardless of settings
 
 Configuration Properties:
 
@@ -1471,10 +1470,11 @@ pg-console.dashboards.analysis.enabled=${PG_CONSOLE_DASH_ANALYSIS:true}
 pg-console.dashboards.infrastructure.enabled=${PG_CONSOLE_DASH_INFRASTRUCTURE:true}
 pg-console.dashboards.data-control.enabled=${PG_CONSOLE_DASH_DATA_CONTROL:true}
 pg-console.dashboards.enterprise.enabled=${PG_CONSOLE_DASH_ENTERPRISE:true}
+pg-console.dashboards.security.enabled=${PG_CONSOLE_DASH_SECURITY:true}
 
 # Individual page toggles (examples)
-pg-console.dashboards.monitoring.slow-queries.enabled=${PG_CONSOLE_DASH_SLOW_QUERIES:true}
-pg-console.dashboards.analysis.index-advisor.enabled=${PG_CONSOLE_DASH_INDEX_ADVISOR:true}
+pg-console.dashboards.monitoring.slow-queries=${PG_CONSOLE_DASH_SLOW_QUERIES:true}
+pg-console.dashboards.analysis.index-advisor=${PG_CONSOLE_DASH_INDEX_ADVISOR:true}
 ```
 
 Phase 14 — Command-Line Interface (CLI) Support (Planned)

@@ -896,142 +896,208 @@
 
         <nav class="sidebar-nav" aria-label="Primary">
             <!-- Monitoring Section -->
+            {#if toggles.monitoringSection}
             <div class="nav-section" role="group" aria-labelledby="nav-monitoring">
                 <div class="nav-section-title" id="nav-monitoring">Monitoring</div>
+                {#if toggles.dashboard}
                 <a class="nav-link" href="/?instance={currentInstance ?: 'default'}" data-title="Dashboard">
                     <i class="bi bi-speedometer2" aria-hidden="true"></i>
                     <span class="nav-link-text">Dashboard</span>
                 </a>
+                {/if}
+                {#if toggles.activity}
                 <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
                     <i class="bi bi-activity" aria-hidden="true"></i>
                     <span class="nav-link-text">Activity</span>
                 </a>
+                {/if}
+                {#if toggles.slowQueries}
                 <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" data-title="Slow Queries">
                     <i class="bi bi-hourglass-split" aria-hidden="true"></i>
                     <span class="nav-link-text">Slow Queries</span>
                 </a>
+                {/if}
+                {#if toggles.locks}
                 <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}" data-title="Locks">
                     <i class="bi bi-lock-fill" aria-hidden="true"></i>
                     <span class="nav-link-text">Locks</span>
                 </a>
+                {/if}
+                {#if toggles.waitEvents}
                 <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
                     <i class="bi bi-clock-history" aria-hidden="true"></i>
                     <span class="nav-link-text">Wait Events</span>
                 </a>
+                {/if}
+                {#if toggles.tables}
                 <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}" data-title="Tables">
                     <i class="bi bi-table" aria-hidden="true"></i>
                     <span class="nav-link-text">Tables</span>
                 </a>
+                {/if}
+                {#if toggles.databases}
                 <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}" data-title="Databases">
                     <i class="bi bi-database" aria-hidden="true"></i>
                     <span class="nav-link-text">Databases</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- Analysis Section -->
+            {#if toggles.analysisSection}
             <div class="nav-section" role="group" aria-labelledby="nav-analysis">
                 <div class="nav-section-title" id="nav-analysis">Analysis</div>
+                {#if toggles.indexAdvisor}
                 <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}" data-title="Index Advisor">
                     <i class="bi bi-lightbulb" aria-hidden="true"></i>
                     <span class="nav-link-text">Index Advisor</span>
                 </a>
+                {/if}
+                {#if toggles.queryRegressions}
                 <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}" data-title="Regressions">
                     <i class="bi bi-graph-down-arrow" aria-hidden="true"></i>
                     <span class="nav-link-text">Regressions</span>
                 </a>
+                {/if}
+                {#if toggles.tableMaintenance}
                 <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}" data-title="Maintenance">
                     <i class="bi bi-wrench" aria-hidden="true"></i>
                     <span class="nav-link-text">Maintenance</span>
                 </a>
+                {/if}
+                {#if toggles.baselines}
                 <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}" data-title="Baselines">
                     <i class="bi bi-clipboard-data" aria-hidden="true"></i>
                     <span class="nav-link-text">Baselines</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- Infrastructure Section -->
+            {#if toggles.infrastructureSection}
             <div class="nav-section" role="group" aria-labelledby="nav-infra">
                 <div class="nav-section-title" id="nav-infra">Infrastructure</div>
+                {#if toggles.replication}
                 <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}" data-title="Replication">
                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                     <span class="nav-link-text">Replication</span>
                 </a>
+                {/if}
+                {#if toggles.infrastructure}
                 <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}" data-title="Infrastructure">
                     <i class="bi bi-server" aria-hidden="true"></i>
                     <span class="nav-link-text">Infrastructure</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- Data Control Section -->
+            {#if toggles.dataControlSection}
             <div class="nav-section" role="group" aria-labelledby="nav-data">
                 <div class="nav-section-title" id="nav-data">Data Control</div>
+                {#if toggles.logicalReplication}
                 <a class="nav-link" href="/logical-replication?instance={currentInstance ?: 'default'}" data-title="Logical Replication">
                     <i class="bi bi-diagram-3" aria-hidden="true"></i>
                     <span class="nav-link-text">Logical Replication</span>
                 </a>
+                {/if}
+                {#if toggles.cdc}
                 <a class="nav-link" href="/cdc?instance={currentInstance ?: 'default'}" data-title="Change Data Capture">
                     <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
                     <span class="nav-link-text">Change Data Capture</span>
                 </a>
+                {/if}
+                {#if toggles.dataLineage}
                 <a class="nav-link" href="/data-lineage?instance={currentInstance ?: 'default'}" data-title="Data Lineage">
                     <i class="bi bi-bezier2" aria-hidden="true"></i>
                     <span class="nav-link-text">Data Lineage</span>
                 </a>
+                {/if}
+                {#if toggles.partitions}
                 <a class="nav-link" href="/partitions?instance={currentInstance ?: 'default'}" data-title="Partitions">
                     <i class="bi bi-grid-3x3" aria-hidden="true"></i>
                     <span class="nav-link-text">Partitions</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- Enterprise Section -->
+            {#if toggles.enterpriseSection}
             <div class="nav-section" role="group" aria-labelledby="nav-enterprise">
                 <div class="nav-section-title" id="nav-enterprise">Enterprise</div>
+                {#if toggles.comparison}
                 <a class="nav-link" href="/comparison?instance={currentInstance ?: 'default'}" data-title="Instance Comparison">
                     <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
                     <span class="nav-link-text">Comparison</span>
                 </a>
+                {/if}
+                {#if toggles.schemaComparison}
                 <a class="nav-link" href="/schema-comparison?instance={currentInstance ?: 'default'}" data-title="Schema Comparison">
                     <i class="bi bi-file-diff" aria-hidden="true"></i>
                     <span class="nav-link-text">Schema Diff</span>
                 </a>
+                {/if}
+                {#if toggles.bookmarks}
                 <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
                     <i class="bi bi-bookmark-star" aria-hidden="true"></i>
                     <span class="nav-link-text">Bookmarks</span>
                 </a>
+                {/if}
+                {#if toggles.auditLog}
                 <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
                     <i class="bi bi-journal-text" aria-hidden="true"></i>
                     <span class="nav-link-text">Audit Log</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- Security Section -->
+            {#if toggles.securitySection}
             <div class="nav-section" role="group" aria-labelledby="nav-security">
                 <div class="nav-section-title" id="nav-security">Security</div>
+                {#if toggles.securityOverview}
                 <a class="nav-link" href="/security?instance={currentInstance ?: 'default'}" data-title="Security Overview">
                     <i class="bi bi-shield-check" aria-hidden="true"></i>
                     <span class="nav-link-text">Overview</span>
                 </a>
+                {/if}
+                {#if toggles.roles}
                 <a class="nav-link" href="/security/roles?instance={currentInstance ?: 'default'}" data-title="Roles & Permissions">
                     <i class="bi bi-people" aria-hidden="true"></i>
                     <span class="nav-link-text">Roles</span>
                 </a>
+                {/if}
+                {#if toggles.securityConnections}
                 <a class="nav-link" href="/security/connections?instance={currentInstance ?: 'default'}" data-title="Connection Security">
                     <i class="bi bi-shield-lock" aria-hidden="true"></i>
                     <span class="nav-link-text">Connections</span>
                 </a>
+                {/if}
+                {#if toggles.access}
                 <a class="nav-link" href="/security/access?instance={currentInstance ?: 'default'}" data-title="Data Access">
                     <i class="bi bi-eye" aria-hidden="true"></i>
                     <span class="nav-link-text">Access</span>
                 </a>
+                {/if}
+                {#if toggles.compliance}
                 <a class="nav-link" href="/security/compliance?instance={currentInstance ?: 'default'}" data-title="Compliance">
                     <i class="bi bi-clipboard-check" aria-hidden="true"></i>
                     <span class="nav-link-text">Compliance</span>
                 </a>
+                {/if}
+                {#if toggles.securityRecommendations}
                 <a class="nav-link" href="/security/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
                     <i class="bi bi-lightbulb" aria-hidden="true"></i>
                     <span class="nav-link-text">Recommendations</span>
                 </a>
+                {/if}
             </div>
+            {/if}
 
             <!-- System Section -->
             <div class="nav-section" role="group" aria-labelledby="nav-system">
@@ -1050,22 +1116,30 @@
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-nav" role="navigation" aria-label="Quick navigation">
         <div class="mobile-nav-items">
+            {#if toggles.dashboard}
             <a class="mobile-nav-link" href="/?instance={currentInstance ?: 'default'}" aria-label="Dashboard">
                 <i class="bi bi-speedometer2" aria-hidden="true"></i>
                 <span>Dashboard</span>
             </a>
+            {/if}
+            {#if toggles.activity}
             <a class="mobile-nav-link" href="/activity?instance={currentInstance ?: 'default'}" aria-label="Activity">
                 <i class="bi bi-activity" aria-hidden="true"></i>
                 <span>Activity</span>
             </a>
+            {/if}
+            {#if toggles.slowQueries}
             <a class="mobile-nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" aria-label="Slow Queries">
                 <i class="bi bi-hourglass-split" aria-hidden="true"></i>
                 <span>Queries</span>
             </a>
+            {/if}
+            {#if toggles.locks}
             <a class="mobile-nav-link" href="/locks?instance={currentInstance ?: 'default'}" aria-label="Locks">
                 <i class="bi bi-lock-fill" aria-hidden="true"></i>
                 <span>Locks</span>
             </a>
+            {/if}
             <button class="mobile-nav-link" id="mobileMoreBtn" aria-label="More navigation options">
                 <i class="bi bi-three-dots" aria-hidden="true"></i>
                 <span>More</span>

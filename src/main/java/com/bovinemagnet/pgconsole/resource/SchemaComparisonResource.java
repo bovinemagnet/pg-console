@@ -56,12 +56,16 @@ public class SchemaComparisonResource {
     @Inject
     Template migrationScript;
 
+    @Inject
+    FeatureToggleService featureToggleService;
+
     /**
      * Main schema comparison page.
      */
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index(@QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         List<String> instances = dataSourceManager.getAvailableInstances();
         List<String> schemas = comparisonService.getSchemas(instance);
         List<ComparisonProfile> profiles = profileService.findAll();
@@ -71,7 +75,8 @@ public class SchemaComparisonResource {
                 .data("schemas", schemas)
                 .data("profiles", profiles)
                 .data("currentInstance", instance)
-                .data("filterPresets", ComparisonFilter.FilterPreset.values());
+                .data("filterPresets", ComparisonFilter.FilterPreset.values())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -81,6 +86,7 @@ public class SchemaComparisonResource {
     @Path("/schemas")
     @Produces(MediaType.TEXT_HTML)
     public String getSchemas(@QueryParam("instance") String instance) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         List<String> schemas = comparisonService.getSchemas(instance);
 
         StringBuilder sb = new StringBuilder();
@@ -113,6 +119,7 @@ public class SchemaComparisonResource {
             @FormParam("includeTriggers") @DefaultValue("true") boolean includeTriggers,
             @FormParam("includeConstraints") @DefaultValue("true") boolean includeConstraints,
             @FormParam("profileId") Long profileId) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         // Build filter
         ComparisonFilter filter = new ComparisonFilter();
@@ -169,7 +176,8 @@ public class SchemaComparisonResource {
         return schemaComparisonResult
                 .data("result", result)
                 .data("drift", drift)
-                .data("wrapOptions", MigrationScript.WrapOption.values());
+                .data("wrapOptions", MigrationScript.WrapOption.values())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -179,6 +187,7 @@ public class SchemaComparisonResource {
     @Path("/run-profile/{id}")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance runProfile(@PathParam("id") long id) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         Optional<ComparisonProfile> profileOpt = profileService.findById(id);
         if (profileOpt.isEmpty()) {
             return schemaComparison
@@ -186,7 +195,8 @@ public class SchemaComparisonResource {
                     .data("instances", dataSourceManager.getAvailableInstances())
                     .data("schemas", List.of())
                     .data("profiles", profileService.findAll())
-                    .data("filterPresets", ComparisonFilter.FilterPreset.values());
+                    .data("filterPresets", ComparisonFilter.FilterPreset.values())
+                    .data("toggles", featureToggleService.getAllToggles());
         }
 
         ComparisonProfile profile = profileOpt.get();
@@ -209,7 +219,8 @@ public class SchemaComparisonResource {
                 .data("result", result)
                 .data("profile", profile)
                 .data("drift", drift)
-                .data("wrapOptions", MigrationScript.WrapOption.values());
+                .data("wrapOptions", MigrationScript.WrapOption.values())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -225,6 +236,7 @@ public class SchemaComparisonResource {
             @FormParam("destSchema") String destSchema,
             @FormParam("wrapOption") @DefaultValue("SINGLE_TRANSACTION") String wrapOption,
             @FormParam("includeDrops") @DefaultValue("false") boolean includeDrops) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         // Re-run comparison to get fresh result
         SchemaComparisonResult result = comparisonService.compare(
@@ -244,7 +256,8 @@ public class SchemaComparisonResource {
                 .data("result", result)
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("selectedWrapOption", wrap)
-                .data("includeDrops", includeDrops);
+                .data("includeDrops", includeDrops)
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -260,6 +273,7 @@ public class SchemaComparisonResource {
             @QueryParam("destSchema") String destSchema,
             @QueryParam("wrapOption") @DefaultValue("SINGLE_TRANSACTION") String wrapOption,
             @QueryParam("includeDrops") @DefaultValue("false") boolean includeDrops) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         SchemaComparisonResult result = comparisonService.compare(
                 sourceInstance, destInstance, sourceSchema, destSchema, null);
@@ -288,9 +302,11 @@ public class SchemaComparisonResource {
     @Path("/profiles")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance profiles() {
+        featureToggleService.requirePageEnabled("schema-comparison");
         return schemaComparisonProfiles
                 .data("profiles", profileService.findAll())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getAvailableInstances())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -307,12 +323,14 @@ public class SchemaComparisonResource {
             @FormParam("sourceSchema") @DefaultValue("public") String sourceSchema,
             @FormParam("destSchema") @DefaultValue("public") String destSchema,
             @FormParam("isDefault") @DefaultValue("false") boolean isDefault) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         if (profileService.nameExists(name)) {
             return schemaComparisonProfiles
                     .data("error", "A profile with this name already exists")
                     .data("profiles", profileService.findAll())
-                    .data("instances", dataSourceManager.getAvailableInstances());
+                    .data("instances", dataSourceManager.getAvailableInstances())
+                    .data("toggles", featureToggleService.getAllToggles());
         }
 
         ComparisonProfile profile = ComparisonProfile.builder()
@@ -331,7 +349,8 @@ public class SchemaComparisonResource {
         return schemaComparisonProfiles
                 .data("success", "Profile saved successfully")
                 .data("profiles", profileService.findAll())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getAvailableInstances())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -341,6 +360,7 @@ public class SchemaComparisonResource {
     @Path("/profiles/{id}")
     @Produces(MediaType.TEXT_HTML)
     public String deleteProfile(@PathParam("id") long id) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         profileService.delete(id);
         return "<div class=\"alert alert-success\" role=\"alert\">Profile deleted successfully</div>";
     }
@@ -352,6 +372,7 @@ public class SchemaComparisonResource {
     @Path("/profiles/{id}/export")
     @Produces(MediaType.APPLICATION_JSON)
     public Response exportProfile(@PathParam("id") long id) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         String json = profileService.exportAsJson(id);
         if (json == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
@@ -370,19 +391,22 @@ public class SchemaComparisonResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance importProfile(String json) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         ComparisonProfile profile = profileService.importFromJson(json);
 
         if (profile == null) {
             return schemaComparisonProfiles
                     .data("error", "Failed to import profile - invalid JSON")
                     .data("profiles", profileService.findAll())
-                    .data("instances", dataSourceManager.getAvailableInstances());
+                    .data("instances", dataSourceManager.getAvailableInstances())
+                    .data("toggles", featureToggleService.getAllToggles());
         }
 
         return schemaComparisonProfiles
                 .data("success", "Profile imported successfully")
                 .data("profiles", profileService.findAll())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getAvailableInstances())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -393,10 +417,12 @@ public class SchemaComparisonResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance history(
             @QueryParam("limit") @DefaultValue("50") int limit) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         return schemaComparisonHistory
                 .data("history", historyService.getHistory(limit))
                 .data("totalCount", historyService.count())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getAvailableInstances())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -406,20 +432,23 @@ public class SchemaComparisonResource {
     @Path("/history/{id}")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance historyDetail(@PathParam("id") long id) {
+        featureToggleService.requirePageEnabled("schema-comparison");
         Optional<ComparisonHistory> historyOpt = historyService.findById(id);
         if (historyOpt.isEmpty()) {
             return schemaComparisonHistory
                     .data("error", "History record not found")
                     .data("history", historyService.getHistory(50))
                     .data("totalCount", historyService.count())
-                    .data("instances", dataSourceManager.getAvailableInstances());
+                    .data("instances", dataSourceManager.getAvailableInstances())
+                    .data("toggles", featureToggleService.getAllToggles());
         }
 
         return schemaComparisonHistory
                 .data("detail", historyOpt.get())
                 .data("history", historyService.getHistory(50))
                 .data("totalCount", historyService.count())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getAvailableInstances())
+                .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -433,6 +462,7 @@ public class SchemaComparisonResource {
             @QueryParam("destInstance") String destInstance,
             @QueryParam("sourceSchema") String sourceSchema,
             @QueryParam("destSchema") String destSchema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         SchemaComparisonResult result = comparisonService.compare(
                 sourceInstance, destInstance, sourceSchema, destSchema, null);
@@ -508,6 +538,7 @@ public class SchemaComparisonResource {
             @QueryParam("destInstance") String destInstance,
             @QueryParam("sourceSchema") String sourceSchema,
             @QueryParam("destSchema") String destSchema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         SchemaComparisonResult result = comparisonService.compare(
                 sourceInstance, destInstance, sourceSchema, destSchema, null);
@@ -555,6 +586,7 @@ public class SchemaComparisonResource {
     public String getSchemaSummary(
             @QueryParam("instance") String instance,
             @QueryParam("schema") String schema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         Map<String, Integer> summary = comparisonService.getSchemaSummary(instance, schema);
 

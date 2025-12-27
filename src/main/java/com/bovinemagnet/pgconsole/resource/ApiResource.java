@@ -18,6 +18,7 @@ import com.bovinemagnet.pgconsole.service.ComplianceService;
 import com.bovinemagnet.pgconsole.service.ConnectionSecurityService;
 import com.bovinemagnet.pgconsole.service.DataAccessPatternService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.SchemaComparisonService;
 import com.bovinemagnet.pgconsole.service.IndexAdvisorService;
 import com.bovinemagnet.pgconsole.service.InfrastructureService;
@@ -99,6 +100,9 @@ public class ApiResource {
     @Inject
     ComparisonHistoryService comparisonHistoryService;
 
+    @Inject
+    FeatureToggleService featureToggleService;
+
     /**
      * Returns overview statistics for a PostgreSQL instance as JSON.
      * <p>
@@ -112,6 +116,7 @@ public class ApiResource {
     @Path("/overview")
     public Map<String, Object> getOverview(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("dashboard");
         OverviewStats stats = postgresService.getOverviewStats(instance);
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -133,6 +138,7 @@ public class ApiResource {
     @Path("/activity")
     public Map<String, Object> getActivity(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("activity");
         List<Activity> activities = postgresService.getCurrentActivity(instance);
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -161,6 +167,7 @@ public class ApiResource {
             @QueryParam("sortBy") @DefaultValue("totalTime") String sortBy,
             @QueryParam("order") @DefaultValue("desc") String order,
             @QueryParam("limit") @DefaultValue("50") int limit) {
+        featureToggleService.requirePageEnabled("slow-queries");
         List<SlowQuery> queries = postgresService.getSlowQueries(instance, sortBy, order);
         if (queries.size() > limit) {
             queries = queries.subList(0, limit);
@@ -186,6 +193,7 @@ public class ApiResource {
     @Path("/locks")
     public Map<String, Object> getLocks(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("locks");
         List<BlockingTree> blockingTree = postgresService.getBlockingTree(instance);
         List<LockInfo> locks = postgresService.getLockInfo(instance);
         Map<String, Object> response = new HashMap<>();
@@ -209,6 +217,7 @@ public class ApiResource {
     @Path("/wait-events")
     public Map<String, Object> getWaitEvents(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("wait-events");
         List<WaitEventSummary> typeSummaries = postgresService.getWaitEventTypeSummary(instance);
         List<WaitEventSummary> waitEvents = postgresService.getWaitEventSummary(instance);
         Map<String, Object> response = new HashMap<>();
@@ -232,6 +241,7 @@ public class ApiResource {
     @Path("/tables")
     public Map<String, Object> getTables(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("tables");
         List<TableStats> tables = postgresService.getTableStats(instance);
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -254,6 +264,7 @@ public class ApiResource {
     @Path("/databases")
     public Map<String, Object> getDatabases(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("databases");
         List<DatabaseMetrics> databases = postgresService.getAllDatabaseMetrics(instance);
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -276,6 +287,7 @@ public class ApiResource {
     @Path("/index-advisor")
     public Map<String, Object> getIndexAdvisor(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("index-advisor");
         var recommendations = indexAdvisorService.getRecommendations(instance);
         var summary = indexAdvisorService.getSummary(instance);
         Map<String, Object> response = new HashMap<>();
@@ -303,6 +315,7 @@ public class ApiResource {
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("window") @DefaultValue("24") int windowHours,
             @QueryParam("threshold") @DefaultValue("50") int thresholdPercent) {
+        featureToggleService.requirePageEnabled("query-regressions");
         var regressions = queryRegressionService.detectRegressions(instance, windowHours, thresholdPercent);
         var improvements = queryRegressionService.detectImprovements(instance, windowHours, thresholdPercent);
         var summary = queryRegressionService.getSummary(instance, windowHours, thresholdPercent);
@@ -330,6 +343,7 @@ public class ApiResource {
     @Path("/table-maintenance")
     public Map<String, Object> getTableMaintenance(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("table-maintenance");
         var recommendations = tableMaintenanceService.getRecommendations(instance);
         var summary = tableMaintenanceService.getSummary(instance);
         Map<String, Object> response = new HashMap<>();
@@ -353,6 +367,7 @@ public class ApiResource {
     @Path("/replication")
     public Map<String, Object> getReplication(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("replication");
         var replicas = replicationService.getStreamingReplication(instance);
         var slots = replicationService.getReplicationSlots(instance);
         var walStats = replicationService.getWalStats(instance);
@@ -382,6 +397,7 @@ public class ApiResource {
     @Path("/infrastructure")
     public Map<String, Object> getInfrastructure(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("infrastructure");
         var vacuumProgress = infrastructureService.getVacuumProgress(instance);
         var bgProcessStats = infrastructureService.getBackgroundProcessStats(instance);
         var storageStats = infrastructureService.getStorageStats(instance);
@@ -458,6 +474,7 @@ public class ApiResource {
     @Path("/security/summary")
     public Map<String, Object> getSecuritySummary(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security");
         var auditSummary = securityAuditService.getSummary(instance);
         var connectionSummary = connectionSecurityService.getSummary(instance);
         var accessSummary = dataAccessPatternService.getSummary(instance);
@@ -487,6 +504,7 @@ public class ApiResource {
     @Path("/security/roles")
     public Map<String, Object> getSecurityRoles(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-roles");
         var roles = securityAuditService.getAllRoles(instance);
         var memberships = securityAuditService.getRoleMemberships(instance);
         var warnings = securityAuditService.getAllWarnings(instance);
@@ -515,6 +533,7 @@ public class ApiResource {
     @Path("/security/connections")
     public Map<String, Object> getSecurityConnections(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-connections");
         var sslConnections = connectionSecurityService.getSslConnections(instance);
         var hbaRules = connectionSecurityService.getHbaRules(instance);
         var warnings = connectionSecurityService.getWarnings(instance);
@@ -542,6 +561,7 @@ public class ApiResource {
     @Path("/security/access")
     public Map<String, Object> getSecurityAccess(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-access");
         var sensitiveTables = dataAccessPatternService.getSensitiveTables(instance);
         var piiColumns = dataAccessPatternService.getPiiColumns(instance);
         var rlsPolicies = dataAccessPatternService.getRlsPolicies(instance);
@@ -569,6 +589,7 @@ public class ApiResource {
     @Path("/security/compliance")
     public Map<String, Object> getSecurityCompliance(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-compliance");
         var scores = complianceService.getAllComplianceScores(instance);
         var summary = complianceService.getSummary(instance);
         Map<String, Object> response = new HashMap<>();
@@ -592,6 +613,7 @@ public class ApiResource {
     @Path("/security/recommendations")
     public Map<String, Object> getSecurityRecommendations(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-recommendations");
         var recommendations = securityRecommendationService.getAllRecommendations(instance);
         var summary = securityRecommendationService.getSummary(instance);
         Map<String, Object> response = new HashMap<>();
@@ -624,6 +646,7 @@ public class ApiResource {
             @QueryParam("destInstance") @DefaultValue("default") String destInstance,
             @QueryParam("sourceSchema") @DefaultValue("public") String sourceSchema,
             @QueryParam("destSchema") @DefaultValue("public") String destSchema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         SchemaComparisonResult result = schemaComparisonService.compare(
                 sourceInstance, destInstance, sourceSchema, destSchema, null);
@@ -655,6 +678,7 @@ public class ApiResource {
     @Path("/schema-comparison/schemas")
     public Map<String, Object> getSchemas(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -671,6 +695,7 @@ public class ApiResource {
     @GET
     @Path("/schema-comparison/profiles")
     public Map<String, Object> getProfiles() {
+        featureToggleService.requirePageEnabled("schema-comparison");
         List<ComparisonProfile> profiles = comparisonProfileService.findAll();
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
@@ -689,6 +714,7 @@ public class ApiResource {
     @Path("/schema-comparison/history")
     public Map<String, Object> getHistory(
             @QueryParam("limit") @DefaultValue("50") int limit) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         List<ComparisonHistory> history = comparisonHistoryService.getHistory(limit);
         Map<String, Object> response = new HashMap<>();
@@ -711,6 +737,7 @@ public class ApiResource {
     public Map<String, Object> getSchemaSummary(
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("schema") @DefaultValue("public") String schema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());

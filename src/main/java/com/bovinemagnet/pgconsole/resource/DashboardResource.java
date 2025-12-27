@@ -31,6 +31,7 @@ import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.QueryFingerprintService;
 import com.bovinemagnet.pgconsole.service.QueryRegressionService;
 import com.bovinemagnet.pgconsole.service.SecurityAuditService;
+import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.SecurityRecommendationService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import com.bovinemagnet.pgconsole.service.ReplicationService;
@@ -230,6 +231,9 @@ public class DashboardResource {
     @Inject
     SecurityRecommendationService securityRecommendationService;
 
+    @Inject
+    FeatureToggleService featureToggleService;
+
     /**
      * Renders the main dashboard overview page with key PostgreSQL metrics and sparklines.
      * <p>
@@ -243,6 +247,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance index(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("dashboard");
         OverviewStats stats = postgresService.getOverviewStats(instance);
 
         // Generate sparklines from history (last 1 hour)
@@ -258,7 +263,8 @@ public class DashboardResource {
                     .data("cacheHitSparkline", cacheHitSparkline)
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
-                    .data("securityEnabled", config.security().enabled());
+                    .data("securityEnabled", config.security().enabled())
+                    .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -281,6 +287,7 @@ public class DashboardResource {
             @QueryParam("sortBy") String sortBy,
             @QueryParam("order") String order,
             @QueryParam("view") @DefaultValue("individual") String view) {
+        featureToggleService.requirePageEnabled("slow-queries");
 
         List<SlowQuery> queries = postgresService.getSlowQueries(
             instance,
@@ -294,7 +301,8 @@ public class DashboardResource {
                          .data("view", view)
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
-                         .data("securityEnabled", config.security().enabled());
+                         .data("securityEnabled", config.security().enabled())
+                         .data("toggles", featureToggleService.getAllToggles());
 
         // Add grouped data if viewing grouped
         if ("grouped".equals(view)) {
@@ -319,11 +327,13 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance activity(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("activity");
         List<Activity> activities = postgresService.getCurrentActivity(instance);
         return activity.data("activities", activities)
                       .data("instances", dataSourceManager.getInstanceInfoList())
                       .data("currentInstance", instance)
-                      .data("securityEnabled", config.security().enabled());
+                      .data("securityEnabled", config.security().enabled())
+                      .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -340,11 +350,13 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance tables(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("tables");
         List<TableStats> stats = postgresService.getTableStats(instance);
         return tables.data("tables", stats)
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
-                    .data("securityEnabled", config.security().enabled());
+                    .data("securityEnabled", config.security().enabled())
+                    .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -384,13 +396,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance about(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        // About page is always enabled - no feature toggle check
         DatabaseInfo dbInfo = postgresService.getDatabaseInfo(instance);
         return about.data("dbInfo", dbInfo)
                     .data("appName", appName)
                     .data("appVersion", appVersion)
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
-                    .data("securityEnabled", config.security().enabled());
+                    .data("securityEnabled", config.security().enabled())
+                    .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -407,13 +421,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance locks(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("locks");
         List<BlockingTree> blockingTree = postgresService.getBlockingTree(instance);
         List<LockInfo> lockInfos = postgresService.getLockInfo(instance);
         return locks.data("blockingTree", blockingTree)
                     .data("locks", lockInfos)
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
-                    .data("securityEnabled", config.security().enabled());
+                    .data("securityEnabled", config.security().enabled())
+                    .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -430,13 +446,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance waitEvents(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("wait-events");
         List<WaitEventSummary> typeSummaries = postgresService.getWaitEventTypeSummary(instance);
         List<WaitEventSummary> waitEventList = postgresService.getWaitEventSummary(instance);
         return waitEvents.data("typeSummaries", typeSummaries)
                         .data("waitEvents", waitEventList)
                         .data("instances", dataSourceManager.getInstanceInfoList())
                         .data("currentInstance", instance)
-                        .data("securityEnabled", config.security().enabled());
+                        .data("securityEnabled", config.security().enabled())
+                        .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -453,13 +471,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance indexAdvisor(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("index-advisor");
         var recommendations = indexAdvisorService.getRecommendations(instance);
         var summary = indexAdvisorService.getSummary(instance);
         return indexAdvisor.data("recommendations", recommendations)
                           .data("summary", summary)
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
-                          .data("securityEnabled", config.security().enabled());
+                          .data("securityEnabled", config.security().enabled())
+                          .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -480,6 +500,7 @@ public class DashboardResource {
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("window") @DefaultValue("24") int windowHours,
             @QueryParam("threshold") @DefaultValue("50") int thresholdPercent) {
+        featureToggleService.requirePageEnabled("query-regressions");
         var regressions = queryRegressionService.detectRegressions(instance, windowHours, thresholdPercent);
         var improvements = queryRegressionService.detectImprovements(instance, windowHours, thresholdPercent);
         var summary = queryRegressionService.getSummary(instance, windowHours, thresholdPercent);
@@ -490,7 +511,8 @@ public class DashboardResource {
                                .data("thresholdPercent", thresholdPercent)
                                .data("instances", dataSourceManager.getInstanceInfoList())
                                .data("currentInstance", instance)
-                               .data("securityEnabled", config.security().enabled());
+                               .data("securityEnabled", config.security().enabled())
+                               .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -507,13 +529,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance tableMaintenance(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("table-maintenance");
         var recommendations = tableMaintenanceService.getRecommendations(instance);
         var summary = tableMaintenanceService.getSummary(instance);
         return tableMaintenance.data("recommendations", recommendations)
                                .data("summary", summary)
                                .data("instances", dataSourceManager.getInstanceInfoList())
                                .data("currentInstance", instance)
-                               .data("securityEnabled", config.security().enabled());
+                               .data("securityEnabled", config.security().enabled())
+                               .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -532,6 +556,7 @@ public class DashboardResource {
     public TemplateInstance statementsManagement(
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("window") @DefaultValue("24") int windowHours) {
+        featureToggleService.requirePageEnabled("statements-management");
         var topMovers = statementsManagementService.getTopMovers(instance, windowHours);
         var summary = statementsManagementService.getSummary(instance);
         return statementsManagement.data("topMovers", topMovers)
@@ -539,7 +564,8 @@ public class DashboardResource {
                                    .data("windowHours", windowHours)
                                    .data("instances", dataSourceManager.getInstanceInfoList())
                                    .data("currentInstance", instance)
-                                   .data("securityEnabled", config.security().enabled());
+                                   .data("securityEnabled", config.security().enabled())
+                                   .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -556,6 +582,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance replication(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("replication");
         var replicas = replicationService.getStreamingReplication(instance);
         var slots = replicationService.getReplicationSlots(instance);
         var walStats = replicationService.getWalStats(instance);
@@ -568,7 +595,8 @@ public class DashboardResource {
                           .data("isReplica", isReplica)
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
-                          .data("securityEnabled", config.security().enabled());
+                          .data("securityEnabled", config.security().enabled())
+                          .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -585,6 +613,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance infrastructure(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("infrastructure");
         var vacuumProgress = infrastructureService.getVacuumProgress(instance);
         var bgProcessStats = infrastructureService.getBackgroundProcessStats(instance);
         var storageStats = infrastructureService.getStorageStats(instance);
@@ -593,7 +622,8 @@ public class DashboardResource {
                              .data("storageStats", storageStats)
                              .data("instances", dataSourceManager.getInstanceInfoList())
                              .data("currentInstance", instance)
-                             .data("securityEnabled", config.security().enabled());
+                             .data("securityEnabled", config.security().enabled())
+                             .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -610,13 +640,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance auditLog(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("audit-log");
         var logs = auditService.getRecentLogs(100);
         var summary = auditService.getSummary();
         return auditLog.data("logs", logs)
                        .data("summary", summary)
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
-                       .data("securityEnabled", config.security().enabled());
+                       .data("securityEnabled", config.security().enabled())
+                       .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -635,6 +667,7 @@ public class DashboardResource {
     public TemplateInstance bookmarks(
             @QueryParam("instance") @DefaultValue("default") String instance,
             @QueryParam("tag") String tag) {
+        featureToggleService.requirePageEnabled("bookmarks");
         var allBookmarks = bookmarkService.getBookmarks(instance, null, tag);
         var summary = bookmarkService.getSummary(instance);
         var tags = bookmarkService.getAllTags(instance);
@@ -643,7 +676,8 @@ public class DashboardResource {
                         .data("tags", tags)
                         .data("instances", dataSourceManager.getInstanceInfoList())
                         .data("currentInstance", instance)
-                        .data("securityEnabled", config.security().enabled());
+                        .data("securityEnabled", config.security().enabled())
+                        .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -660,6 +694,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance comparison(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("comparison");
         var comparisons = comparisonService.compareOverview();
         // Get all instance IDs for finding common queries
         var instanceIds = dataSourceManager.getInstanceInfoList().stream()
@@ -670,7 +705,8 @@ public class DashboardResource {
                          .data("commonQueries", commonQueries)
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
-                         .data("securityEnabled", config.security().enabled());
+                         .data("securityEnabled", config.security().enabled())
+                         .data("toggles", featureToggleService.getAllToggles());
     }
 
     // --- Phase 8: Change Data Control & Schema Management ---
@@ -689,6 +725,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance logicalReplication(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("logical-replication");
         var publications = logicalReplicationService.getPublications(instance);
         var subscriptions = logicalReplicationService.getSubscriptions(instance);
         var origins = logicalReplicationService.getReplicationOrigins(instance);
@@ -701,7 +738,8 @@ public class DashboardResource {
                                  .data("summary", summary)
                                  .data("instances", dataSourceManager.getInstanceInfoList())
                                  .data("currentInstance", instance)
-                                 .data("securityEnabled", config.security().enabled());
+                                 .data("securityEnabled", config.security().enabled())
+                                 .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -718,6 +756,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance cdc(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("cdc");
         var activities = changeDataCaptureService.getTableChangeActivity(instance);
         var highChurnTables = changeDataCaptureService.getHighChurnTables(instance, 10);
         var walEstimates = changeDataCaptureService.getWalGenerationByTable(instance);
@@ -728,7 +767,8 @@ public class DashboardResource {
                   .data("summary", summary)
                   .data("instances", dataSourceManager.getInstanceInfoList())
                   .data("currentInstance", instance)
-                  .data("securityEnabled", config.security().enabled());
+                  .data("securityEnabled", config.security().enabled())
+                  .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -745,6 +785,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance dataLineage(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("data-lineage");
         var eventTriggers = schemaChangeService.getEventTriggers(instance);
         var foreignKeys = schemaChangeService.getForeignKeyRelationships(instance);
         var viewDependencies = schemaChangeService.getViewDependencies(instance);
@@ -757,7 +798,8 @@ public class DashboardResource {
                           .data("summary", summary)
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
-                          .data("securityEnabled", config.security().enabled());
+                          .data("securityEnabled", config.security().enabled())
+                          .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -774,6 +816,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance partitions(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("partitions");
         var partitionedTables = partitioningService.getPartitionedTables(instance);
         var orphanPartitions = partitioningService.getOrphanPartitions(instance);
         var summary = partitioningService.getSummary(instance);
@@ -782,7 +825,8 @@ public class DashboardResource {
                          .data("summary", summary)
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
-                         .data("securityEnabled", config.security().enabled());
+                         .data("securityEnabled", config.security().enabled())
+                         .data("toggles", featureToggleService.getAllToggles());
     }
 
     // --- Phase 10: Security & Compliance Monitoring ---
@@ -801,6 +845,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance security(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security");
         var auditSummary = securityAuditService.getSummary(instance);
         var connectionSummary = connectionSecurityService.getSummary(instance);
         var accessSummary = dataAccessPatternService.getSummary(instance);
@@ -817,7 +862,8 @@ public class DashboardResource {
                        .data("complianceScores", complianceScores)
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
-                       .data("securityEnabled", config.security().enabled());
+                       .data("securityEnabled", config.security().enabled())
+                       .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -834,6 +880,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance securityRoles(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-roles");
         var roles = securityAuditService.getAllRoles(instance);
         var memberships = securityAuditService.getRoleMemberships(instance);
         var warnings = securityAuditService.getAllWarnings(instance);
@@ -844,7 +891,8 @@ public class DashboardResource {
                             .data("summary", summary)
                             .data("instances", dataSourceManager.getInstanceInfoList())
                             .data("currentInstance", instance)
-                            .data("securityEnabled", config.security().enabled());
+                            .data("securityEnabled", config.security().enabled())
+                            .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -861,6 +909,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance securityConnections(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-connections");
         var sslConnections = connectionSecurityService.getSslConnections(instance);
         var hbaRules = connectionSecurityService.getHbaRules(instance);
         var warnings = connectionSecurityService.getWarnings(instance);
@@ -871,7 +920,8 @@ public class DashboardResource {
                                   .data("summary", summary)
                                   .data("instances", dataSourceManager.getInstanceInfoList())
                                   .data("currentInstance", instance)
-                                  .data("securityEnabled", config.security().enabled());
+                                  .data("securityEnabled", config.security().enabled())
+                                  .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -888,6 +938,7 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance securityAccess(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-access");
         var sensitiveTables = dataAccessPatternService.getSensitiveTables(instance);
         var piiColumns = dataAccessPatternService.getPiiColumns(instance);
         var rlsPolicies = dataAccessPatternService.getRlsPolicies(instance);
@@ -898,7 +949,8 @@ public class DashboardResource {
                              .data("summary", summary)
                              .data("instances", dataSourceManager.getInstanceInfoList())
                              .data("currentInstance", instance)
-                             .data("securityEnabled", config.security().enabled());
+                             .data("securityEnabled", config.security().enabled())
+                             .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -915,13 +967,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance securityCompliance(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-compliance");
         var scores = complianceService.getAllComplianceScores(instance);
         var summary = complianceService.getSummary(instance);
         return securityCompliance.data("scores", scores)
                                  .data("summary", summary)
                                  .data("instances", dataSourceManager.getInstanceInfoList())
                                  .data("currentInstance", instance)
-                                 .data("securityEnabled", config.security().enabled());
+                                 .data("securityEnabled", config.security().enabled())
+                                 .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -938,13 +992,15 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance securityRecommendations(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("security-recommendations");
         var recommendations = securityRecommendationService.getAllRecommendations(instance);
         var summary = securityRecommendationService.getSummary(instance);
         return securityRecommendations.data("recommendations", recommendations)
                                       .data("summary", summary)
                                       .data("instances", dataSourceManager.getInstanceInfoList())
                                       .data("currentInstance", instance)
-                                      .data("securityEnabled", config.security().enabled());
+                                      .data("securityEnabled", config.security().enabled())
+                                      .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -963,6 +1019,7 @@ public class DashboardResource {
     public TemplateInstance queryDetail(
             @PathParam("queryId") String queryId,
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("slow-queries");
         SlowQuery query = postgresService.getSlowQueryById(instance, queryId);
 
         // Generate sparklines from query history (last 24 hours)
@@ -974,7 +1031,8 @@ public class DashboardResource {
                           .data("callsSparkline", callsSparkline)
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
-                          .data("securityEnabled", config.security().enabled());
+                          .data("securityEnabled", config.security().enabled())
+                          .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -991,11 +1049,13 @@ public class DashboardResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance databases(
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("databases");
         List<DatabaseMetrics> dbMetrics = postgresService.getAllDatabaseMetrics(instance);
         return databases.data("databases", dbMetrics)
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
-                       .data("securityEnabled", config.security().enabled());
+                       .data("securityEnabled", config.security().enabled())
+                       .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
@@ -1014,11 +1074,13 @@ public class DashboardResource {
     public TemplateInstance databaseDetail(
             @PathParam("dbName") String dbName,
             @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("databases");
         DatabaseMetrics db = postgresService.getDatabaseMetrics(instance, dbName);
         return databaseDetail.data("db", db)
                             .data("instances", dataSourceManager.getInstanceInfoList())
                             .data("currentInstance", instance)
-                            .data("securityEnabled", config.security().enabled());
+                            .data("securityEnabled", config.security().enabled())
+                            .data("toggles", featureToggleService.getAllToggles());
     }
 
     // --- Admin Actions: Cancel/Terminate Queries ---
