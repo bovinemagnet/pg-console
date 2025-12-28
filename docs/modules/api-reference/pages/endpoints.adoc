@@ -1,0 +1,1580 @@
+= API Endpoints
+Paul Snow
+0.0.0
+:description: Complete reference for all pg-console REST API endpoints with request/response examples
+:keywords: api, endpoints, rest, json, monitoring, postgresql
+
+This page provides a complete reference for all pg-console REST API endpoints, including request parameters, response formats, and examples.
+
+== Endpoint Categories
+
+* <<core-monitoring,Core Monitoring>> - Essential database monitoring metrics
+* <<insights,Insights & Analysis>> - Intelligent insights and recommendations
+* <<security,Security & Compliance>> - Security monitoring and compliance
+* <<schema-comparison,Schema Comparison>> - Schema comparison and migration
+* <<infrastructure,Infrastructure>> - Replication and background processes
+* <<system,System>> - Health checks and instance information
+
+[#core-monitoring]
+== Core Monitoring
+
+Essential endpoints for monitoring PostgreSQL database performance and activity.
+
+=== GET /api/v1/overview
+
+Returns overview statistics for a PostgreSQL instance including connections, database size, cache hit ratio, and version information.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "stats": {
+    "version": "PostgreSQL 16.1 on x86_64-pc-linux-gnu",
+    "uptime": "15 days 04:23:12",
+    "activeConnections": 12,
+    "maxConnections": 100,
+    "idleConnections": 8,
+    "activeQueries": 4,
+    "blockedQueries": 0,
+    "databaseSize": 5368709120,
+    "databaseSizeFormatted": "5.0 GB",
+    "cacheHitRatio": 99.5,
+    "transactionsPerSecond": 245.3,
+    "tuplesReturned": 1523847,
+    "tuplesFetched": 982341,
+    "tuplesInserted": 54321,
+    "tuplesUpdated": 12345,
+    "tuplesDeleted": 987
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/overview?instance=production
+----
+
+'''
+
+=== GET /api/v1/activity
+
+Returns current database activity from `pg_stat_activity`, including all active sessions, running queries, and idle connections.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 15,
+  "activities": [
+    {
+      "pid": 12345,
+      "user": "app_user",
+      "database": "myapp",
+      "applicationName": "web-server-01",
+      "clientAddress": "192.168.1.100",
+      "backendStart": "2025-12-28T09:15:00Z",
+      "xactStart": "2025-12-28T10:29:55Z",
+      "queryStart": "2025-12-28T10:29:55Z",
+      "stateChange": "2025-12-28T10:29:55Z",
+      "state": "active",
+      "waitEventType": null,
+      "waitEvent": null,
+      "query": "SELECT * FROM orders WHERE status = 'pending'",
+      "queryDuration": "5.234 seconds",
+      "transactionDuration": "5.234 seconds",
+      "idleDuration": null
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/activity?instance=default
+----
+
+'''
+
+=== GET /api/v1/slow-queries
+
+Returns query performance statistics from `pg_stat_statements`, sorted by specified criteria.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`sortBy`
+|Query (optional)
+|Sort field: `totalTime`, `calls`, `meanTime`, `maxTime`, `rows` (default: `totalTime`)
+
+|`order`
+|Query (optional)
+|Sort order: `asc` or `desc` (default: `desc`)
+
+|`limit`
+|Query (optional)
+|Maximum number of queries to return (default: `50`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 50,
+  "queries": [
+    {
+      "queryId": "3894729847",
+      "user": "app_user",
+      "database": "myapp",
+      "query": "SELECT * FROM orders WHERE user_id = $1 AND status = $2",
+      "totalCalls": 15234,
+      "totalTime": 45678.90,
+      "minTime": 0.12,
+      "maxTime": 234.56,
+      "meanTime": 3.00,
+      "stddevTime": 12.45,
+      "rows": 152340,
+      "sharedBlksHit": 987654,
+      "sharedBlksRead": 12345,
+      "sharedBlksDirtied": 543,
+      "sharedBlksWritten": 123,
+      "tempBlksRead": 0,
+      "tempBlksWritten": 0,
+      "blkReadTime": 45.67,
+      "blkWriteTime": 12.34
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+# Get top 10 slowest queries by total time
+curl "http://localhost:8080/api/v1/slow-queries?instance=prod&limit=10&sortBy=totalTime&order=desc"
+
+# Get most frequently called queries
+curl "http://localhost:8080/api/v1/slow-queries?sortBy=calls&order=desc&limit=20"
+----
+
+'''
+
+=== GET /api/v1/locks
+
+Returns lock information from `pg_locks` and a hierarchical blocking tree showing which processes are blocking others.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "blockingTree": [
+    {
+      "pid": 12345,
+      "user": "app_user",
+      "database": "myapp",
+      "query": "UPDATE orders SET status = 'shipped' WHERE id = 123",
+      "duration": "15.234 seconds",
+      "blockedBy": null,
+      "blocking": [67890],
+      "depth": 0
+    },
+    {
+      "pid": 67890,
+      "user": "app_user",
+      "database": "myapp",
+      "query": "UPDATE orders SET status = 'delivered' WHERE id = 123",
+      "duration": "8.456 seconds",
+      "blockedBy": 12345,
+      "blocking": [],
+      "depth": 1
+    }
+  ],
+  "locks": [
+    {
+      "lockType": "relation",
+      "database": "myapp",
+      "relation": "orders",
+      "page": null,
+      "tuple": null,
+      "virtualXid": null,
+      "transactionId": null,
+      "classId": null,
+      "objId": null,
+      "objSubId": null,
+      "virtualTransaction": "3/1234",
+      "pid": 12345,
+      "mode": "RowExclusiveLock",
+      "granted": true,
+      "fastPath": false
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/locks?instance=production
+----
+
+'''
+
+=== GET /api/v1/wait-events
+
+Returns wait event statistics from `pg_stat_activity`, grouped by type and individually, to help identify performance bottlenecks.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "typeSummaries": [
+    {
+      "waitEventType": "IO",
+      "count": 15,
+      "percentage": 45.5
+    },
+    {
+      "waitEventType": "Lock",
+      "count": 8,
+      "percentage": 24.2
+    }
+  ],
+  "waitEvents": [
+    {
+      "waitEvent": "DataFileRead",
+      "waitEventType": "IO",
+      "count": 12,
+      "percentage": 36.4
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/wait-events
+----
+
+'''
+
+=== GET /api/v1/tables
+
+Returns statistics for all user tables from `pg_stat_user_tables`, including sizes, row counts, index usage, and vacuum information.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 25,
+  "tables": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "tableSize": 1073741824,
+      "tableSizeFormatted": "1.0 GB",
+      "indexSize": 536870912,
+      "indexSizeFormatted": "512 MB",
+      "totalSize": 1610612736,
+      "totalSizeFormatted": "1.5 GB",
+      "rowCount": 1523847,
+      "seqScans": 234,
+      "seqTuplesRead": 356789234,
+      "idxScans": 987654,
+      "idxTuplesRead": 1523847,
+      "tuplesInserted": 54321,
+      "tuplesUpdated": 12345,
+      "tuplesDeleted": 987,
+      "tuplesHotUpdated": 8765,
+      "livetuples": 1523847,
+      "deadTuples": 1234,
+      "lastVacuum": "2025-12-27T03:00:00Z",
+      "lastAutovacuum": "2025-12-28T08:15:00Z",
+      "lastAnalyze": "2025-12-27T03:00:00Z",
+      "lastAutoanalyze": "2025-12-28T09:30:00Z",
+      "vacuumCount": 45,
+      "autovacuumCount": 123,
+      "analyzeCount": 45,
+      "autoanalyzeCount": 156
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/tables?instance=default
+----
+
+'''
+
+=== GET /api/v1/databases
+
+Returns metrics for all databases in the PostgreSQL instance from `pg_stat_database`, including size, connection counts, and transaction rates.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 3,
+  "databases": [
+    {
+      "name": "myapp",
+      "size": 5368709120,
+      "sizeFormatted": "5.0 GB",
+      "connections": 12,
+      "transactionsCommitted": 12345678,
+      "transactionsRolledBack": 123,
+      "blocksRead": 987654,
+      "blocksHit": 98765432,
+      "tuplesReturned": 1523847,
+      "tuplesFetched": 982341,
+      "tuplesInserted": 54321,
+      "tuplesUpdated": 12345,
+      "tuplesDeleted": 987,
+      "conflicts": 0,
+      "tempFiles": 12,
+      "tempBytes": 1234567,
+      "deadlocks": 2,
+      "cacheHitRatio": 99.0,
+      "statsReset": "2025-01-01T00:00:00Z"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/databases
+----
+
+'''
+
+[#insights]
+== Insights & Analysis
+
+Intelligent insights including anomaly detection, forecasting, and recommendations.
+
+=== GET /api/v1/index-advisor
+
+Analyses query patterns and table scans to suggest missing indexes that could improve query performance.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalRecommendations": 8,
+    "estimatedImprovementMs": 1234.56,
+    "tablesAffected": 5
+  },
+  "recommendations": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "columnName": "user_id",
+      "reason": "Sequential scans detected on WHERE clause",
+      "seqScans": 12345,
+      "estimatedImpactMs": 567.89,
+      "suggestedIndex": "CREATE INDEX idx_orders_user_id ON public.orders(user_id);",
+      "priority": "HIGH"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/index-advisor?instance=production
+----
+
+'''
+
+=== GET /api/v1/query-regressions
+
+Compares query performance over time to detect regressions (slower) and improvements (faster) using historical data.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`window`
+|Query (optional)
+|Time window in hours for comparison (default: `24`)
+
+|`threshold`
+|Query (optional)
+|Percentage change threshold for detection (default: `50`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "windowHours": 24,
+  "thresholdPercent": 50,
+  "summary": {
+    "regressionCount": 3,
+    "improvementCount": 5,
+    "totalQueriesAnalysed": 150
+  },
+  "regressions": [
+    {
+      "queryId": "3894729847",
+      "query": "SELECT * FROM orders WHERE status = $1",
+      "currentMeanTime": 150.5,
+      "previousMeanTime": 75.2,
+      "changePercent": 100.1,
+      "changeType": "REGRESSION"
+    }
+  ],
+  "improvements": [
+    {
+      "queryId": "9876543210",
+      "query": "SELECT * FROM products WHERE category = $1",
+      "currentMeanTime": 25.3,
+      "previousMeanTime": 78.9,
+      "changePercent": -67.9,
+      "changeType": "IMPROVEMENT"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+# Detect regressions in last 24 hours with 50% threshold
+curl "http://localhost:8080/api/v1/query-regressions?window=24&threshold=50"
+
+# More sensitive detection (20% threshold) over 48 hours
+curl "http://localhost:8080/api/v1/query-regressions?window=48&threshold=20"
+----
+
+'''
+
+=== GET /api/v1/table-maintenance
+
+Identifies tables that need vacuuming or analysing based on bloat, dead tuple counts, and last vacuum/analyse timestamps.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "needsVacuum": 5,
+    "needsAnalyze": 3,
+    "totalTablesChecked": 25
+  },
+  "recommendations": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "action": "VACUUM",
+      "reason": "High dead tuple count (12.5%)",
+      "deadTuples": 19000,
+      "liveTuples": 152000,
+      "lastVacuum": "2025-12-20T03:00:00Z",
+      "daysSinceVacuum": 8,
+      "priority": "HIGH",
+      "suggestedCommand": "VACUUM ANALYZE public.orders;"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/table-maintenance
+----
+
+'''
+
+[#infrastructure]
+== Infrastructure
+
+Endpoints for monitoring replication, background processes, and infrastructure health.
+
+=== GET /api/v1/replication
+
+Retrieves streaming replication information including connected replicas, replication slots, and WAL statistics.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "isReplica": false,
+  "summary": {
+    "activeReplicas": 2,
+    "replicationSlots": 2,
+    "maxReplicationLag": 125,
+    "walSendingRate": 1024000
+  },
+  "walStats": {
+    "walLevel": "replica",
+    "maxWalSenders": 10,
+    "walKeepSize": "1024 MB",
+    "walSegmentSize": "16 MB"
+  },
+  "replicas": [
+    {
+      "applicationName": "replica-01",
+      "clientAddress": "192.168.1.101",
+      "state": "streaming",
+      "sentLsn": "0/3000000",
+      "writeLsn": "0/3000000",
+      "flushLsn": "0/3000000",
+      "replayLsn": "0/2FFFFFF",
+      "replicationLag": 125,
+      "syncState": "async"
+    }
+  ],
+  "slots": [
+    {
+      "slotName": "replica_01_slot",
+      "slotType": "physical",
+      "database": null,
+      "active": true,
+      "xmin": null,
+      "restartLsn": "0/2000000",
+      "confirmedFlushLsn": null
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/replication?instance=primary
+----
+
+'''
+
+=== GET /api/v1/infrastructure
+
+Retrieves vacuum progress, background writer statistics, and storage usage information.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "vacuumProgress": [
+    {
+      "pid": 12345,
+      "database": "myapp",
+      "table": "orders",
+      "phase": "scanning heap",
+      "heapBlksTotal": 100000,
+      "heapBlksScanned": 45000,
+      "heapBlksVacuumed": 45000,
+      "indexVacuumCount": 2,
+      "maxDeadTuples": 291271111,
+      "numDeadTuples": 12345,
+      "progressPercent": 45.0
+    }
+  ],
+  "backgroundProcessStats": {
+    "checkpointsTimedCount": 1234,
+    "checkpointsRequestedCount": 56,
+    "bufferCheckpoint": 987654,
+    "buffersClean": 123456,
+    "maxWrittenClean": 789,
+    "buffersBackend": 54321,
+    "buffersBackendFsync": 0,
+    "buffersAlloc": 2345678,
+    "statsReset": "2025-01-01T00:00:00Z"
+  },
+  "storageStats": {
+    "totalDatabaseSize": 10737418240,
+    "totalDatabaseSizeFormatted": "10 GB",
+    "largestDatabase": "myapp",
+    "largestDatabaseSize": 5368709120,
+    "tablespaceCount": 1,
+    "dataDirectory": "/var/lib/postgresql/16/main"
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/infrastructure
+----
+
+'''
+
+[#security]
+== Security & Compliance
+
+Security monitoring endpoints including role auditing, connection security, and compliance scoring.
+
+=== GET /api/v1/security/summary
+
+Provides an overview of security status across all security monitoring areas.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "roles": {
+    "totalRoles": 25,
+    "privilegedRoles": 3,
+    "warningCount": 2
+  },
+  "connections": {
+    "totalConnections": 15,
+    "sslConnections": 12,
+    "sslPercentage": 80.0,
+    "warningCount": 1
+  },
+  "dataAccess": {
+    "sensitiveTables": 8,
+    "piiColumns": 15,
+    "rlsPolicies": 5
+  },
+  "compliance": {
+    "overallScore": 78.5,
+    "areasChecked": 5
+  },
+  "recommendations": {
+    "critical": 1,
+    "high": 3,
+    "medium": 5,
+    "low": 8
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/summary
+----
+
+'''
+
+=== GET /api/v1/security/roles
+
+Retrieves all database roles with their privileges, role memberships, and security warnings.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 25,
+  "roles": [
+    {
+      "roleName": "app_user",
+      "roleSuperuser": false,
+      "roleInherit": true,
+      "roleCreateRole": false,
+      "roleCreateDb": false,
+      "roleCanLogin": true,
+      "roleReplication": false,
+      "roleConnectionLimit": 10,
+      "roleValidUntil": null,
+      "memberOf": ["readonly_group"],
+      "privileges": ["CONNECT", "SELECT"]
+    }
+  ],
+  "memberships": [
+    {
+      "role": "app_user",
+      "memberOf": "readonly_group",
+      "grantedBy": "postgres"
+    }
+  ],
+  "warnings": [
+    {
+      "roleName": "old_admin",
+      "warningType": "UNUSED_SUPERUSER",
+      "message": "Superuser role not used in 90 days",
+      "severity": "HIGH"
+    }
+  ],
+  "summary": {
+    "totalRoles": 25,
+    "privilegedRoles": 3,
+    "warningCount": 2
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/roles
+----
+
+'''
+
+=== GET /api/v1/security/connections
+
+Retrieves SSL connection status, pg_hba.conf rules, and connection security warnings.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "sslConnections": [
+    {
+      "pid": 12345,
+      "user": "app_user",
+      "database": "myapp",
+      "clientAddress": "192.168.1.100",
+      "ssl": true,
+      "sslVersion": "TLSv1.3",
+      "sslCipher": "TLS_AES_256_GCM_SHA384"
+    }
+  ],
+  "hbaRules": [
+    {
+      "lineNumber": 90,
+      "type": "host",
+      "database": "all",
+      "user": "all",
+      "address": "192.168.1.0/24",
+      "authMethod": "scram-sha-256",
+      "options": null
+    }
+  ],
+  "warnings": [
+    {
+      "type": "UNENCRYPTED_CONNECTION",
+      "message": "3 connections without SSL encryption",
+      "severity": "MEDIUM"
+    }
+  ],
+  "summary": {
+    "totalConnections": 15,
+    "sslConnections": 12,
+    "sslPercentage": 80.0,
+    "warningCount": 1
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/connections
+----
+
+'''
+
+=== GET /api/v1/security/access
+
+Retrieves sensitive tables with PII detection, PII columns, and row-level security policies.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "sensitiveTables": [
+    {
+      "schemaName": "public",
+      "tableName": "users",
+      "piiColumnCount": 5,
+      "hasRls": false,
+      "riskLevel": "HIGH"
+    }
+  ],
+  "piiColumns": [
+    {
+      "schemaName": "public",
+      "tableName": "users",
+      "columnName": "email",
+      "dataType": "varchar",
+      "piiType": "EMAIL"
+    }
+  ],
+  "rlsPolicies": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "policyName": "user_isolation",
+      "permissive": true,
+      "roles": ["app_user"],
+      "cmd": "SELECT",
+      "qual": "(user_id = current_user_id())"
+    }
+  ],
+  "summary": {
+    "sensitiveTables": 8,
+    "piiColumns": 15,
+    "rlsPolicies": 5,
+    "tablesNeedingRls": 3
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/access
+----
+
+'''
+
+=== GET /api/v1/security/compliance
+
+Retrieves compliance scores across multiple security areas.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "scores": [
+    {
+      "area": "Access Control",
+      "score": 85.5,
+      "maxScore": 100.0,
+      "checksPassed": 17,
+      "checksFailed": 3,
+      "status": "GOOD"
+    },
+    {
+      "area": "Encryption",
+      "score": 62.0,
+      "maxScore": 100.0,
+      "checksPassed": 5,
+      "checksFailed": 3,
+      "status": "NEEDS_IMPROVEMENT"
+    }
+  ],
+  "summary": {
+    "overallScore": 78.5,
+    "areasChecked": 5,
+    "totalChecksPassed": 45,
+    "totalChecksFailed": 12
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/compliance
+----
+
+'''
+
+=== GET /api/v1/security/recommendations
+
+Retrieves security recommendations organised by priority.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 17,
+  "recommendations": [
+    {
+      "id": 1,
+      "category": "ACCESS_CONTROL",
+      "priority": "CRITICAL",
+      "title": "Unused superuser accounts detected",
+      "description": "Remove or disable unused superuser accounts",
+      "rationale": "Reduces attack surface and privilege escalation risks",
+      "action": "Review and remove accounts: old_admin, test_super",
+      "affectedObjects": ["old_admin", "test_super"]
+    }
+  ],
+  "summary": {
+    "critical": 1,
+    "high": 3,
+    "medium": 5,
+    "low": 8
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/security/recommendations
+----
+
+'''
+
+[#schema-comparison]
+== Schema Comparison
+
+Endpoints for comparing database schemas and generating migration scripts.
+
+=== GET /api/v1/schema-comparison/compare
+
+Compares schemas between two PostgreSQL instances and returns detailed differences.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`sourceInstance`
+|Query (required)
+|Source instance name
+
+|`destInstance`
+|Query (required)
+|Destination instance name
+
+|`sourceSchema`
+|Query (optional)
+|Source schema (default: `public`)
+
+|`destSchema`
+|Query (optional)
+|Destination schema (default: `public`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "sourceInstance": "production",
+  "destInstance": "staging",
+  "sourceSchema": "public",
+  "destSchema": "public",
+  "success": true,
+  "summary": {
+    "missingObjects": 5,
+    "extraObjects": 2,
+    "modifiedObjects": 8,
+    "matchingObjects": 45,
+    "totalChecked": 60
+  },
+  "differences": [
+    {
+      "objectType": "TABLE",
+      "objectName": "new_orders",
+      "differenceType": "MISSING",
+      "severity": "MEDIUM",
+      "details": "Table exists in source but not in destination"
+    },
+    {
+      "objectType": "COLUMN",
+      "objectName": "users.email_verified",
+      "differenceType": "MODIFIED",
+      "severity": "LOW",
+      "details": "Column type changed: boolean -> varchar(10)",
+      "sourceDefinition": "email_verified boolean",
+      "destinationDefinition": "email_verified varchar(10)"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/api/v1/schema-comparison/compare?sourceInstance=prod&destInstance=staging"
+----
+
+'''
+
+=== GET /api/v1/schema-comparison/schemas
+
+Returns available schemas for an instance.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (required)
+|Instance name
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "production",
+  "schemas": ["public", "myapp", "reporting", "audit"]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/schema-comparison/schemas?instance=production
+----
+
+'''
+
+=== GET /api/v1/schema-comparison/profiles
+
+Returns saved comparison profiles.
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "count": 3,
+  "profiles": [
+    {
+      "id": 1,
+      "name": "prod-to-staging",
+      "description": "Compare production to staging environment",
+      "sourceInstance": "production",
+      "destinationInstance": "staging",
+      "sourceSchema": "public",
+      "destinationSchema": "public",
+      "isDefault": true,
+      "createdBy": "admin",
+      "createdAt": "2025-12-01T10:00:00Z",
+      "lastRun": "2025-12-28T09:00:00Z"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/schema-comparison/profiles
+----
+
+'''
+
+=== GET /api/v1/schema-comparison/history
+
+Returns comparison history records.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`limit`
+|Query (optional)
+|Maximum records to return (default: `50`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "count": 50,
+  "totalCount": 234,
+  "history": [
+    {
+      "id": 123,
+      "sourceInstance": "production",
+      "destinationInstance": "staging",
+      "comparedAt": "2025-12-28T09:00:00Z",
+      "comparedBy": "admin",
+      "profileName": "prod-to-staging",
+      "missingObjects": 5,
+      "extraObjects": 2,
+      "modifiedObjects": 8
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/api/v1/schema-comparison/history?limit=100"
+----
+
+'''
+
+=== GET /api/v1/schema-comparison/summary
+
+Returns schema summary statistics for an instance.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (required)
+|Instance name
+
+|`schema`
+|Query (optional)
+|Schema name (default: `public`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "production",
+  "schema": "public",
+  "summary": {
+    "tables": 45,
+    "views": 12,
+    "functions": 28,
+    "sequences": 15,
+    "indexes": 87,
+    "triggers": 23,
+    "types": 5
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/api/v1/schema-comparison/summary?instance=prod&schema=public"
+----
+
+'''
+
+[#system]
+== System
+
+System endpoints for health monitoring and instance management.
+
+=== GET /api/v1/health
+
+Health check endpoint for monitoring and load balancers. Returns health status and basic database information.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response (Healthy)
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "status": "healthy",
+  "version": "PostgreSQL 16.1 on x86_64-pc-linux-gnu",
+  "connections": 12,
+  "maxConnections": 100
+}
+----
+
+==== Response (Unhealthy)
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "status": "unhealthy",
+  "error": "Connection refused: could not connect to server"
+}
+----
+
+==== Example
+
+[source,bash]
+----
+# Basic health check
+curl http://localhost:8080/api/v1/health
+
+# Health check for specific instance
+curl http://localhost:8080/api/v1/health?instance=production
+----
+
+'''
+
+=== GET /api/v1/instances
+
+Returns list of configured PostgreSQL instances.
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "count": 3,
+  "instances": [
+    {
+      "name": "default",
+      "displayName": "Default Instance",
+      "description": "Local development instance",
+      "host": "localhost",
+      "port": 5432,
+      "database": "postgres"
+    },
+    {
+      "name": "production",
+      "displayName": "Production",
+      "description": "Primary production database",
+      "host": "prod-db-01.example.com",
+      "port": 5432,
+      "database": "myapp"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/instances
+----
+
+'''
+
+== Response Field Reference
+
+This section documents common fields found across multiple endpoints.
+
+=== Time Fields
+
+All timestamp fields use ISO 8601 format:
+
+[source,json]
+----
+"timestamp": "2025-12-28T10:30:00Z"
+----
+
+Duration fields use PostgreSQL interval format or decimal seconds:
+
+[source,json]
+----
+"queryDuration": "5.234 seconds"
+"meanTime": 3.00
+----
+
+=== Size Fields
+
+Size fields are provided in both bytes and human-readable format:
+
+[source,json]
+----
+"databaseSize": 5368709120,
+"databaseSizeFormatted": "5.0 GB"
+----
+
+=== Percentage Fields
+
+Percentages are represented as decimal numbers (0-100):
+
+[source,json]
+----
+"cacheHitRatio": 99.5,
+"progressPercent": 45.0
+----
+
+=== Boolean Fields
+
+Boolean fields use JSON boolean values:
+
+[source,json]
+----
+"ssl": true,
+"granted": false
+----
+
+== Rate Limiting
+
+Currently, pg-console does not implement rate limiting. For production deployments, implement rate limiting at the reverse proxy or API gateway level to prevent API abuse.
+
+Recommended limits:
+* Health checks: 1 request/second
+* Monitoring endpoints: 10 requests/minute
+* Administrative actions: 5 requests/minute
+
+== Next Steps
+
+* xref:rest-api.adoc[REST API Overview] - API architecture and best practices
+* xref:index.adoc[API Reference Home] - API introduction
+* xref:admin-guide:security.adoc[Security Configuration] - Secure your API

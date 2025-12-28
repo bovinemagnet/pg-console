@@ -1,0 +1,75 @@
+= User Guide
+Paul Snow
+0.0.0
+:description: Complete user guide for installing, configuring, and using pg-console to monitor PostgreSQL databases
+:keywords: postgresql, monitoring, dashboard, user guide
+
+[abstract]
+This user guide provides comprehensive instructions for installing, configuring, and using pg-console to monitor your PostgreSQL database instances.
+
+== What is pg-console?
+
+pg-console is a lightweight, server-side rendered PostgreSQL monitoring dashboard built with Quarkus, Qute templating, and htmx. It provides real-time insights into database performance, slow queries, active connections, lock contention, and table statistics without requiring client-side JavaScript frameworks.
+
+== Key Features
+
+* *Real-time Monitoring* - Live dashboard with auto-refresh capabilities (5s/10s/30s/60s intervals)
+* *Query Performance Analysis* - Identify slow queries using `pg_stat_statements` with detailed execution statistics
+* *Connection Activity* - Monitor current database connections and active queries
+* *Lock Detection* - Visualise lock contention and blocking trees to identify deadlock scenarios
+* *Table Statistics* - Track table bloat, index usage, and vacuum activity
+* *Historical Trends* - Optional history sampling with SVG sparklines for metrics over time
+* *Multi-Database Support* - Monitor multiple databases with per-database metrics comparison
+* *Dark Mode* - Toggle between light and dark themes with persistent preference
+* *Zero JavaScript Build* - Works without JavaScript; htmx provides progressive enhancement
+
+== Who Should Use This Guide?
+
+This guide is designed for:
+
+* *Database Administrators* - Monitor production PostgreSQL instances and troubleshoot performance issues
+* *DevOps Engineers* - Integrate pg-console into monitoring infrastructure
+* *Developers* - Analyse query performance during development and testing
+* *System Administrators* - Install and configure pg-console for team use
+
+== Guide Structure
+
+This user guide is organised into the following sections:
+
+xref:installation.adoc[Installation]::
+Learn how to install pg-console, including prerequisites, enabling required PostgreSQL extensions, and building from source.
+
+xref:configuration.adoc[Configuration]::
+Configure database connections, filtering, history sampling, and security settings using environment variables.
+
+xref:dashboards.adoc[Using Dashboards]::
+Explore the available dashboards including overview, slow queries, activity, locks, tables, and per-database metrics.
+
+xref:troubleshooting.adoc[Troubleshooting]::
+Resolve common issues such as missing extensions, permission errors, and data collection problems.
+
+== Getting Started
+
+If you're new to pg-console, we recommend following these steps:
+
+. Review the xref:installation.adoc#prerequisites[prerequisites] to ensure your environment meets the requirements
+. Follow the xref:installation.adoc[installation instructions] to deploy pg-console
+. Configure the xref:configuration.adoc#database-connection[database connection] settings
+. Enable the xref:installation.adoc#pg-stat-statements[pg_stat_statements extension] on your PostgreSQL server
+. Access the xref:dashboards.adoc#overview-dashboard[overview dashboard] to begin monitoring
+
+== Additional Resources
+
+For more advanced topics, see:
+
+* xref:admin-guide:index.adoc[Administration Guide] - Production deployment, scaling, and maintenance
+* xref:developer-guide:index.adoc[Developer Guide] - Architecture, contributing, and extending pg-console
+* xref:api-reference:index.adoc[API Reference] - REST endpoints and integration options
+
+== Support
+
+For issues, questions, or feature requests:
+
+* Visit the https://github.com/{github-repo}[GitHub repository]
+* Review the xref:troubleshooting.adoc[troubleshooting guide]
+* Check existing https://github.com/{github-repo}/issues[GitHub issues]

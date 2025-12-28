@@ -1,0 +1,5 @@
+* xref:index.adoc[User Guide]
+** xref:installation.adoc[Installation]
+** xref:configuration.adoc[Configuration]
+** xref:dashboards.adoc[Using Dashboards]
+** xref:troubleshooting.adoc[Troubleshooting]

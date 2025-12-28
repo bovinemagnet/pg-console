@@ -1,0 +1,119 @@
+= Administration Guide
+Paul Snow
+0.0.0
+:description: Administrator's guide for deploying, configuring, and maintaining pg-console
+:keywords: PostgreSQL, administration, deployment, configuration, monitoring
+
+The Administration Guide provides comprehensive information for deploying, configuring, and maintaining pg-console in production environments.
+
+== Overview
+
+This guide covers essential administrative tasks including:
+
+* Deploying pg-console as a systemd service, Docker container, or native executable
+* Configuring multi-instance monitoring for multiple PostgreSQL servers
+* Setting up alerting for critical database conditions
+* Using the CLI for automated reporting and scripting
+* Optimising production settings and security
+
+== Prerequisites
+
+Before deploying pg-console, ensure you have:
+
+* Java 21 or later (for JAR deployment)
+* PostgreSQL 12 or later with `pg_stat_statements` extension enabled
+* Network connectivity from pg-console to PostgreSQL server(s)
+* Appropriate PostgreSQL user credentials with monitoring permissions
+
+TIP: For optimal performance monitoring, ensure the `pg_stat_statements` extension is loaded in `postgresql.conf` with `shared_preload_libraries = 'pg_stat_statements'`.
+
+== Administrative Tasks
+
+=== Deployment
+
+The xref:deployment.adoc[Deployment] guide covers:
+
+* Running pg-console as a systemd service for automatic startup and management
+* Containerised deployment with Docker
+* Reverse proxy configuration using nginx for SSL termination and authentication
+* Production settings and performance optimisation
+* Health check endpoint configuration
+* Building and deploying native executables with GraalVM
+
+=== Multi-Instance Monitoring
+
+The xref:multi-instance.adoc[Multi-Instance Monitoring] guide explains:
+
+* Configuring pg-console to monitor multiple PostgreSQL instances simultaneously
+* Setting up named datasources for production, staging, and development environments
+* Using the instance switcher in the web interface
+* Managing instance-specific configuration and credentials
+
+=== Alerting Configuration
+
+The xref:alerting.adoc[Alerting Configuration] guide details:
+
+* Enabling and configuring alerting for critical database conditions
+* Webhook integration with Slack, Discord, and Microsoft Teams
+* Email alerting setup with SMTP configuration
+* Customising alert thresholds for connection percentage, blocked queries, long-running queries, and cache hit ratio
+* Configuring cooldown periods to prevent alert storms
+* Viewing alert history and audit logs
+
+=== CLI Reference
+
+The xref:cli-reference.adoc[CLI Reference] provides:
+
+* Using pg-console in command-line mode for one-shot reports
+* Available report types: overview, slow-queries, locks, activity, tables
+* Output format options (text, JSON, CSV)
+* Example usage in shell scripts, cron jobs, and monitoring pipelines
+
+== Security Considerations
+
+When deploying pg-console in production:
+
+* Use dedicated PostgreSQL monitoring users with minimal required permissions
+* Enable SSL/TLS for PostgreSQL connections using `?sslmode=require`
+* Place pg-console behind a reverse proxy with authentication (Basic Auth, OAuth2)
+* Restrict network access using firewall rules
+* Regularly review and rotate database credentials
+* Enable audit logging for administrative actions
+
+== Performance Tuning
+
+For large-scale deployments:
+
+* Adjust history sampling intervals based on database activity levels
+* Configure retention periods to balance historical data with storage requirements
+* Tune the number of top queries sampled to reduce overhead
+* Consider disabling history sampling on low-activity databases
+* Use connection pooling for multiple instance monitoring
+* Monitor pg-console's own resource usage and adjust JVM settings if necessary
+
+== Maintenance
+
+Regular maintenance tasks include:
+
+* Monitoring disk usage for the `pgconsole` schema where historical data is stored
+* Reviewing alert logs and adjusting thresholds based on operational patterns
+* Updating pg-console to the latest version for bug fixes and features
+* Backing up configuration files and environment settings
+* Testing failover and recovery procedures for monitored instances
+
+== Getting Help
+
+If you encounter issues:
+
+* Check the xref:user-guide:troubleshooting.adoc[Troubleshooting Guide] for common problems
+* Review application logs for error messages and stack traces
+* Verify PostgreSQL connectivity and extension availability
+* Consult the xref:developer-guide:index.adoc[Developer Guide] for architecture details
+* Report bugs and request features via the project repository
+
+== Next Steps
+
+* Review the xref:deployment.adoc[Deployment] guide to install pg-console
+* Configure xref:multi-instance.adoc[Multi-Instance Monitoring] if managing multiple databases
+* Set up xref:alerting.adoc[Alerting] to receive notifications for critical conditions
+* Explore the xref:cli-reference.adoc[CLI Reference] for automated reporting

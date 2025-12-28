@@ -1,0 +1,23 @@
+name: pg-console
+title: pg-console
+version: '1.0'
+start_page: ROOT:index.adoc
+
+nav:
+  - modules/ROOT/nav.adoc
+  - modules/user-guide/nav.adoc
+  - modules/admin-guide/nav.adoc
+  - modules/api-reference/nav.adoc
+  - modules/developer-guide/nav.adoc
+
+asciidoc:
+  attributes:
+    # Project metadata
+    project-name: pg-console
+    project-version: 1.0.0
+    # GitHub repository
+    github-repo: bovinemagnet/pg-console
+    # Java version
+    java-version: 21
+    # Quarkus version
+    quarkus-version: 3.30.5

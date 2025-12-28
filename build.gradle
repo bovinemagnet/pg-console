@@ -2,6 +2,8 @@ plugins {
     id 'java'
     id 'io.quarkus' version '3.30.5'
     id 'jacoco'
+    id "org.antora" version "${antoraPluginVersion}"
+
 }
 
 repositories {
@@ -25,6 +27,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-mailer'
     implementation 'io.quarkus:quarkus-logging-json'
     implementation 'io.quarkus:quarkus-picocli'
+    implementation 'io.quarkus:quarkus-smallrye-openapi'
 
     // Test dependencies - Core
     testImplementation 'io.quarkus:quarkus-junit5'
@@ -174,4 +177,14 @@ compileJava {
 
 compileTestJava {
     options.encoding = 'UTF-8'
+}
+
+
+antora {
+    playbook = file('antora-playbook.yml')
+    options = [clean: true, fetch: true, stacktrace: true]
+    packages = [
+        '@antora/lunr-extension': 'latest',
+        '@sntke/antora-mermaid-extension': 'latest'
+    ]
 }

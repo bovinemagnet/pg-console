@@ -1,0 +1,48 @@
+= Welcome to pg-console
+Paul Snow
+0.0.0
+:description: PostgreSQL monitoring and performance dashboard built with Quarkus, Qute, and htmx
+:keywords: PostgreSQL, monitoring, dashboard, performance, pg_stat_statements
+
+pg-console is a lightweight PostgreSQL monitoring and performance dashboard that provides real-time insights into your database activity, query performance, and system health.
+
+== What is pg-console?
+
+pg-console is a web-based monitoring dashboard for PostgreSQL databases that leverages PostgreSQL's built-in statistics views to provide comprehensive insights without requiring additional database modifications or extensions beyond `pg_stat_statements`.
+
+Built with modern web technologies including Quarkus, Qute templating, and htmx, pg-console delivers a responsive, server-side rendered interface that works seamlessly with or without JavaScript enabled.
+
+== Key Features
+
+* *Real-time Monitoring* - Live dashboard with configurable auto-refresh (5s/10s/30s/60s intervals)
+* *Query Performance Analysis* - Identify and analyse slow queries using `pg_stat_statements` metrics
+* *Active Connections* - Monitor current database activity, connections, and running queries
+* *Lock Contention Detection* - Visualise blocking trees and identify problematic locks
+* *Table Statistics* - Track table sizes, bloat indicators, and access patterns
+* *Database Metrics* - Compare metrics across multiple databases with sparkline visualisations
+* *Historical Tracking* - Automatic sampling and retention of performance metrics over time
+* *Dark Mode Support* - Built-in dark/light theme toggle with persistent preferences
+* *No Client-side Dependencies* - Progressive enhancement with htmx; full functionality without JavaScript
+* *Simple Deployment* - Single JAR deployment with minimal configuration required
+
+== Getting Started
+
+Ready to start monitoring your PostgreSQL databases?
+
+* xref:quick-start.adoc[Quick Start Guide] - Get up and running in minutes
+* xref:user-guide:index.adoc[User Guide] - Detailed usage instructions and dashboard features
+* xref:admin-guide:index.adoc[Administration Guide] - Configuration, deployment, and maintenance
+
+== Documentation Modules
+
+The pg-console documentation is organised into the following modules:
+
+* *User Guide* - Learn how to use the dashboard, interpret metrics, and analyse query performance
+* *Administration Guide* - Configure, deploy, and maintain pg-console in production environments
+* *Developer Guide* - Architecture, development setup, and contributing guidelines
+
+== Need Help?
+
+* Check the xref:user-guide:troubleshooting.adoc[Troubleshooting Guide] for common issues
+* Review the xref:admin-guide:configuration.adoc[Configuration Reference] for environment variables
+* Visit the project repository for issue tracking and contributions

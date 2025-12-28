@@ -42,3 +42,4 @@ build/
 .quarkus/
 build/**
 bin/*
+target/**

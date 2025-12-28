@@ -1,0 +1,611 @@
+= Troubleshooting
+Paul Snow
+0.0.0
+:description: Troubleshooting guide for common pg-console issues including extension problems, permissions, connectivity, and data collection
+:keywords: troubleshooting, errors, debugging, issues
+
+[abstract]
+This guide helps you diagnose and resolve common issues with pg-console, including extension configuration, permission errors, connection problems, and data collection issues.
+
+== General Troubleshooting Steps
+
+Before diving into specific issues:
+
+. Check application logs for error messages
+. Verify PostgreSQL server is running and accessible
+. Confirm database credentials are correct
+. Review the xref:dashboards.adoc#about[About page] (`/about`) for configuration details
+
+== pg_stat_statements Not Enabled
+
+=== Symptoms
+
+* Slow Queries dashboard shows "Extension not available" message
+* Error in logs: `ERROR: relation "pg_stat_statements" does not exist`
+* Query performance metrics are unavailable
+
+=== Diagnosis
+
+Connect to your PostgreSQL database and run:
+
+[source,sql]
+----
+SELECT * FROM pg_stat_statements LIMIT 1;
+----
+
+If you see `ERROR: relation "pg_stat_statements" does not exist`, the extension is not enabled.
+
+=== Solution
+
+Follow the xref:installation.adoc#pg-stat-statements[pg_stat_statements installation guide]:
+
+. Add to `postgresql.conf`:
++
+[source,ini]
+----
+shared_preload_libraries = 'pg_stat_statements'
+----
+
+. Restart PostgreSQL:
++
+[source,bash]
+----
+sudo systemctl restart postgresql
+----
+
+. Create the extension in each monitored database:
++
+[source,sql]
+----
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+----
+
+. Verify the extension is active:
++
+[source,sql]
+----
+SELECT count(*) FROM pg_stat_statements;
+----
+
+[NOTE]
+====
+Changes to `shared_preload_libraries` require a full PostgreSQL restart, not just a configuration reload.
+====
+
+== Permission Denied Errors
+
+=== Symptoms
+
+* Error in logs: `ERROR: permission denied for relation pg_stat_activity`
+* Dashboard shows "Access denied" or empty data
+* Some dashboards work but others fail
+
+=== Diagnosis
+
+Check which system views the database user can access:
+
+[source,sql]
+----
+-- Test as the pg-console user
+SELECT current_user;
+
+-- Try accessing system views
+SELECT count(*) FROM pg_stat_activity;
+SELECT count(*) FROM pg_stat_statements;
+SELECT count(*) FROM pg_locks;
+----
+
+If any of these fail with "permission denied", the user lacks necessary privileges.
+
+=== Solution 1: Grant pg_monitor Role (Recommended)
+
+PostgreSQL 10+ includes the `pg_monitor` role with appropriate permissions:
+
+[source,sql]
+----
+GRANT pg_monitor TO pgconsole_user;
+----
+
+This grants read access to all monitoring views and statistics.
+
+=== Solution 2: Grant Specific Permissions
+
+For PostgreSQL versions before 10, grant individual permissions:
+
+[source,sql]
+----
+-- Grant access to pg_stat_activity
+GRANT SELECT ON pg_stat_activity TO pgconsole_user;
+
+-- Grant execute on statistics functions
+GRANT EXECUTE ON FUNCTION pg_stat_statements_reset() TO pgconsole_user;
+
+-- For pg_stat_statements views
+GRANT SELECT ON pg_stat_statements TO pgconsole_user;
+----
+
+=== Solution 3: History Schema Creation
+
+If history sampling is enabled and fails with permission denied:
+
+[source,sql]
+----
+-- Grant CREATE privilege on the database
+GRANT CREATE ON DATABASE myapp TO pgconsole_user;
+----
+
+Alternatively, disable history sampling:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=false
+----
+
+== Connection Refused
+
+=== Symptoms
+
+* Application fails to start
+* Error in logs: `Connection refused` or `Connection to localhost:5432 refused`
+* Dashboard is inaccessible
+
+=== Diagnosis
+
+Verify PostgreSQL is running and accepting connections:
+
+[source,bash]
+----
+# Check PostgreSQL service status
+sudo systemctl status postgresql
+
+# Test connection with psql
+psql -h localhost -p 5432 -U postgres -d postgres
+----
+
+=== Solution 1: PostgreSQL Not Running
+
+Start the PostgreSQL service:
+
+[source,bash]
+----
+sudo systemctl start postgresql
+sudo systemctl enable postgresql  # Start on boot
+----
+
+=== Solution 2: Wrong Host or Port
+
+Verify the connection details in your configuration:
+
+[source,bash]
+----
+# Check environment variable
+echo $POSTGRES_URL
+
+# Expected format:
+# jdbc:postgresql://HOST:PORT/DATABASE
+----
+
+Common issues:
+
+* Using `localhost` in Docker without proper networking (use `host.docker.internal` on macOS/Windows, or `--network host` on Linux)
+* Wrong port number (default is 5432)
+* PostgreSQL listening only on Unix sockets (check `listen_addresses` in `postgresql.conf`)
+
+=== Solution 3: Firewall Blocking Connection
+
+Check if a firewall is blocking the connection:
+
+[source,bash]
+----
+# Test port connectivity
+telnet DB_HOST 5432
+
+# Or using nc
+nc -zv DB_HOST 5432
+----
+
+If blocked, configure firewall rules:
+
+[source,bash]
+----
+# Ubuntu/Debian (ufw)
+sudo ufw allow 5432/tcp
+
+# RHEL/CentOS (firewalld)
+sudo firewall-cmd --permanent --add-port=5432/tcp
+sudo firewall-cmd --reload
+----
+
+=== Solution 4: PostgreSQL Not Listening on Network
+
+Edit `postgresql.conf`:
+
+[source,ini]
+----
+listen_addresses = '*'  # Listen on all interfaces
+----
+
+Edit `pg_hba.conf` to allow connections:
+
+[source,text]
+----
+# Allow connections from application server
+host    all    all    192.168.1.0/24    md5
+----
+
+Reload PostgreSQL:
+
+[source,bash]
+----
+sudo systemctl reload postgresql
+----
+
+== Authentication Failed
+
+=== Symptoms
+
+* Error in logs: `FATAL: password authentication failed for user "postgres"`
+* Application starts but cannot connect to database
+
+=== Diagnosis
+
+Test credentials manually:
+
+[source,bash]
+----
+psql -h localhost -p 5432 -U postgres -d postgres
+----
+
+If this fails with the same error, the credentials are incorrect.
+
+=== Solution
+
+. Verify the username and password:
++
+[source,bash]
+----
+echo $POSTGRES_USER
+echo $POSTGRES_PASSWORD
+----
+
+. Reset the password if needed:
++
+[source,sql]
+----
+-- As a superuser
+ALTER USER postgres PASSWORD 'new_secure_password';
+----
+
+. Update the environment variable:
++
+[source,bash]
+----
+export POSTGRES_PASSWORD='new_secure_password'
+----
+
+. Check `pg_hba.conf` authentication method:
++
+[source,text]
+----
+# Use md5 or scram-sha-256 for password authentication
+host    all    all    127.0.0.1/32    md5
+----
+
+. Reload PostgreSQL after changing `pg_hba.conf`:
++
+[source,bash]
+----
+sudo systemctl reload postgresql
+----
+
+== Dashboard Shows No Data
+
+=== Symptoms
+
+* Dashboard loads successfully but shows empty tables or "No data available"
+* No errors in logs
+* Database connection is successful
+
+=== Diagnosis
+
+. Check the xref:dashboards.adoc#about[About page] to verify:
+   - PostgreSQL connection is active
+   - `pg_stat_statements` is enabled (if viewing slow queries)
+   - Database filter configuration
+
+. Verify there is activity in the database:
++
+[source,sql]
+----
+-- Check if any queries are tracked
+SELECT count(*) FROM pg_stat_statements;
+
+-- Check if there are active connections
+SELECT count(*) FROM pg_stat_activity;
+
+-- Check if there are tables in the database
+SELECT count(*) FROM pg_stat_user_tables;
+----
+
+=== Solution 1: Empty pg_stat_statements
+
+If `pg_stat_statements` has no data:
+
+* The extension was recently installed (wait for queries to execute)
+* Statistics were recently reset
+* No queries have been executed since extension installation
+
+Generate some activity:
+
+[source,sql]
+----
+SELECT version();
+SELECT now();
+SELECT count(*) FROM pg_stat_user_tables;
+----
+
+Refresh the dashboard to see the new queries.
+
+=== Solution 2: Database Filter Excluding Data
+
+Check if `PG_CONSOLE_DATABASES` is filtering out the database:
+
+[source,bash]
+----
+echo $PG_CONSOLE_DATABASES
+----
+
+If this is set, ensure the database you're monitoring is in the list:
+
+[source,bash]
+----
+# Monitor all databases
+export PG_CONSOLE_DATABASES=
+
+# Or add specific database
+export PG_CONSOLE_DATABASES=myapp,postgres
+----
+
+Restart pg-console after changing the configuration.
+
+=== Solution 3: No User Tables
+
+If you're monitoring a fresh database with no tables:
+
+[source,sql]
+----
+-- Create a test table
+CREATE TABLE test_table (id serial PRIMARY KEY, name text);
+INSERT INTO test_table (name) VALUES ('test');
+----
+
+Refresh the Tables dashboard to see the new table.
+
+== History Not Being Collected
+
+=== Symptoms
+
+* Sparklines do not appear on dashboards
+* Historical trends are unavailable
+* No errors in logs
+
+=== Diagnosis
+
+. Check if history sampling is enabled:
++
+[source,bash]
+----
+echo $PG_CONSOLE_HISTORY_ENABLED
+----
+
+. Check the About page for history status
+
+. Verify the `pgconsole` schema exists:
++
+[source,sql]
+----
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'pgconsole';
+----
+
+. Check if tables exist in the schema:
++
+[source,sql]
+----
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'pgconsole';
+----
+
+. Check if data is being inserted:
++
+[source,sql]
+----
+SELECT count(*) FROM pgconsole.query_history;
+SELECT count(*) FROM pgconsole.database_history;
+SELECT count(*) FROM pgconsole.table_history;
+----
+
+=== Solution 1: History Disabled
+
+Enable history sampling:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=true
+----
+
+Restart pg-console. The `pgconsole` schema will be created on startup.
+
+=== Solution 2: Insufficient Permissions
+
+Grant CREATE privilege to allow schema creation:
+
+[source,sql]
+----
+GRANT CREATE ON DATABASE myapp TO pgconsole_user;
+----
+
+Or create the schema manually:
+
+[source,sql]
+----
+CREATE SCHEMA IF NOT EXISTS pgconsole;
+GRANT USAGE ON SCHEMA pgconsole TO pgconsole_user;
+GRANT CREATE ON SCHEMA pgconsole TO pgconsole_user;
+----
+
+Restart pg-console to initialise tables.
+
+=== Solution 3: Sampling Interval Too Long
+
+If the interval is very long, data may not appear immediately:
+
+[source,bash]
+----
+# Check current interval
+echo $PG_CONSOLE_HISTORY_INTERVAL
+
+# Set to 60 seconds for testing
+export PG_CONSOLE_HISTORY_INTERVAL=60
+----
+
+Wait for at least one interval period, then check for data:
+
+[source,sql]
+----
+SELECT max(sampled_at) FROM pgconsole.database_history;
+----
+
+=== Solution 4: Flyway Migration Issues
+
+If tables are not created, check logs for Flyway migration errors:
+
+[source,bash]
+----
+# Look for migration errors in logs
+grep -i "flyway" /var/log/pg-console/application.log
+----
+
+Manually run migrations if needed (see xref:developer-guide:database-schema.adoc[Database Schema]).
+
+== Application Won't Start
+
+=== Symptoms
+
+* Application exits immediately after starting
+* Error in logs during startup
+* Port binding failures
+
+=== Solution 1: Port Already in Use
+
+If you see `Address already in use` error:
+
+[source,bash]
+----
+# Check what's using port 8080
+sudo lsof -i :8080
+
+# Or use netstat
+sudo netstat -tulpn | grep 8080
+----
+
+Either stop the conflicting service or change pg-console port:
+
+[source,bash]
+----
+export QUARKUS_HTTP_PORT=3000
+----
+
+=== Solution 2: Java Version Mismatch
+
+Verify Java version:
+
+[source,bash]
+----
+java -version
+----
+
+Must be Java {java-version} or later. If incorrect:
+
+[source,bash]
+----
+# Set JAVA_HOME to Java 21 installation
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+export PATH=$JAVA_HOME/bin:$PATH
+----
+
+=== Solution 3: Missing Dependencies
+
+For native executables, ensure required libraries are installed:
+
+[source,bash]
+----
+# Ubuntu/Debian
+sudo apt install zlib1g
+
+# RHEL/CentOS
+sudo dnf install zlib
+----
+
+== Slow Dashboard Performance
+
+=== Symptoms
+
+* Dashboards take a long time to load
+* Browser becomes unresponsive
+* High database CPU usage
+
+=== Solution 1: Disable Aggressive Auto-Refresh
+
+Reduce auto-refresh frequency:
+
+. Click *Auto-Refresh* dropdown
+. Select *30 seconds* or *60 seconds* instead of *5 seconds*
+
+Or disable auto-refresh entirely and refresh manually as needed.
+
+=== Solution 2: Increase History Sampling Interval
+
+If history sampling is causing load:
+
+[source,bash]
+----
+# Increase interval to 5 minutes
+export PG_CONSOLE_HISTORY_INTERVAL=300
+----
+
+=== Solution 3: Filter Monitored Databases
+
+If monitoring many databases, limit to critical ones:
+
+[source,bash]
+----
+export PG_CONSOLE_DATABASES=production,analytics
+----
+
+=== Solution 4: Reduce History Retention
+
+Shorten retention period to reduce data volume:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_RETENTION=1  # Keep only 1 day
+----
+
+== Getting Help
+
+If you've tried these solutions and still experience issues:
+
+. Check the https://github.com/{github-repo}/issues[GitHub Issues] for similar problems
+. Review application logs for detailed error messages
+. Verify your configuration against the xref:configuration.adoc[Configuration guide]
+. Create a new GitHub issue with:
+  - pg-console version (from xref:dashboards.adoc#about[About page])
+  - PostgreSQL version
+  - Operating system
+  - Relevant log excerpts
+  - Steps to reproduce the issue
+
+== Next Steps
+
+* Review xref:installation.adoc[installation guide] for setup requirements
+* Check xref:configuration.adoc[configuration reference] for available settings
+* Explore xref:admin-guide:index.adoc[administration guide] for production deployment best practices

@@ -1,0 +1,793 @@
+= Testing
+Paul Snow
+0.0.0
+:description: Testing strategy for pg-console including unit tests, integration tests, E2E tests, and coverage
+:keywords: testing, unit tests, integration tests, Testcontainers, Playwright, JaCoCo
+
+This page describes the testing strategy for pg-console, including how to run tests, write new tests, and measure code coverage.
+
+== Testing Philosophy
+
+pg-console follows a comprehensive testing strategy to ensure reliability and maintainability:
+
+* *Unit tests* validate individual components in isolation
+* *Integration tests* verify interactions with PostgreSQL using Testcontainers
+* *End-to-end tests* validate the full user experience using Playwright
+* *Code coverage* measures test effectiveness with JaCoCo
+* *CI/CD pipeline* runs all tests automatically on every commit
+
+The test suite is designed to run quickly, provide fast feedback, and catch regressions early.
+
+== Test Structure
+
+Tests are organised in `src/test/java/` following the same package structure as the main codebase:
+
+[source,text]
+----
+src/test/java/com/bovinemagnet/pgconsole/
+├── model/        # Model/DTO validation tests
+├── repository/   # Repository integration tests
+├── resource/     # REST endpoint tests
+├── service/      # Service layer unit and integration tests
+└── e2e/          # End-to-end Playwright tests
+----
+
+=== Test Naming Conventions
+
+* Test classes end with `Test`: `PostgresServiceTest`, `HistoryRepositoryTest`
+* Test methods use descriptive names: `shouldReturnSlowQueriesOrderedByTotalTime()`
+* Integration tests end with `IT`: `HistoryRepositoryIT`, `DashboardResourceIT`
+* E2E tests end with `E2E`: `DashboardNavigationE2E`, `AutoRefreshE2E`
+
+== Running Tests
+
+=== All Tests
+
+Run the entire test suite:
+
+[source,bash]
+----
+gradle21w test
+----
+
+This executes:
+
+* Unit tests (fast, no external dependencies)
+* Integration tests (slower, uses Testcontainers)
+* E2E tests (slowest, uses Playwright)
+
+=== Unit Tests Only
+
+Run only fast unit tests:
+
+[source,bash]
+----
+gradle21w test --tests '*Test' --exclude-task testE2E
+----
+
+=== Integration Tests Only
+
+Run only integration tests with Testcontainers:
+
+[source,bash]
+----
+gradle21w test --tests '*IT'
+----
+
+=== E2E Tests Only
+
+Run only end-to-end Playwright tests:
+
+[source,bash]
+----
+gradle21w testE2E
+----
+
+=== Single Test Class
+
+Run a specific test class:
+
+[source,bash]
+----
+gradle21w test --tests PostgresServiceTest
+----
+
+=== Single Test Method
+
+Run a specific test method:
+
+[source,bash]
+----
+gradle21w test --tests PostgresServiceTest.shouldReturnSlowQueriesOrderedByTotalTime
+----
+
+=== Continuous Testing
+
+Run tests automatically when files change (development mode):
+
+[source,bash]
+----
+gradle21w test --continuous
+----
+
+== Unit Tests
+
+Unit tests validate individual components in isolation without external dependencies.
+
+=== Service Layer Tests
+
+Service layer tests use mocking to isolate business logic from data access.
+
+[source,java]
+----
+@QuarkusTest
+class SparklineServiceTest {
+
+    @Inject
+    SparklineService sparklineService;
+
+    @Test
+    void shouldGenerateSvgSparklineFromDataPoints() {
+        // Given
+        List<Double> values = List.of(10.0, 20.0, 15.0, 30.0, 25.0);
+
+        // When
+        String svg = sparklineService.generateSparkline(values, 100, 30);
+
+        // Then
+        assertThat(svg).contains("<svg");
+        assertThat(svg).contains("<polyline");
+        assertThat(svg).contains("width=\"100\"");
+        assertThat(svg).contains("height=\"30\"");
+    }
+
+    @Test
+    void shouldHandleEmptyDataGracefully() {
+        // Given
+        List<Double> values = List.of();
+
+        // When
+        String svg = sparklineService.generateSparkline(values, 100, 30);
+
+        // Then
+        assertThat(svg).contains("<svg");
+        assertThat(svg).doesNotContain("<polyline");
+    }
+}
+----
+
+=== Model Validation Tests
+
+Model tests validate DTOs, records, and data structures:
+
+[source,java]
+----
+class SlowQueryTest {
+
+    @Test
+    void shouldCreateSlowQueryRecord() {
+        // Given/When
+        SlowQuery query = new SlowQuery(
+            123456789L,
+            "SELECT * FROM users WHERE id = $1",
+            1000L,
+            5000.0,
+            5.0,
+            "postgres"
+        );
+
+        // Then
+        assertThat(query.queryId()).isEqualTo(123456789L);
+        assertThat(query.calls()).isEqualTo(1000L);
+        assertThat(query.totalTime()).isEqualTo(5000.0);
+    }
+
+    @Test
+    void shouldCalculateMeanTimeCorrectly() {
+        // Given
+        SlowQuery query = new SlowQuery(
+            123456789L, "SELECT 1", 1000L, 5000.0, 5.0, "postgres"
+        );
+
+        // When
+        double meanTime = query.totalTime() / query.calls();
+
+        // Then
+        assertThat(meanTime).isEqualTo(5.0);
+    }
+}
+----
+
+=== Utility and Helper Tests
+
+Test utility classes and helper methods:
+
+[source,java]
+----
+class AllowlistValidatorTest {
+
+    private static final Set<String> ALLOWED_COLUMNS = Set.of(
+        "query", "calls", "total_time", "mean_time"
+    );
+
+    @Test
+    void shouldAllowValidColumn() {
+        String column = "total_time";
+        boolean valid = ALLOWED_COLUMNS.contains(column);
+        assertThat(valid).isTrue();
+    }
+
+    @Test
+    void shouldRejectInvalidColumn() {
+        String column = "malicious_column; DROP TABLE users--";
+        boolean valid = ALLOWED_COLUMNS.contains(column);
+        assertThat(valid).isFalse();
+    }
+}
+----
+
+== Integration Tests
+
+Integration tests verify interactions with PostgreSQL using Testcontainers to provide a real database.
+
+=== Testcontainers Setup
+
+Testcontainers automatically starts a PostgreSQL Docker container for integration tests:
+
+[source,java]
+----
+@QuarkusTest
+@QuarkusTestResource(PostgresTestResource.class)
+class HistoryRepositoryIT {
+
+    @Inject
+    HistoryRepository historyRepository;
+
+    @Test
+    void shouldInsertAndRetrieveOverviewHistory() {
+        // Given
+        OverviewHistory sample = new OverviewHistory(
+            null,
+            Instant.now(),
+            10,
+            5,
+            3,
+            0,
+            95.5,
+            1024000L,
+            100.0,
+            1000L,
+            500L,
+            100L
+        );
+
+        // When
+        historyRepository.insertOverviewHistory(sample);
+        List<OverviewHistory> results = historyRepository
+            .getOverviewHistory(Duration.ofHours(1));
+
+        // Then
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).totalConnections()).isEqualTo(10);
+        assertThat(results.get(0).cacheHitRatio()).isEqualTo(95.5);
+    }
+
+    @Test
+    @Transactional
+    void shouldDeleteOldRecords() {
+        // Given
+        Instant oldTime = Instant.now().minus(Duration.ofDays(10));
+        OverviewHistory oldSample = new OverviewHistory(
+            null, oldTime, 5, 3, 2, 0, 90.0, 1024000L, 50.0, 500L, 200L, 50L
+        );
+        historyRepository.insertOverviewHistory(oldSample);
+
+        // When
+        int deleted = historyRepository.deleteOldRecords(Duration.ofDays(7));
+
+        // Then
+        assertThat(deleted).isGreaterThan(0);
+    }
+}
+----
+
+=== Test Resource Configuration
+
+The `PostgresTestResource` configures the Testcontainer:
+
+[source,java]
+----
+public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
+
+    private PostgreSQLContainer<?> postgres;
+
+    @Override
+    public Map<String, String> start() {
+        postgres = new PostgreSQLContainer<>("postgres:16")
+            .withDatabaseName("test")
+            .withUsername("test")
+            .withPassword("test")
+            .withInitScript("test-init.sql"); // Enable extensions
+
+        postgres.start();
+
+        return Map.of(
+            "quarkus.datasource.jdbc.url", postgres.getJdbcUrl(),
+            "quarkus.datasource.username", postgres.getUsername(),
+            "quarkus.datasource.password", postgres.getPassword()
+        );
+    }
+
+    @Override
+    public void stop() {
+        if (postgres != null) {
+            postgres.stop();
+        }
+    }
+}
+----
+
+=== Test Initialisation Script
+
+The `test-init.sql` script prepares the test database:
+
+[source,sql]
+----
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Create test data
+CREATE TABLE IF NOT EXISTS test_table (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO test_table (name) VALUES
+    ('Test 1'),
+    ('Test 2'),
+    ('Test 3');
+----
+
+== End-to-End Tests
+
+E2E tests validate the complete user experience using Playwright to automate browser interactions.
+
+=== Playwright Setup
+
+Playwright tests run against a real application instance:
+
+[source,java]
+----
+@QuarkusTest
+class DashboardNavigationE2E {
+
+    private static final String BASE_URL = "http://localhost:8081";
+
+    @Test
+    void shouldNavigateToAllDashboardPages() {
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch();
+            BrowserContext context = browser.newContext();
+            Page page = context.newPage();
+
+            // Navigate to home page
+            page.navigate(BASE_URL);
+            assertThat(page.title()).contains("Overview");
+
+            // Navigate to slow queries
+            page.click("a[href='/slow-queries']");
+            assertThat(page.url()).contains("/slow-queries");
+
+            // Navigate to activity
+            page.click("a[href='/activity']");
+            assertThat(page.url()).contains("/activity");
+
+            // Navigate to locks
+            page.click("a[href='/locks']");
+            assertThat(page.url()).contains("/locks");
+
+            // Navigate to tables
+            page.click("a[href='/tables']");
+            assertThat(page.url()).contains("/tables");
+
+            context.close();
+            browser.close();
+        }
+    }
+}
+----
+
+=== Testing Auto-Refresh
+
+Validate htmx auto-refresh functionality:
+
+[source,java]
+----
+@QuarkusTest
+class AutoRefreshE2E {
+
+    @Test
+    void shouldAutoRefreshActivityPage() {
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch();
+            Page page = browser.newPage();
+
+            page.navigate(BASE_URL + "/activity");
+
+            // Set refresh interval to 5 seconds
+            page.selectOption("#refreshInterval", "5");
+
+            // Wait for localStorage to be set
+            page.waitForTimeout(100);
+
+            // Verify localStorage value
+            String interval = (String) page.evaluate(
+                "localStorage.getItem('refreshInterval')"
+            );
+            assertThat(interval).isEqualTo("5");
+
+            // Verify htmx polling is active
+            page.waitForTimeout(5500);
+            // Page should have refreshed
+
+            browser.close();
+        }
+    }
+}
+----
+
+=== Testing Dark Mode
+
+Validate dark mode toggle:
+
+[source,java]
+----
+@QuarkusTest
+class DarkModeE2E {
+
+    @Test
+    void shouldToggleDarkMode() {
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch();
+            Page page = browser.newPage();
+
+            page.navigate(BASE_URL);
+
+            // Click dark mode toggle
+            page.click("#darkModeToggle");
+
+            // Verify theme attribute
+            String theme = (String) page.evaluate(
+                "document.documentElement.getAttribute('data-bs-theme')"
+            );
+            assertThat(theme).isEqualTo("dark");
+
+            // Verify localStorage
+            String storedTheme = (String) page.evaluate(
+                "localStorage.getItem('theme')"
+            );
+            assertThat(storedTheme).isEqualTo("dark");
+
+            browser.close();
+        }
+    }
+}
+----
+
+== Code Coverage
+
+pg-console uses JaCoCo to measure test coverage and generate reports.
+
+=== Generating Coverage Reports
+
+Run tests with coverage enabled:
+
+[source,bash]
+----
+gradle21w test jacocoTestReport
+----
+
+This generates:
+
+* HTML report: `build/reports/jacoco/test/html/index.html`
+* XML report: `build/reports/jacoco/test/jacocoTestReport.xml`
+* CSV report: `build/reports/jacoco/test/jacocoTestReport.csv`
+
+=== Viewing Coverage Reports
+
+Open the HTML report in a browser:
+
+[source,bash]
+----
+xdg-open build/reports/jacoco/test/html/index.html
+----
+
+The report shows:
+
+* Overall coverage percentage
+* Coverage by package
+* Coverage by class
+* Line-by-line coverage in source files
+
+=== Coverage Thresholds
+
+The project enforces minimum coverage thresholds:
+
+* *Line coverage:* 80%
+* *Branch coverage:* 70%
+* *Complexity coverage:* 75%
+
+Builds fail if coverage falls below these thresholds.
+
+=== Coverage Configuration
+
+JaCoCo is configured in `build.gradle.kts`:
+
+[source,kotlin]
+----
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(true)
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+        rule {
+            element = "BRANCH"
+            limit {
+                minimum = "0.70".toBigDecimal()
+            }
+        }
+    }
+}
+----
+
+== CI/CD Pipeline
+
+pg-console uses GitHub Actions for continuous integration and deployment.
+
+=== Workflow Configuration
+
+The `.github/workflows/ci.yml` file defines the pipeline:
+
+[source,yaml]
+----
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Run tests
+        run: gradle21w test
+
+      - name: Generate coverage report
+        run: gradle21w jacocoTestReport
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: build/reports/jacoco/test/jacocoTestReport.xml
+----
+
+=== Pipeline Steps
+
+. *Checkout code* from repository
+. *Set up Java 21* with Temurin distribution
+. *Start PostgreSQL service* for integration tests
+. *Run all tests* (unit, integration, E2E)
+. *Generate coverage report* with JaCoCo
+. *Upload coverage* to Codecov for tracking
+
+=== Quality Gates
+
+The pipeline enforces quality gates:
+
+* All tests must pass
+* Coverage thresholds must be met
+* Build must succeed without warnings
+* Linting rules must pass (if configured)
+
+Pull requests are blocked from merging if any quality gate fails.
+
+== Writing New Tests
+
+=== Unit Test Template
+
+[source,java]
+----
+@QuarkusTest
+class MyServiceTest {
+
+    @Inject
+    MyService myService;
+
+    @Test
+    void shouldDoSomething() {
+        // Given
+        // Set up test data
+
+        // When
+        // Execute the method under test
+
+        // Then
+        // Assert expected outcomes
+    }
+}
+----
+
+=== Integration Test Template
+
+[source,java]
+----
+@QuarkusTest
+@QuarkusTestResource(PostgresTestResource.class)
+class MyRepositoryIT {
+
+    @Inject
+    MyRepository myRepository;
+
+    @Test
+    @Transactional
+    void shouldPersistAndRetrieveData() {
+        // Given
+        // Create test entities
+
+        // When
+        // Persist to database
+        // Retrieve from database
+
+        // Then
+        // Assert data integrity
+    }
+}
+----
+
+=== E2E Test Template
+
+[source,java]
+----
+@QuarkusTest
+class MyFeatureE2E {
+
+    @Test
+    void shouldPerformUserWorkflow() {
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch();
+            Page page = browser.newPage();
+
+            // Given
+            page.navigate(BASE_URL + "/page");
+
+            // When
+            page.click("button#action");
+
+            // Then
+            assertThat(page.locator("#result").textContent())
+                .contains("Expected text");
+
+            browser.close();
+        }
+    }
+}
+----
+
+== Best Practices
+
+=== Test Isolation
+
+* Each test should be independent and not rely on other tests
+* Use `@Transactional` to rollback database changes after integration tests
+* Clean up test data in `@AfterEach` methods if needed
+* Avoid shared mutable state between tests
+
+=== Descriptive Assertions
+
+Use AssertJ for readable assertions:
+
+[source,java]
+----
+// Good: Descriptive and readable
+assertThat(result.getConnections())
+    .hasSize(10)
+    .allMatch(conn -> conn.getState() == State.ACTIVE);
+
+// Bad: Generic and unclear
+assertTrue(result.getConnections().size() == 10);
+----
+
+=== Test Data Builders
+
+Use builder pattern for complex test data:
+
+[source,java]
+----
+class SlowQueryBuilder {
+    private Long queryId = 123456789L;
+    private String queryText = "SELECT 1";
+    private Long calls = 1000L;
+    private Double totalTime = 5000.0;
+
+    public SlowQueryBuilder withQueryId(Long queryId) {
+        this.queryId = queryId;
+        return this;
+    }
+
+    public SlowQuery build() {
+        return new SlowQuery(queryId, queryText, calls, totalTime, ...);
+    }
+}
+
+// Usage
+SlowQuery query = new SlowQueryBuilder()
+    .withQueryId(999L)
+    .withCalls(5000L)
+    .build();
+----
+
+=== Parameterised Tests
+
+Use JUnit 5 parameterised tests for multiple test cases:
+
+[source,java]
+----
+@ParameterizedTest
+@CsvSource({
+    "total_time, true",
+    "calls, true",
+    "invalid_column, false"
+})
+void shouldValidateColumnAllowlist(String column, boolean expected) {
+    boolean valid = ALLOWED_COLUMNS.contains(column);
+    assertThat(valid).isEqualTo(expected);
+}
+----
+
+== Next Steps
+
+Now that you understand the testing strategy, explore:
+
+* xref:architecture.adoc[Architecture] - Review the system design
+* xref:database-schema.adoc[Database Schema] - Learn about data storage
+* xref:admin-guide:configuration.adoc[Configuration] - Configure the application

@@ -1,0 +1,488 @@
+= Multi-Instance Monitoring
+Paul Snow
+0.0.0
+:description: Configure pg-console to monitor multiple PostgreSQL instances
+:keywords: multi-instance, monitoring, multiple databases, datasources, instance switcher
+
+This guide explains how to configure pg-console to monitor multiple PostgreSQL instances simultaneously, allowing you to manage production, staging, and development environments from a single dashboard.
+
+== Overview
+
+Multi-instance monitoring enables pg-console to:
+
+* Monitor multiple PostgreSQL servers from a single installation
+* Switch between instances using the web interface
+* Maintain separate historical data for each instance
+* Configure instance-specific settings and credentials
+* Compare metrics across different environments
+
+== Configuration Methods
+
+pg-console supports two methods for multi-instance configuration:
+
+1. **Environment Variables** - Simple configuration using `PG_CONSOLE_INSTANCES`
+2. **Named Datasources** - Advanced configuration using `application.properties`
+
+== Environment Variable Configuration
+
+The simplest method for configuring multiple instances uses the `PG_CONSOLE_INSTANCES` environment variable.
+
+=== Basic Configuration
+
+Define instances as a JSON array:
+
+[source,bash]
+----
+export PG_CONSOLE_INSTANCES='[
+  {
+    "name": "Production",
+    "url": "jdbc:postgresql://prod-db.example.com:5432/postgres",
+    "username": "pgconsole_monitor",
+    "password": "prod_password",
+    "databases": "production_app,production_analytics"
+  },
+  {
+    "name": "Staging",
+    "url": "jdbc:postgresql://staging-db.example.com:5432/postgres",
+    "username": "pgconsole_monitor",
+    "password": "staging_password",
+    "databases": "staging_app"
+  },
+  {
+    "name": "Development",
+    "url": "jdbc:postgresql://localhost:5432/postgres",
+    "username": "postgres",
+    "password": "postgres",
+    "databases": ""
+  }
+]'
+----
+
+=== Instance Properties
+
+Each instance definition supports the following properties:
+
+[cols="1,1,3"]
+|===
+|Property |Required |Description
+
+|`name`
+|Yes
+|Display name shown in the instance switcher
+
+|`url`
+|Yes
+|JDBC connection URL for the PostgreSQL server
+
+|`username`
+|Yes
+|Database user with monitoring permissions
+
+|`password`
+|Yes
+|Database password (consider using secrets management)
+
+|`databases`
+|No
+|Comma-separated list of databases to monitor (empty = all databases)
+
+|`historyEnabled`
+|No
+|Enable history sampling for this instance (default: `true`)
+
+|`historyInterval`
+|No
+|Sampling interval in seconds (default: `60`)
+
+|`historyRetention`
+|No
+|Days to retain history data (default: `7`)
+|===
+
+=== Systemd Configuration
+
+When using systemd, define instances in the environment file `/etc/pgconsole/pgconsole.env`:
+
+[source,bash]
+----
+PG_CONSOLE_INSTANCES=[{"name":"Production","url":"jdbc:postgresql://prod-db:5432/postgres","username":"monitor","password":"secret","databases":"app_db"},{"name":"Staging","url":"jdbc:postgresql://staging-db:5432/postgres","username":"monitor","password":"secret"}]
+----
+
+TIP: For readability with systemd, use compact JSON without line breaks.
+
+=== Docker Configuration
+
+Pass the instances configuration as an environment variable:
+
+[source,bash]
+----
+docker run -d \
+  --name pgconsole \
+  -p 8080:8080 \
+  -e PG_CONSOLE_INSTANCES='[
+    {
+      "name": "Production",
+      "url": "jdbc:postgresql://prod-db:5432/postgres",
+      "username": "monitor",
+      "password": "secret"
+    },
+    {
+      "name": "Staging",
+      "url": "jdbc:postgresql://staging-db:5432/postgres",
+      "username": "monitor",
+      "password": "secret"
+    }
+  ]' \
+  pgconsole:latest
+----
+
+== Named Datasources Configuration
+
+For advanced scenarios, configure multiple datasources in `application.properties` or `application.yml`.
+
+=== Application Properties
+
+Add named datasources to `src/main/resources/application.properties`:
+
+[source,properties]
+----
+# Default instance (Production)
+quarkus.datasource.db-kind=postgresql
+quarkus.datasource.jdbc.url=jdbc:postgresql://prod-db.example.com:5432/postgres
+quarkus.datasource.username=pgconsole_monitor
+quarkus.datasource.password=prod_password
+
+# Staging instance
+quarkus.datasource.staging.db-kind=postgresql
+quarkus.datasource.staging.jdbc.url=jdbc:postgresql://staging-db.example.com:5432/postgres
+quarkus.datasource.staging.username=pgconsole_monitor
+quarkus.datasource.staging.password=staging_password
+
+# Development instance
+quarkus.datasource.dev.db-kind=postgresql
+quarkus.datasource.dev.jdbc.url=jdbc:postgresql://localhost:5432/postgres
+quarkus.datasource.dev.username=postgres
+quarkus.datasource.dev.password=postgres
+
+# Instance metadata
+pg-console.instances.production.name=Production
+pg-console.instances.production.datasource=default
+pg-console.instances.production.databases=production_app,production_analytics
+
+pg-console.instances.staging.name=Staging
+pg-console.instances.staging.datasource=staging
+pg-console.instances.staging.databases=staging_app
+
+pg-console.instances.dev.name=Development
+pg-console.instances.dev.datasource=dev
+----
+
+=== Application YAML
+
+Alternatively, use YAML format in `src/main/resources/application.yml`:
+
+[source,yaml]
+----
+quarkus:
+  datasource:
+    db-kind: postgresql
+    jdbc:
+      url: jdbc:postgresql://prod-db.example.com:5432/postgres
+    username: pgconsole_monitor
+    password: ${PROD_PASSWORD}
+
+    staging:
+      db-kind: postgresql
+      jdbc:
+        url: jdbc:postgresql://staging-db.example.com:5432/postgres
+      username: pgconsole_monitor
+      password: ${STAGING_PASSWORD}
+
+    dev:
+      db-kind: postgresql
+      jdbc:
+        url: jdbc:postgresql://localhost:5432/postgres
+      username: postgres
+      password: postgres
+
+pg-console:
+  instances:
+    production:
+      name: Production
+      datasource: default
+      databases: production_app,production_analytics
+      history:
+        enabled: true
+        interval: 60
+        retention: 30
+
+    staging:
+      name: Staging
+      datasource: staging
+      databases: staging_app
+      history:
+        enabled: true
+        interval: 300
+        retention: 7
+
+    dev:
+      name: Development
+      datasource: dev
+      history:
+        enabled: false
+----
+
+IMPORTANT: Use environment variable substitution (e.g., `${PROD_PASSWORD}`) to avoid storing passwords in version control.
+
+== Instance Switcher UI
+
+The web interface provides an instance switcher in the navigation bar for easy switching between configured instances.
+
+=== Using the Instance Switcher
+
+1. Click the instance dropdown in the top navigation bar
+2. Select the target instance from the list
+3. The dashboard reloads with data from the selected instance
+4. The selected instance persists across browser sessions using localStorage
+
+=== Instance Indicator
+
+The currently selected instance is displayed in the navigation bar with:
+
+* Instance name prominently shown
+* Visual indicator (colour-coded by environment type)
+* Quick access to switch to other instances
+
+== Historical Data Management
+
+Each instance maintains separate historical data in the `pgconsole` schema.
+
+=== Schema Separation
+
+Historical data is stored with instance-specific prefixes:
+
+[source,sql]
+----
+-- Production instance
+pgconsole.production_query_history
+pgconsole.production_database_history
+pgconsole.production_connection_history
+
+-- Staging instance
+pgconsole.staging_query_history
+pgconsole.staging_database_history
+pgconsole.staging_connection_history
+----
+
+=== Retention Policies
+
+Configure instance-specific retention policies:
+
+[source,properties]
+----
+pg-console.instances.production.history.retention=30
+pg-console.instances.staging.history.retention=7
+pg-console.instances.dev.history.retention=1
+----
+
+== Example Configurations
+
+=== Production and Staging
+
+Monitor both production and staging environments:
+
+[source,bash]
+----
+export PG_CONSOLE_INSTANCES='[
+  {
+    "name": "Production",
+    "url": "jdbc:postgresql://prod-db.example.com:5432/postgres?sslmode=require",
+    "username": "pgconsole_monitor",
+    "password": "'${PROD_DB_PASSWORD}'",
+    "databases": "ecommerce_prod,analytics_prod",
+    "historyInterval": 60,
+    "historyRetention": 30
+  },
+  {
+    "name": "Staging",
+    "url": "jdbc:postgresql://staging-db.example.com:5432/postgres?sslmode=require",
+    "username": "pgconsole_monitor",
+    "password": "'${STAGING_DB_PASSWORD}'",
+    "databases": "ecommerce_staging",
+    "historyInterval": 300,
+    "historyRetention": 7
+  }
+]'
+----
+
+=== Multi-Region Deployment
+
+Monitor PostgreSQL instances across multiple regions:
+
+[source,bash]
+----
+export PG_CONSOLE_INSTANCES='[
+  {
+    "name": "US-East Production",
+    "url": "jdbc:postgresql://db-us-east.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${US_EAST_PASSWORD}'"
+  },
+  {
+    "name": "EU-West Production",
+    "url": "jdbc:postgresql://db-eu-west.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${EU_WEST_PASSWORD}'"
+  },
+  {
+    "name": "APAC Production",
+    "url": "jdbc:postgresql://db-apac.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${APAC_PASSWORD}'"
+  }
+]'
+----
+
+=== Read Replicas
+
+Monitor both primary and replica instances:
+
+[source,bash]
+----
+export PG_CONSOLE_INSTANCES='[
+  {
+    "name": "Primary (Write)",
+    "url": "jdbc:postgresql://primary.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${PRIMARY_PASSWORD}'",
+    "historyEnabled": true
+  },
+  {
+    "name": "Replica 1 (Read)",
+    "url": "jdbc:postgresql://replica1.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${REPLICA_PASSWORD}'",
+    "historyEnabled": false
+  },
+  {
+    "name": "Replica 2 (Read)",
+    "url": "jdbc:postgresql://replica2.example.com:5432/postgres",
+    "username": "monitor",
+    "password": "'${REPLICA_PASSWORD}'",
+    "historyEnabled": false
+  }
+]'
+----
+
+== Security Considerations
+
+=== Credential Management
+
+Store credentials securely:
+
+* Use environment variables for passwords, not hardcoded values
+* Consider HashiCorp Vault, AWS Secrets Manager, or Azure Key Vault integration
+* Rotate credentials regularly across all instances
+* Use dedicated monitoring users with minimal privileges
+
+=== Network Security
+
+Protect connections to multiple instances:
+
+* Enable SSL for all PostgreSQL connections using `sslmode=require`
+* Use VPN or SSH tunnels for remote instances
+* Implement network segmentation and firewall rules
+* Restrict pg-console network access to authorised networks
+
+=== Connection Pooling
+
+Configure appropriate pool sizes for multiple instances:
+
+[source,properties]
+----
+quarkus.datasource.jdbc.min-size=2
+quarkus.datasource.jdbc.max-size=5
+
+quarkus.datasource.staging.jdbc.min-size=1
+quarkus.datasource.staging.jdbc.max-size=3
+
+quarkus.datasource.dev.jdbc.min-size=1
+quarkus.datasource.dev.jdbc.max-size=2
+----
+
+== Performance Considerations
+
+=== Sampling Intervals
+
+Adjust sampling intervals based on instance importance:
+
+* **Production**: 60-second intervals for detailed monitoring
+* **Staging**: 300-second intervals to reduce overhead
+* **Development**: Disable history sampling entirely
+
+=== Resource Usage
+
+Monitor pg-console resource consumption when managing multiple instances:
+
+* Each instance maintains separate connection pools
+* Historical data storage increases linearly with instance count
+* Consider dedicating additional memory for large-scale deployments
+
+=== Query Overhead
+
+Minimise the impact on monitored instances:
+
+* Use dedicated read replicas for monitoring queries when possible
+* Adjust `pg-console.history.top-queries` to reduce sampling overhead
+* Disable history sampling on low-priority instances
+* Monitor pg-console's own queries using `pg_stat_statements`
+
+== Troubleshooting
+
+=== Instance Not Appearing
+
+Check configuration syntax:
+
+[source,bash]
+----
+echo $PG_CONSOLE_INSTANCES | jq .
+----
+
+Verify JSON is valid and properly formatted.
+
+=== Connection Failures
+
+Test connectivity manually:
+
+[source,bash]
+----
+psql -h prod-db.example.com -U pgconsole_monitor -d postgres -c "SELECT version();"
+----
+
+Check network connectivity, credentials, and `pg_hba.conf` rules.
+
+=== Instance Switching Slow
+
+* Verify network latency between pg-console and PostgreSQL instances
+* Check connection pool configuration and availability
+* Review PostgreSQL server load and response times
+
+=== History Data Missing
+
+Verify history sampling is enabled:
+
+[source,sql]
+----
+SELECT * FROM pgconsole.query_history
+WHERE instance_name = 'Production'
+ORDER BY sampled_at DESC
+LIMIT 10;
+----
+
+Check logs for sampling errors or permission issues.
+
+== Next Steps
+
+* Configure xref:alerting.adoc[Alerting] for critical conditions across all instances
+* Review the xref:deployment.adoc[Deployment Guide] for production best practices
+* Explore the xref:cli-reference.adoc[CLI Reference] for instance-specific reporting

@@ -1,0 +1,820 @@
+= CLI Reference
+Paul Snow
+0.0.0
+:description: Command-line interface reference for pg-console
+:keywords: CLI, command-line, automation, scripting, reports, cron
+
+This guide provides a comprehensive reference for using pg-console in command-line mode for automated reporting, scripting, and integration with monitoring pipelines.
+
+== Overview
+
+pg-console includes a CLI mode that allows you to generate one-shot reports without starting the web server. This is useful for:
+
+* Automated monitoring and reporting in cron jobs
+* Integration with existing monitoring tools and dashboards
+* Quick health checks and diagnostics
+* Generating reports for documentation or incident response
+* CI/CD pipeline integration for database validation
+
+== Basic Usage
+
+Run pg-console in CLI mode:
+
+[source,bash]
+----
+java -jar build/quarkus-app/quarkus-run.jar cli [OPTIONS] COMMAND
+----
+
+Or using the native executable:
+
+[source,bash]
+----
+./pgconsole-runner cli [OPTIONS] COMMAND
+----
+
+== Global Options
+
+Global options apply to all CLI commands:
+
+[cols="1,1,3"]
+|===
+|Option |Short |Description
+
+|`--instance NAME`
+|`-i`
+|Target instance name (for multi-instance setups)
+
+|`--output FORMAT`
+|`-o`
+|Output format: text, json, csv (default: text)
+
+|`--quiet`
+|`-q`
+|Suppress informational output, show only data
+
+|`--verbose`
+|`-v`
+|Enable verbose output with debugging information
+
+|`--config FILE`
+|`-c`
+|Path to configuration file (default: application.properties)
+
+|`--help`
+|`-h`
+|Display help information
+|===
+
+== Commands
+
+=== Overview Report
+
+Generate a comprehensive overview of database health and metrics.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli overview [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--databases DB1,DB2`
+|Limit report to specific databases
+
+|`--summary`
+|Show summary only, exclude detailed metrics
+|===
+
+==== Example Output (Text)
+
+[source,text]
+----
+pg-console Overview Report
+Instance: Production
+Generated: 2025-12-28 14:30:15 UTC
+
+=== Database Summary ===
+Total Databases: 3
+Total Size: 142.5 GB
+Total Connections: 85 / 100 (85%)
+
+=== Performance Metrics ===
+Cache Hit Ratio: 98.5%
+Transaction Rate: 1,250 tps
+Active Queries: 12
+Blocked Queries: 0
+
+=== Top Databases by Size ===
+1. production_app    85.2 GB
+2. analytics_db      42.8 GB
+3. reporting_db      14.5 GB
+
+=== Top Databases by Connections ===
+1. production_app    45 connections
+2. analytics_db      28 connections
+3. reporting_db      12 connections
+
+=== Alerts ===
+⚠ WARNING: Connection usage at 85% (threshold: 80%)
+----
+
+==== Example Output (JSON)
+
+[source,bash]
+----
+java -jar pgconsole.jar cli overview --output json
+----
+
+[source,json]
+----
+{
+  "instance": "Production",
+  "timestamp": "2025-12-28T14:30:15Z",
+  "summary": {
+    "totalDatabases": 3,
+    "totalSize": "142.5 GB",
+    "totalConnections": 85,
+    "maxConnections": 100,
+    "connectionUsagePercent": 85
+  },
+  "performance": {
+    "cacheHitRatio": 98.5,
+    "transactionRate": 1250,
+    "activeQueries": 12,
+    "blockedQueries": 0
+  },
+  "databases": [
+    {
+      "name": "production_app",
+      "size": "85.2 GB",
+      "connections": 45
+    },
+    {
+      "name": "analytics_db",
+      "size": "42.8 GB",
+      "connections": 28
+    },
+    {
+      "name": "reporting_db",
+      "size": "14.5 GB",
+      "connections": 12
+    }
+  ],
+  "alerts": [
+    {
+      "severity": "WARNING",
+      "message": "Connection usage at 85% (threshold: 80%)"
+    }
+  ]
+}
+----
+
+=== Slow Queries Report
+
+Analyse slow queries from `pg_stat_statements`.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli slow-queries [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--limit N`
+|Number of queries to show (default: 20)
+
+|`--min-duration SECONDS`
+|Minimum query duration in seconds (default: 1.0)
+
+|`--min-calls N`
+|Minimum number of query executions (default: 1)
+
+|`--sort FIELD`
+|Sort by: duration, calls, mean_time, total_time (default: mean_time)
+
+|`--database DB`
+|Filter by specific database
+|===
+
+==== Example Output (Text)
+
+[source,bash]
+----
+java -jar pgconsole.jar cli slow-queries --limit 5
+----
+
+[source,text]
+----
+pg-console Slow Queries Report
+Instance: Production
+Generated: 2025-12-28 14:30:15 UTC
+
+=== Top 5 Slow Queries ===
+
+1. Query ID: 1234567890
+   Database: production_app
+   Calls: 1,250
+   Mean Time: 15.5 sec
+   Total Time: 5.4 hours
+   Query: SELECT * FROM orders o JOIN order_items oi ON o.id = oi.order_id WHERE o.status = 'pending'
+
+2. Query ID: 2345678901
+   Database: analytics_db
+   Calls: 45
+   Mean Time: 8.2 sec
+   Total Time: 6.2 minutes
+   Query: SELECT date_trunc('day', created_at) as day, count(*) FROM events GROUP BY day
+
+3. Query ID: 3456789012
+   Database: production_app
+   Calls: 890
+   Mean Time: 5.1 sec
+   Total Time: 1.3 hours
+   Query: UPDATE users SET last_login = now() WHERE id = $1
+----
+
+==== Example Output (CSV)
+
+[source,bash]
+----
+java -jar pgconsole.jar cli slow-queries --output csv --limit 10 > slow_queries.csv
+----
+
+[source,csv]
+----
+query_id,database,calls,mean_time_sec,total_time_sec,query
+1234567890,production_app,1250,15.5,19350,SELECT * FROM orders o JOIN...
+2345678901,analytics_db,45,8.2,369,SELECT date_trunc('day'...
+3456789012,production_app,890,5.1,4539,UPDATE users SET last_login...
+----
+
+=== Locks Report
+
+Display current locks and blocking trees.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli locks [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--show-blocked-only`
+|Show only blocked queries
+
+|`--show-blocking-tree`
+|Display blocking tree hierarchy
+
+|`--database DB`
+|Filter by specific database
+|===
+
+==== Example Output
+
+[source,bash]
+----
+java -jar pgconsole.jar cli locks --show-blocking-tree
+----
+
+[source,text]
+----
+pg-console Locks Report
+Instance: Production
+Generated: 2025-12-28 14:30:15 UTC
+
+=== Lock Summary ===
+Total Locks: 45
+Blocked Queries: 3
+
+=== Blocking Tree ===
+
+[ROOT] PID: 12345 | User: app_user | Database: production_app
+       Query: UPDATE orders SET status = 'processed' WHERE id = 12345
+       Lock Type: ExclusiveLock on tuple
+       Duration: 15 seconds
+  |
+  +-- [BLOCKED] PID: 12346 | User: app_user | Database: production_app
+  |            Query: SELECT * FROM orders WHERE id = 12345 FOR UPDATE
+  |            Waiting: 10 seconds
+  |
+  +-- [BLOCKED] PID: 12347 | User: app_user | Database: production_app
+               Query: UPDATE orders SET updated_at = now() WHERE id = 12345
+               Waiting: 8 seconds
+----
+
+=== Activity Report
+
+Show current database activity and connections.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli activity [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--state STATE`
+|Filter by state: active, idle, idle_in_transaction
+
+|`--min-duration SECONDS`
+|Minimum query duration (default: 0)
+
+|`--database DB`
+|Filter by specific database
+
+|`--user USER`
+|Filter by database user
+|===
+
+==== Example Output
+
+[source,bash]
+----
+java -jar pgconsole.jar cli activity --state active
+----
+
+[source,text]
+----
+pg-console Activity Report
+Instance: Production
+Generated: 2025-12-28 14:30:15 UTC
+
+=== Connection Summary ===
+Total Connections: 85
+Active: 12
+Idle: 65
+Idle in Transaction: 8
+
+=== Active Queries ===
+
+PID: 12345 | User: app_user | Database: production_app | Duration: 5.2 sec
+Query: SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at
+
+PID: 12346 | User: analytics_user | Database: analytics_db | Duration: 2.8 sec
+Query: SELECT date_trunc('hour', created_at), count(*) FROM events GROUP BY 1
+
+PID: 12347 | User: app_user | Database: production_app | Duration: 1.5 sec
+Query: UPDATE users SET last_seen = now() WHERE id = 789
+----
+
+=== Tables Report
+
+Show table statistics, sizes, and bloat information.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli tables [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--database DB`
+|Target database (required)
+
+|`--limit N`
+|Number of tables to show (default: 20)
+
+|`--sort FIELD`
+|Sort by: size, bloat, seq_scan, idx_scan (default: size)
+
+|`--min-size SIZE`
+|Minimum table size (e.g., 100MB, 1GB)
+|===
+
+==== Example Output
+
+[source,bash]
+----
+java -jar pgconsole.jar cli tables --database production_app --limit 5
+----
+
+[source,text]
+----
+pg-console Tables Report
+Instance: Production
+Database: production_app
+Generated: 2025-12-28 14:30:15 UTC
+
+=== Top 5 Tables by Size ===
+
+1. orders
+   Size: 25.5 GB
+   Bloat: 8% (estimated 2.0 GB)
+   Seq Scans: 1,250
+   Index Scans: 125,000
+
+2. order_items
+   Size: 18.2 GB
+   Bloat: 5% (estimated 910 MB)
+   Seq Scans: 890
+   Index Scans: 89,000
+
+3. events
+   Size: 12.8 GB
+   Bloat: 15% (estimated 1.9 GB)
+   Seq Scans: 45
+   Index Scans: 450,000
+----
+
+=== Health Check
+
+Perform a quick health check and exit with status code.
+
+[source,bash]
+----
+java -jar pgconsole.jar cli health [OPTIONS]
+----
+
+==== Options
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|`--check-connections`
+|Verify database connectivity
+
+|`--check-replication`
+|Check replication lag
+
+|`--check-extensions`
+|Verify required extensions are installed
+|===
+
+==== Exit Codes
+
+[cols="1,3"]
+|===
+|Code |Meaning
+
+|0
+|Healthy - all checks passed
+
+|1
+|Warning - some checks failed but system operational
+
+|2
+|Critical - major issues detected
+
+|3
+|Unknown - unable to determine health status
+|===
+
+==== Example
+
+[source,bash]
+----
+java -jar pgconsole.jar cli health --check-connections
+echo "Exit code: $?"
+----
+
+[source,text]
+----
+pg-console Health Check
+Instance: Production
+Generated: 2025-12-28 14:30:15 UTC
+
+✓ Database connection successful
+✓ pg_stat_statements extension available
+✓ Connection usage: 85% (threshold: 80%) - WARNING
+✗ Cache hit ratio: 88% (threshold: 90%) - WARNING
+
+Overall Status: WARNING
+Exit code: 1
+----
+
+== Output Formats
+
+=== Text Format
+
+Human-readable text output (default):
+
+[source,bash]
+----
+java -jar pgconsole.jar cli overview --output text
+----
+
+Best for:
+* Interactive terminal usage
+* Quick visual inspection
+* Documentation and reports
+
+=== JSON Format
+
+Structured JSON output for programmatic consumption:
+
+[source,bash]
+----
+java -jar pgconsole.jar cli overview --output json | jq .
+----
+
+Best for:
+* Integration with monitoring tools
+* Data processing pipelines
+* API consumption
+* Storage in time-series databases
+
+=== CSV Format
+
+Comma-separated values for spreadsheet analysis:
+
+[source,bash]
+----
+java -jar pgconsole.jar cli slow-queries --output csv > report.csv
+----
+
+Best for:
+* Excel/Google Sheets analysis
+* Data import into BI tools
+* Historical trend analysis
+* Bulk data processing
+
+== Automation Examples
+
+=== Cron Job for Daily Reports
+
+Generate daily slow query reports:
+
+[source,bash]
+----
+# /etc/cron.d/pgconsole-reports
+0 6 * * * pgconsole /opt/pgconsole/scripts/daily-report.sh
+----
+
+Script `/opt/pgconsole/scripts/daily-report.sh`:
+
+[source,bash]
+----
+#!/bin/bash
+set -e
+
+DATE=$(date +%Y-%m-%d)
+REPORT_DIR="/var/reports/pgconsole"
+mkdir -p "$REPORT_DIR"
+
+# Generate slow queries report
+java -jar /opt/pgconsole/quarkus-run.jar cli slow-queries \
+  --output json \
+  --limit 50 \
+  > "$REPORT_DIR/slow-queries-$DATE.json"
+
+# Generate overview report
+java -jar /opt/pgconsole/quarkus-run.jar cli overview \
+  --output json \
+  > "$REPORT_DIR/overview-$DATE.json"
+
+# Send to monitoring system
+curl -X POST https://monitoring.example.com/api/reports \
+  -H "Content-Type: application/json" \
+  -d @"$REPORT_DIR/overview-$DATE.json"
+----
+
+=== Health Check Monitoring
+
+Integrate with monitoring systems:
+
+[source,bash]
+----
+#!/bin/bash
+# /usr/local/bin/check-pgconsole-health
+
+java -jar /opt/pgconsole/quarkus-run.jar cli health \
+  --quiet \
+  --check-connections \
+  --check-replication
+
+EXIT_CODE=$?
+
+case $EXIT_CODE in
+  0)
+    echo "OK - Database healthy"
+    ;;
+  1)
+    echo "WARNING - Database has warnings"
+    ;;
+  2)
+    echo "CRITICAL - Database has critical issues"
+    ;;
+  *)
+    echo "UNKNOWN - Unable to determine health"
+    ;;
+esac
+
+exit $EXIT_CODE
+----
+
+Nagios/Icinga integration:
+
+[source,bash]
+----
+# /etc/nagios/nrpe.cfg
+command[check_postgres]=/usr/local/bin/check-pgconsole-health
+----
+
+=== Slack Alert Integration
+
+Post critical slow queries to Slack:
+
+[source,bash]
+----
+#!/bin/bash
+# /opt/pgconsole/scripts/slack-slow-queries.sh
+
+SLACK_WEBHOOK="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+# Get slow queries as JSON
+QUERIES=$(java -jar /opt/pgconsole/quarkus-run.jar cli slow-queries \
+  --output json \
+  --limit 5 \
+  --min-duration 10)
+
+# Post to Slack
+curl -X POST "$SLACK_WEBHOOK" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"text\": \"⚠️ Slow Queries Detected\",
+    \"attachments\": [{
+      \"color\": \"warning\",
+      \"text\": \`echo \$QUERIES | jq -r '.queries[] | \"Query: \\(.query)\\nMean Time: \\(.meanTime) sec\"'\`
+    }]
+  }"
+----
+
+=== CI/CD Database Validation
+
+Validate database health before deployment:
+
+[source,bash]
+----
+#!/bin/bash
+# .gitlab-ci.yml or similar
+
+echo "Validating production database health..."
+
+java -jar pgconsole.jar cli health \
+  --instance production \
+  --check-connections \
+  --check-replication
+
+if [ $? -eq 2 ]; then
+  echo "CRITICAL: Database health check failed. Aborting deployment."
+  exit 1
+fi
+
+echo "Database health check passed. Proceeding with deployment."
+----
+
+=== Log Aggregation
+
+Send reports to log aggregation systems:
+
+[source,bash]
+----
+#!/bin/bash
+# Send JSON reports to Elasticsearch
+
+OVERVIEW=$(java -jar /opt/pgconsole/quarkus-run.jar cli overview \
+  --output json \
+  --instance production)
+
+curl -X POST "https://elasticsearch.example.com/pgconsole-reports/_doc" \
+  -H "Content-Type: application/json" \
+  -d "$OVERVIEW"
+----
+
+== Environment Variables
+
+Configure CLI behaviour with environment variables:
+
+[cols="1,3"]
+|===
+|Variable |Description
+
+|`PGCONSOLE_INSTANCE`
+|Default instance name (overrides `--instance`)
+
+|`PGCONSOLE_OUTPUT`
+|Default output format (overrides `--output`)
+
+|`PGCONSOLE_CONFIG`
+|Path to configuration file (overrides `--config`)
+
+|`POSTGRES_URL`
+|Database connection URL
+
+|`POSTGRES_USER`
+|Database username
+
+|`POSTGRES_PASSWORD`
+|Database password
+|===
+
+Example:
+
+[source,bash]
+----
+export PGCONSOLE_INSTANCE=production
+export PGCONSOLE_OUTPUT=json
+java -jar pgconsole.jar cli overview
+----
+
+== Multi-Instance CLI Usage
+
+When monitoring multiple instances, specify the target:
+
+[source,bash]
+----
+# Report from production instance
+java -jar pgconsole.jar cli overview --instance production
+
+# Report from staging instance
+java -jar pgconsole.jar cli slow-queries --instance staging
+
+# Compare across instances
+for instance in production staging dev; do
+  echo "=== $instance ==="
+  java -jar pgconsole.jar cli overview \
+    --instance $instance \
+    --summary
+done
+----
+
+== Troubleshooting
+
+=== Connection Errors
+
+Verify environment variables:
+
+[source,bash]
+----
+java -jar pgconsole.jar cli health --verbose
+----
+
+Test PostgreSQL connectivity:
+
+[source,bash]
+----
+psql -h $POSTGRES_HOST -U $POSTGRES_USER -d postgres -c "SELECT version();"
+----
+
+=== Permission Errors
+
+Ensure the database user has required permissions:
+
+[source,sql]
+----
+GRANT pg_monitor TO pgconsole_monitor;
+GRANT CONNECT ON DATABASE postgres TO pgconsole_monitor;
+----
+
+=== Output Format Errors
+
+Validate JSON output:
+
+[source,bash]
+----
+java -jar pgconsole.jar cli overview --output json | jq .
+----
+
+Check CSV delimiter:
+
+[source,bash]
+----
+java -jar pgconsole.jar cli slow-queries --output csv | head -1
+----
+
+== Best Practices
+
+1. **Use Quiet Mode in Scripts**: Suppress informational output with `--quiet` for cleaner logs
+2. **Redirect Output**: Save reports to files for historical analysis and auditing
+3. **Set Timeouts**: Use command timeouts in cron jobs to prevent hanging processes
+4. **Monitor Exit Codes**: Always check exit codes in automated scripts
+5. **Validate JSON**: Use `jq` or similar tools to validate JSON output before processing
+6. **Secure Credentials**: Use environment variables or secrets management, never hardcode passwords
+7. **Log Results**: Send CLI output to centralised logging for troubleshooting
+
+== Next Steps
+
+* Review the xref:deployment.adoc[Deployment Guide] for production setup
+* Configure xref:multi-instance.adoc[Multi-Instance Monitoring] for multiple databases
+* Set up xref:alerting.adoc[Alerting] to complement CLI reporting

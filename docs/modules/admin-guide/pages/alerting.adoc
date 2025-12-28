@@ -1,0 +1,650 @@
+= Alerting Configuration
+Paul Snow
+0.0.0
+:description: Configure alerting for critical database conditions in pg-console
+:keywords: alerting, notifications, webhooks, email, slack, discord, teams, thresholds
+
+This guide explains how to configure alerting in pg-console to receive notifications when critical database conditions are detected.
+
+== Overview
+
+pg-console's alerting system monitors key database metrics and sends notifications when configurable thresholds are exceeded. Alerts can be delivered via:
+
+* **Webhooks** - Slack, Discord, Microsoft Teams, or custom endpoints
+* **Email** - SMTP-based email notifications
+* **Custom integrations** - Extensible webhook format for third-party systems
+
+== Enabling Alerting
+
+Alerting is disabled by default. Enable it via environment variable or configuration property:
+
+[source,bash]
+----
+export PG_CONSOLE_ALERTING_ENABLED=true
+----
+
+Or in `application.properties`:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+----
+
+== Alert Types
+
+pg-console monitors the following conditions and generates alerts:
+
+[cols="1,3,1"]
+|===
+|Alert Type |Description |Default Threshold
+
+|High Connection Usage
+|Percentage of max_connections in use
+|80%
+
+|Blocked Queries
+|Number of queries blocked by locks
+|5 queries
+
+|Long Running Queries
+|Queries exceeding duration threshold
+|300 seconds
+
+|Low Cache Hit Ratio
+|Cache hit ratio below threshold
+|90%
+
+|High Table Bloat
+|Tables with excessive bloat percentage
+|50%
+
+|Replication Lag
+|Standby server lag behind primary
+|60 seconds
+
+|Idle in Transaction
+|Connections idle in transaction too long
+|300 seconds
+
+|Disk Space Low
+|Database disk usage percentage
+|85%
+|===
+
+== Webhook Configuration
+
+Webhooks send HTTP POST requests to specified endpoints when alerts are triggered.
+
+=== Slack Integration
+
+Configure Slack webhook URL:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.webhook.url=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+pg-console.alerting.webhook.type=slack
+----
+
+Create a Slack webhook:
+
+1. Navigate to your Slack workspace settings
+2. Go to Apps > Incoming Webhooks
+3. Click "Add New Webhook to Workspace"
+4. Select the target channel and authorise
+5. Copy the webhook URL
+
+Example alert in Slack:
+
+----
+⚠️ *pg-console Alert: High Connection Usage*
+
+Instance: Production
+Severity: WARNING
+Metric: Connection Usage
+Current Value: 85%
+Threshold: 80%
+Time: 2025-12-28 14:30:15 UTC
+
+View Dashboard: https://pgconsole.example.com
+----
+
+=== Discord Integration
+
+Configure Discord webhook URL:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.webhook.url=https://discord.com/api/webhooks/YOUR/WEBHOOK/TOKEN
+pg-console.alerting.webhook.type=discord
+----
+
+Create a Discord webhook:
+
+1. Open Discord server settings
+2. Navigate to Integrations > Webhooks
+3. Click "New Webhook"
+4. Name the webhook and select the target channel
+5. Copy the webhook URL
+
+=== Microsoft Teams Integration
+
+Configure Teams webhook URL:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.webhook.url=https://outlook.office.com/webhook/YOUR/CONNECTOR/URL
+pg-console.alerting.webhook.type=teams
+----
+
+Create a Teams webhook:
+
+1. Open Microsoft Teams and navigate to the target channel
+2. Click the three dots menu and select "Connectors"
+3. Find "Incoming Webhook" and click "Configure"
+4. Provide a name and optionally upload an image
+5. Copy the webhook URL
+
+=== Custom Webhook
+
+For custom integrations, use the generic webhook type:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.webhook.url=https://your-endpoint.example.com/alerts
+pg-console.alerting.webhook.type=custom
+----
+
+==== Webhook Payload Format
+
+pg-console sends alerts as JSON POST requests:
+
+[source,json]
+----
+{
+  "alertType": "HIGH_CONNECTION_USAGE",
+  "severity": "WARNING",
+  "instance": "Production",
+  "metric": "Connection Usage",
+  "currentValue": "85%",
+  "threshold": "80%",
+  "timestamp": "2025-12-28T14:30:15.123Z",
+  "message": "Connection usage (85%) exceeds threshold (80%)",
+  "dashboardUrl": "https://pgconsole.example.com",
+  "details": {
+    "maxConnections": 100,
+    "activeConnections": 85,
+    "idleConnections": 15,
+    "database": "production_app"
+  }
+}
+----
+
+==== Custom Headers
+
+Add custom headers for authentication:
+
+[source,properties]
+----
+pg-console.alerting.webhook.headers.Authorization=Bearer YOUR_API_TOKEN
+pg-console.alerting.webhook.headers.X-API-Key=YOUR_API_KEY
+----
+
+== Email Alerting
+
+Configure email notifications using SMTP:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.email.enabled=true
+pg-console.alerting.email.smtp.host=smtp.example.com
+pg-console.alerting.email.smtp.port=587
+pg-console.alerting.email.smtp.username=alerts@example.com
+pg-console.alerting.email.smtp.password=${SMTP_PASSWORD}
+pg-console.alerting.email.smtp.tls=true
+pg-console.alerting.email.from=pgconsole@example.com
+pg-console.alerting.email.to=dba-team@example.com,ops-team@example.com
+----
+
+=== Gmail Configuration
+
+For Gmail SMTP:
+
+[source,properties]
+----
+pg-console.alerting.email.smtp.host=smtp.gmail.com
+pg-console.alerting.email.smtp.port=587
+pg-console.alerting.email.smtp.username=your-email@gmail.com
+pg-console.alerting.email.smtp.password=${GMAIL_APP_PASSWORD}
+pg-console.alerting.email.smtp.tls=true
+----
+
+IMPORTANT: Use an App Password for Gmail, not your regular password. Generate one at: https://myaccount.google.com/apppasswords
+
+=== Email Template
+
+Alert emails include:
+
+* Subject line with alert type and severity
+* Instance and timestamp information
+* Current metric values and thresholds
+* Link to the pg-console dashboard
+* Detailed context and recommended actions
+
+== Threshold Configuration
+
+Customise alert thresholds for your environment:
+
+[source,properties]
+----
+# Connection usage threshold (percentage)
+pg-console.alerting.thresholds.connection-usage=80
+
+# Blocked queries threshold (count)
+pg-console.alerting.thresholds.blocked-queries=5
+
+# Long running query threshold (seconds)
+pg-console.alerting.thresholds.long-query-duration=300
+
+# Cache hit ratio threshold (percentage)
+pg-console.alerting.thresholds.cache-hit-ratio=90
+
+# Table bloat threshold (percentage)
+pg-console.alerting.thresholds.table-bloat=50
+
+# Replication lag threshold (seconds)
+pg-console.alerting.thresholds.replication-lag=60
+
+# Idle in transaction threshold (seconds)
+pg-console.alerting.thresholds.idle-in-transaction=300
+
+# Disk space usage threshold (percentage)
+pg-console.alerting.thresholds.disk-usage=85
+----
+
+=== Instance-Specific Thresholds
+
+Configure different thresholds per instance:
+
+[source,properties]
+----
+# Production instance - strict thresholds
+pg-console.alerting.instances.production.thresholds.connection-usage=70
+pg-console.alerting.instances.production.thresholds.cache-hit-ratio=95
+
+# Staging instance - relaxed thresholds
+pg-console.alerting.instances.staging.thresholds.connection-usage=90
+pg-console.alerting.instances.staging.thresholds.cache-hit-ratio=85
+
+# Development instance - disable alerting
+pg-console.alerting.instances.dev.enabled=false
+----
+
+== Severity Levels
+
+Alerts are categorised by severity:
+
+[cols="1,3,2"]
+|===
+|Severity |Description |Action Required
+
+|`INFO`
+|Informational alerts about changes or events
+|Review when convenient
+
+|`WARNING`
+|Potential issues that require attention
+|Investigate within hours
+
+|`ERROR`
+|Serious issues affecting performance or availability
+|Investigate immediately
+
+|`CRITICAL`
+|System-threatening conditions requiring urgent action
+|Respond immediately
+|===
+
+Configure severity mappings:
+
+[source,properties]
+----
+pg-console.alerting.severity.connection-usage.warning=80
+pg-console.alerting.severity.connection-usage.error=90
+pg-console.alerting.severity.connection-usage.critical=95
+
+pg-console.alerting.severity.cache-hit-ratio.warning=90
+pg-console.alerting.severity.cache-hit-ratio.error=80
+pg-console.alerting.severity.cache-hit-ratio.critical=70
+----
+
+== Cooldown Period
+
+Prevent alert storms by configuring cooldown periods:
+
+[source,properties]
+----
+# Global cooldown (seconds)
+pg-console.alerting.cooldown.default=300
+
+# Per-alert-type cooldown (seconds)
+pg-console.alerting.cooldown.high-connection-usage=600
+pg-console.alerting.cooldown.blocked-queries=180
+pg-console.alerting.cooldown.long-query=300
+----
+
+How cooldown works:
+
+1. Alert is triggered and notification sent
+2. Cooldown period begins (e.g., 5 minutes)
+3. Subsequent alerts of the same type are suppressed
+4. After cooldown expires, alerts resume normally
+
+This prevents repeated notifications for ongoing issues while still alerting when new problems arise.
+
+== Alert History
+
+pg-console maintains a history of all triggered alerts.
+
+=== Viewing Alert History
+
+Access alert history via the web interface:
+
+1. Navigate to the Settings or Admin section
+2. Click "Alert History"
+3. View alerts filtered by instance, type, severity, and time range
+
+=== Database Storage
+
+Alerts are stored in the `pgconsole.alert_history` table:
+
+[source,sql]
+----
+SELECT
+  alert_type,
+  severity,
+  instance_name,
+  triggered_at,
+  message,
+  current_value,
+  threshold_value
+FROM pgconsole.alert_history
+WHERE instance_name = 'Production'
+  AND severity IN ('ERROR', 'CRITICAL')
+ORDER BY triggered_at DESC
+LIMIT 50;
+----
+
+=== Retention
+
+Configure alert history retention:
+
+[source,properties]
+----
+pg-console.alerting.history.retention=30
+----
+
+Alerts older than the retention period are automatically purged.
+
+== Alert Rules
+
+Define custom alert rules using expressions:
+
+[source,properties]
+----
+# Custom rule: Alert when more than 10 queries exceed 1 minute
+pg-console.alerting.rules.slow-queries.enabled=true
+pg-console.alerting.rules.slow-queries.expression=count(queries[duration > 60]) > 10
+pg-console.alerting.rules.slow-queries.severity=WARNING
+pg-console.alerting.rules.slow-queries.message=More than 10 queries running over 1 minute
+
+# Custom rule: Alert on specific table growth
+pg-console.alerting.rules.table-growth.enabled=true
+pg-console.alerting.rules.table-growth.expression=table('user_sessions').size_growth_24h > 10GB
+pg-console.alerting.rules.table-growth.severity=WARNING
+pg-console.alerting.rules.table-growth.message=User sessions table grew by more than 10GB in 24 hours
+----
+
+== Testing Alerting
+
+Verify your alerting configuration:
+
+=== Test Webhook
+
+Trigger a test alert via the API:
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/v1/alerts/test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alertType": "TEST",
+    "severity": "INFO",
+    "message": "Test alert from pg-console"
+  }'
+----
+
+=== Test Email
+
+Send a test email notification:
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/v1/alerts/test-email
+----
+
+=== Monitor Alert Logs
+
+Review alert processing in application logs:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole -f | grep -i alert
+----
+
+== Example Configurations
+
+=== Production Environment
+
+Comprehensive alerting for production:
+
+[source,properties]
+----
+# Enable alerting
+pg-console.alerting.enabled=true
+
+# Slack integration
+pg-console.alerting.webhook.url=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+pg-console.alerting.webhook.type=slack
+
+# Email integration
+pg-console.alerting.email.enabled=true
+pg-console.alerting.email.smtp.host=smtp.example.com
+pg-console.alerting.email.smtp.port=587
+pg-console.alerting.email.smtp.username=alerts@example.com
+pg-console.alerting.email.smtp.password=${SMTP_PASSWORD}
+pg-console.alerting.email.from=pgconsole@example.com
+pg-console.alerting.email.to=dba-team@example.com
+
+# Strict thresholds
+pg-console.alerting.thresholds.connection-usage=70
+pg-console.alerting.thresholds.blocked-queries=3
+pg-console.alerting.thresholds.long-query-duration=180
+pg-console.alerting.thresholds.cache-hit-ratio=95
+
+# Reasonable cooldown
+pg-console.alerting.cooldown.default=300
+----
+
+=== Multi-Instance with Different Channels
+
+Route alerts to different Slack channels by instance:
+
+[source,properties]
+----
+# Production alerts to #db-prod-alerts
+pg-console.alerting.instances.production.webhook.url=https://hooks.slack.com/services/PROD/WEBHOOK/URL
+
+# Staging alerts to #db-staging-alerts
+pg-console.alerting.instances.staging.webhook.url=https://hooks.slack.com/services/STAGING/WEBHOOK/URL
+
+# Development - no alerts
+pg-console.alerting.instances.dev.enabled=false
+----
+
+=== Critical Alerts Only
+
+Configure alerting for critical issues only:
+
+[source,properties]
+----
+pg-console.alerting.enabled=true
+pg-console.alerting.minimum-severity=ERROR
+pg-console.alerting.webhook.url=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+pg-console.alerting.webhook.type=slack
+
+# Only alert on critical thresholds
+pg-console.alerting.thresholds.connection-usage=95
+pg-console.alerting.thresholds.blocked-queries=10
+pg-console.alerting.thresholds.cache-hit-ratio=70
+----
+
+== Troubleshooting
+
+=== Webhooks Not Sending
+
+Check webhook URL and connectivity:
+
+[source,bash]
+----
+curl -X POST https://hooks.slack.com/services/YOUR/WEBHOOK/URL \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Test message"}'
+----
+
+Review logs for webhook errors:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole | grep -i webhook
+----
+
+=== Emails Not Arriving
+
+Verify SMTP settings:
+
+[source,bash]
+----
+telnet smtp.example.com 587
+----
+
+Check for authentication errors in logs:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole | grep -i smtp
+----
+
+Test email configuration:
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/v1/alerts/test-email
+----
+
+=== Too Many Alerts
+
+Increase cooldown periods:
+
+[source,properties]
+----
+pg-console.alerting.cooldown.default=600
+----
+
+Adjust thresholds to reduce sensitivity:
+
+[source,properties]
+----
+pg-console.alerting.thresholds.connection-usage=85
+----
+
+Disable specific alert types:
+
+[source,properties]
+----
+pg-console.alerting.types.long-query.enabled=false
+----
+
+=== Alerts Not Triggering
+
+Verify alerting is enabled:
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/alerts/status
+----
+
+Check threshold configuration:
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/alerts/thresholds
+----
+
+Review alert evaluation logs:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole | grep -i "alert evaluation"
+----
+
+== Security Considerations
+
+=== Webhook Security
+
+* Use HTTPS URLs for all webhooks
+* Rotate webhook URLs regularly
+* Implement webhook signature verification for custom endpoints
+* Restrict outbound network access to known webhook domains
+
+=== Sensitive Information
+
+Avoid including sensitive data in alerts:
+
+[source,properties]
+----
+# Exclude query text from alerts
+pg-console.alerting.include-query-text=false
+
+# Exclude connection details
+pg-console.alerting.include-connection-details=false
+----
+
+=== Credential Management
+
+Store SMTP passwords and API tokens securely:
+
+* Use environment variables, not hardcoded values
+* Integrate with secrets management systems (Vault, AWS Secrets Manager)
+* Rotate credentials regularly
+* Audit alert configuration access
+
+== Best Practices
+
+1. **Start Conservative**: Begin with higher thresholds and adjust based on actual usage patterns
+2. **Use Cooldowns**: Prevent alert fatigue with appropriate cooldown periods
+3. **Test Thoroughly**: Verify alerting configuration with test alerts before relying on it
+4. **Monitor Alert Volume**: Review alert history regularly to identify noisy alerts
+5. **Document Runbooks**: Provide clear action items for each alert type
+6. **Separate Channels**: Route different severity levels or instances to different notification channels
+7. **Regular Reviews**: Periodically review and adjust thresholds based on operational experience
+
+== Next Steps
+
+* Review the xref:deployment.adoc[Deployment Guide] for production configuration
+* Configure xref:multi-instance.adoc[Multi-Instance Monitoring] with instance-specific alerting
+* Explore the xref:cli-reference.adoc[CLI Reference] for automated alert testing

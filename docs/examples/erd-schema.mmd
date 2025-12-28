@@ -1,0 +1,44 @@
+erDiagram
+    %% pgconsole schema entity-relationship diagram
+    %% Shows the three main tables used for historical data storage
+
+    OVERVIEW_HISTORY {
+        BIGSERIAL id PK
+        TIMESTAMP sampled_at
+        VARCHAR instance_name
+        INT active_connections
+        INT blocked_queries
+        DECIMAL cache_hit_ratio
+        BIGINT database_size_bytes
+        INT total_connections
+    }
+
+    QUERY_HISTORY {
+        BIGSERIAL id PK
+        TIMESTAMP sampled_at
+        VARCHAR instance_name
+        BIGINT query_id
+        TEXT query_text
+        BIGINT calls
+        DOUBLE total_time
+        DOUBLE mean_time
+        BIGINT rows
+    }
+
+    ALERT_HISTORY {
+        BIGSERIAL id PK
+        VARCHAR alert_type
+        VARCHAR severity
+        TEXT message
+        TIMESTAMP triggered_at
+        TIMESTAMP resolved_at
+        VARCHAR instance_name
+    }
+
+    %% Relationships
+    %% overview_history and query_history are correlated by sampled_at timestamp
+    OVERVIEW_HISTORY ||--o{ QUERY_HISTORY : "correlated by sampled_at"
+
+    %% alert_history shares instance_name with both tables
+    OVERVIEW_HISTORY ||--o{ ALERT_HISTORY : "shares instance_name"
+    QUERY_HISTORY ||--o{ ALERT_HISTORY : "shares instance_name"
