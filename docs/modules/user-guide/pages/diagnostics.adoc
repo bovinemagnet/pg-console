@@ -1,0 +1,1094 @@
+= Advanced Diagnostics
+Paul Snow
+0.0.0
+:description: Guide to advanced database diagnostics including pipeline risk, TOAST bloat, index redundancy, statistics freshness, and XID wraparound monitoring
+:keywords: diagnostics, toast bloat, index redundancy, pipeline risk, statistics, xid wraparound, hot updates
+
+[abstract]
+This guide covers the advanced diagnostics features in pg-console, including pipeline risk monitoring, TOAST bloat analysis, index redundancy detection, statistical freshness tracking, write/read ratio analysis, HOT update efficiency, column correlation, live charts, and transaction ID wraparound monitoring.
+
+== Overview
+
+The diagnostics section provides specialised monitoring capabilities beyond basic performance metrics. These tools help identify:
+
+* Pipeline and queue processing risks
+* Storage inefficiencies (TOAST bloat, redundant indexes)
+* Query planner health (statistics freshness, column correlation)
+* Update efficiency (HOT updates, write/read patterns)
+* Critical maintenance requirements (XID wraparound)
+* Real-time system trends (live charts)
+
+All diagnostics dashboards are accessible from the main navigation under the *Diagnostics* dropdown menu.
+
+== Enabling Diagnostics
+
+Individual diagnostic features can be toggled on or off through configuration. See xref:admin-guide:configuration.adoc#diagnostics-configuration[Diagnostics Configuration] for full details.
+
+[source,bash]
+----
+# Enable/disable entire diagnostics section
+export PG_CONSOLE_DASH_DIAGNOSTICS=true
+
+# Enable/disable individual diagnostics
+export PG_CONSOLE_DASH_PIPELINE_RISK=true
+export PG_CONSOLE_DASH_TOAST_BLOAT=true
+export PG_CONSOLE_DASH_INDEX_REDUNDANCY=true
+# ... (see configuration reference for complete list)
+----
+
+[[pipeline-risk]]
+== Pipeline Risk Monitoring
+
+The pipeline risk dashboard (`/diagnostics/pipeline-risk`) monitors queue and pipeline tables for processing backlogs and stale data.
+
+=== What It Monitors
+
+Tracks tables matching common queue naming patterns:
+
+* `*_queue` - Work queues
+* `*_event` - Event processing tables
+* `*_job` - Job scheduling tables
+* `*_task` - Task queues
+
+For each matching table, the dashboard displays:
+
+* *Table Name* - Schema-qualified table name
+* *Oldest Row Age* - Time since the oldest row was inserted
+* *Estimated Rows* - Approximate row count
+* *Status* - Risk level indicator (OK, WARNING, CRITICAL)
+
+=== Risk Indicators
+
+[cols="1,3"]
+|===
+|Status |Description
+
+|OK (Green)
+|Oldest row age is within acceptable threshold (default: 24 hours)
+
+|WARNING (Amber)
+|Oldest row approaching staleness threshold
+
+|CRITICAL (Red)
+|Oldest row exceeds staleness threshold - indicates processing backlog
+|===
+
+=== Configuration
+
+[source,bash]
+----
+# Customise queue table patterns (comma-separated)
+export PG_CONSOLE_QUEUE_PATTERNS=*_queue,*_event,*_job,*_task,processing_*
+
+# Set staleness threshold in hours (default: 24)
+export PG_CONSOLE_QUEUE_STALE_HOURS=12
+----
+
+=== Use Cases
+
+* Detect event processing delays in event-sourced architectures
+* Monitor job queue backlogs
+* Alert on stalled async processing pipelines
+* Identify capacity planning requirements
+
+=== Troubleshooting Pipeline Issues
+
+When pipeline risk warnings appear:
+
+1. *Check worker processes* - Ensure queue consumers are running
+2. *Review recent errors* - Check application logs for processing failures
+3. *Analyse row distribution* - Use queries to check if specific records are stuck
+4. *Verify resource availability* - Check CPU, memory, and I/O capacity
+5. *Consider scaling* - Add workers if consistent backlog exists
+
+[NOTE]
+====
+Pipeline risk monitoring assumes queue tables have an insertion timestamp column. Tables without timestamps will show NULL for oldest row age.
+====
+
+[[toast-bloat]]
+== TOAST Bloat Analysis
+
+The TOAST bloat dashboard (`/diagnostics/toast-bloat`) analyses bloat in TOAST (The Oversized-Attribute Storage Technique) tables.
+
+=== What Is TOAST?
+
+PostgreSQL automatically stores large column values (typically > 2KB) in separate TOAST tables. Each table with TOASTable columns has an associated TOAST table named `pg_toast.pg_toast_<oid>`.
+
+TOAST tables can become bloated when:
+
+* Large values are frequently updated or deleted
+* Vacuum operations cannot reclaim space quickly enough
+* Dead tuples accumulate faster than cleanup
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Main table name
+
+|TOAST Table
+|Associated TOAST table name
+
+|Main Table Size
+|Size of the main table
+
+|TOAST Size
+|Size of the TOAST table
+
+|TOAST Ratio
+|Percentage of total size consumed by TOAST data
+
+|Bloat %
+|Estimated bloat percentage in TOAST table
+
+|Reclaimable Space
+|Estimated space that could be reclaimed by VACUUM FULL
+
+|Status
+|WARNING if bloat exceeds threshold (default: 30%)
+|===
+
+=== Interpreting Results
+
+*Healthy TOAST ratios* vary by table:
+
+* Tables with many small rows: < 5%
+* Tables with occasional large values: 10-30%
+* Tables storing large documents/JSON/XML: 50-80%
+
+*Bloat concerns* arise when:
+
+* TOAST ratio increases suddenly without data growth
+* Bloat percentage exceeds 30-50%
+* Reclaimable space is significant (> 100 MB)
+
+=== Remediation
+
+To reduce TOAST bloat:
+
+1. *Regular VACUUM* - Ensure autovacuum is running effectively
++
+[source,sql]
+----
+-- Check last vacuum
+SELECT schemaname, relname, last_autovacuum, last_vacuum
+FROM pg_stat_user_tables
+WHERE relname = 'your_table';
+----
+
+2. *Tune autovacuum* for tables with high update rates
++
+[source,sql]
+----
+ALTER TABLE your_table SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_vacuum_threshold = 1000
+);
+----
+
+3. *VACUUM FULL* (requires exclusive lock) to reclaim space immediately
++
+[source,sql]
+----
+VACUUM FULL your_table;
+----
+
+4. *Consider TOAST compression* settings
++
+[source,sql]
+----
+-- Set TOAST compression strategy for a column
+ALTER TABLE your_table ALTER COLUMN large_column SET STORAGE EXTENDED;
+----
+
+[WARNING]
+====
+`VACUUM FULL` requires an exclusive table lock and rewrites the entire table. Schedule during maintenance windows for production tables.
+====
+
+[[index-redundancy]]
+== Index Redundancy Detection
+
+The index redundancy dashboard (`/diagnostics/index-redundancy`) identifies duplicate and overlapping indexes that waste storage and slow down writes.
+
+=== Types of Redundancy
+
+==== Duplicate Indexes
+
+Exact duplicates with identical columns and definition:
+
+[source,sql]
+----
+-- Both indexes are identical
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_email_duplicate ON users(email);
+----
+
+==== Overlapping Indexes
+
+One index is a subset (left prefix) of another:
+
+[source,sql]
+----
+-- idx_a is redundant (covered by idx_b)
+CREATE INDEX idx_a ON orders(customer_id);
+CREATE INDEX idx_b ON orders(customer_id, order_date);
+----
+
+PostgreSQL can use `idx_b` for queries filtering on `customer_id` alone, making `idx_a` redundant.
+
+=== Dashboard Display
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Redundant Index
+|Name of the redundant index
+
+|Table
+|Table the index belongs to
+
+|Index Columns
+|Columns in the redundant index
+
+|Redundancy Type
+|DUPLICATE or OVERLAPPING
+
+|Covered By
+|Name of the index that makes this one redundant
+
+|Covering Columns
+|Columns in the covering index
+
+|Wasted Space
+|Disk space consumed by the redundant index
+
+|Recommendation
+|Suggested action (typically DROP INDEX)
+|===
+
+=== Analysing Redundancy
+
+Before dropping a redundant index, verify it's truly unused:
+
+[source,sql]
+----
+-- Check index usage statistics
+SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
+FROM pg_stat_user_indexes
+WHERE indexname = 'redundant_index_name';
+----
+
+If `idx_scan` is zero or very low, the index is a good candidate for removal.
+
+=== Removing Redundant Indexes
+
+[source,sql]
+----
+-- Drop redundant index
+DROP INDEX CONCURRENTLY idx_redundant_index;
+----
+
+[TIP]
+====
+Use `DROP INDEX CONCURRENTLY` to avoid blocking concurrent queries. This takes longer but doesn't require an exclusive lock.
+====
+
+=== Exceptions to Redundancy Rules
+
+Some "redundant" indexes may be intentional:
+
+* *Index-only scans* - A smaller index on frequently queried columns may be faster
+* *Covering indexes* - Indexes with INCLUDE columns for specific queries
+* *Partial indexes* - Indexes with WHERE clauses for subset queries
+* *Different index types* - btree vs hash vs gin for different access patterns
+
+Always review application query patterns before dropping indexes.
+
+[[statistical-freshness]]
+== Statistical Freshness
+
+The statistical freshness dashboard (`/diagnostics/statistical-freshness`) tracks when table statistics were last updated and predicts when auto-analyse will trigger.
+
+=== Why Statistics Matter
+
+PostgreSQL's query planner relies on table statistics to choose optimal query plans. Stale statistics can lead to:
+
+* Inefficient query plans
+* Sequential scans instead of index usage
+* Poor join order selection
+* Incorrect cost estimates
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Table name
+
+|Last Analyse
+|Timestamp of last ANALYSE operation
+
+|Last Autoanalyse
+|Timestamp of last automatic ANALYSE
+
+|Days Since Analyse
+|Days since statistics were updated
+
+|Rows Modified
+|Rows inserted/updated/deleted since last analyse
+
+|Modification %
+|Percentage of rows modified since last analyse
+
+|Estimated Auto-Analyse Threshold
+|Row count that will trigger auto-analyse
+
+|Status
+|WARNING if statistics are stale or modification % is high
+|===
+
+=== Auto-Analyse Triggers
+
+PostgreSQL triggers auto-analyse when:
+
+[source]
+----
+modified_rows > (autovacuum_analyze_threshold + autovacuum_analyze_scale_factor * estimated_rows)
+----
+
+Default values:
+
+* `autovacuum_analyze_threshold` = 50 rows
+* `autovacuum_analyze_scale_factor` = 0.1 (10% of table)
+
+For a 10,000 row table:
+----
+50 + (0.1 × 10,000) = 1,050 rows modified
+----
+
+=== Forcing Statistics Update
+
+If statistics are stale:
+
+[source,sql]
+----
+-- Analyse specific table
+ANALYSE your_table;
+
+-- Analyse all tables in current database
+ANALYSE;
+
+-- Analyse with verbose output
+ANALYSE VERBOSE your_table;
+----
+
+=== Tuning Auto-Analyse
+
+For frequently updated tables, reduce thresholds:
+
+[source,sql]
+----
+ALTER TABLE high_activity_table SET (
+  autovacuum_analyze_scale_factor = 0.05,  -- 5% instead of 10%
+  autovacuum_analyze_threshold = 100        -- 100 rows instead of 50
+);
+----
+
+For append-only tables with infrequent reads:
+
+[source,sql]
+----
+ALTER TABLE log_table SET (
+  autovacuum_analyze_scale_factor = 0.2,   -- 20% (less frequent)
+  autovacuum_analyze_threshold = 1000      -- Higher threshold
+);
+----
+
+[[write-read-ratio]]
+== Write/Read Ratio Analysis
+
+The write/read ratio dashboard (`/diagnostics/write-read-ratio`) classifies tables by workload pattern to inform optimisation strategies.
+
+=== Workload Classifications
+
+[cols="1,3"]
+|===
+|Classification |Characteristics
+
+|READ_HEAVY
+|Primarily SELECT queries; few modifications +
+*Optimisation*: Add covering indexes, consider materialised views
+
+|WRITE_HEAVY
+|Frequent INSERT/UPDATE/DELETE; few reads +
+*Optimisation*: Minimise indexes, tune autovacuum aggressively, consider partitioning
+
+|BALANCED
+|Mix of reads and writes +
+*Optimisation*: Balanced approach; monitor both query and write performance
+
+|IDLE
+|No recent activity +
+*Consideration*: Candidates for archival or removal
+|===
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Table name
+
+|Inserts
+|Total INSERT operations
+
+|Updates
+|Total UPDATE operations
+
+|Deletes
+|Total DELETE operations
+
+|Total Writes
+|Sum of inserts, updates, and deletes
+
+|Sequential Scans
+|Number of full table scans
+
+|Index Scans
+|Number of index-based scans
+
+|Total Reads
+|Sum of sequential and index scans
+
+|Write %
+|Percentage of operations that are writes
+
+|Classification
+|Workload type (READ_HEAVY, WRITE_HEAVY, BALANCED, IDLE)
+|===
+
+=== Optimisation by Workload Type
+
+==== Read-Heavy Tables
+
+* Add covering indexes for common queries
+* Consider index-only scans with INCLUDE columns
+* Evaluate materialised views for complex aggregations
+* Cache results at application layer for very static data
+
+==== Write-Heavy Tables
+
+* Minimise index count (only critical indexes)
+* Aggressive autovacuum settings
++
+[source,sql]
+----
+ALTER TABLE write_heavy_table SET (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 500
+);
+----
+* Consider partitioning for time-series data
+* Use UNLOGGED tables if durability not required (development/staging)
+
+==== Balanced Tables
+
+* Monitor both read and write performance
+* Ensure statistics are current
+* Balance index coverage with write overhead
+* Regular VACUUM and ANALYSE
+
+[[hot-efficiency]]
+== HOT Update Efficiency
+
+The HOT efficiency dashboard (`/diagnostics/hot-efficiency`) monitors Heap-Only Tuple (HOT) update performance.
+
+=== What Are HOT Updates?
+
+HOT (Heap-Only Tuple) updates are an optimisation where PostgreSQL performs an UPDATE without modifying indexes, significantly improving performance when:
+
+* No indexed columns are modified
+* The new tuple version fits on the same page (fillfactor allows space)
+
+Non-HOT updates require index maintenance for every index on the table, which is expensive.
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Table name
+
+|Total Updates
+|Total UPDATE operations on the table
+
+|HOT Updates
+|Number of updates performed as HOT updates
+
+|Non-HOT Updates
+|Updates requiring index maintenance
+
+|HOT Ratio %
+|Percentage of updates that were HOT updates
+
+|Status
+|WARNING if HOT ratio falls below threshold (default: 50%)
+
+|Recommendation
+|Suggested optimisations to improve HOT ratio
+|===
+
+=== Interpreting HOT Ratio
+
+[cols="1,3"]
+|===
+|HOT Ratio |Interpretation
+
+|> 80%
+|Excellent - Most updates are HOT
+
+|50-80%
+|Good - Reasonable HOT efficiency
+
+|< 50%
+|Poor - Many updates require index maintenance
+
+|< 20%
+|Critical - Consider schema or fillfactor tuning
+|===
+
+=== Improving HOT Efficiency
+
+==== Increase Fillfactor
+
+Leave space on pages for updated rows:
+
+[source,sql]
+----
+-- Default fillfactor is 100 (no free space)
+-- Set to 90 to reserve 10% for updates
+ALTER TABLE frequently_updated_table SET (fillfactor = 90);
+
+-- For very high update rates, consider 80 or 70
+ALTER TABLE high_update_table SET (fillfactor = 70);
+
+-- Rebuild table to apply new fillfactor
+VACUUM FULL frequently_updated_table;
+----
+
+[IMPORTANT]
+====
+Reducing fillfactor increases table size by the reserved percentage. Balance update performance with storage overhead.
+====
+
+==== Reduce Index Count
+
+Each index on the table reduces HOT update eligibility:
+
+* Audit indexes using xref:#index-redundancy[Index Redundancy Detection]
+* Drop unused indexes
+* Consolidate indexes where possible
+
+==== Partition by Update Pattern
+
+For tables with hot and cold data:
+
+* Partition by time or category
+* Recent partitions have lower fillfactor (more updates)
+* Older partitions have higher fillfactor (mostly reads)
+
+==== Column Ordering
+
+Place frequently updated columns together and at the end:
+
+[source,sql]
+----
+-- Less optimal (updated columns scattered)
+CREATE TABLE orders (
+  id bigint,
+  status varchar(20),        -- Updated frequently
+  customer_id bigint,
+  total_amount numeric,
+  processed_at timestamp,    -- Updated frequently
+  created_at timestamp
+);
+
+-- Better (updated columns grouped)
+CREATE TABLE orders (
+  id bigint,
+  customer_id bigint,
+  total_amount numeric,
+  created_at timestamp,
+  status varchar(20),        -- Updated frequently
+  processed_at timestamp     -- Updated frequently
+);
+----
+
+[[column-correlation]]
+== Column Correlation
+
+The column correlation dashboard (`/diagnostics/correlation`) shows the physical vs logical ordering correlation for indexed columns.
+
+=== What Is Column Correlation?
+
+Correlation measures how well a column's logical order (sorted values) matches its physical order (row storage on disk). Values range from -1 to 1:
+
+* *+1*: Perfect positive correlation (values stored in order)
+* *0*: No correlation (random storage)
+* *-1*: Perfect negative correlation (values stored in reverse order)
+
+=== Why Correlation Matters
+
+High correlation improves performance for:
+
+* Range queries (`WHERE date BETWEEN ... AND ...`)
+* Ordered scans (`ORDER BY indexed_column`)
+* Index-only scans
+* Sequential I/O vs random I/O
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Table name
+
+|Column
+|Indexed column name
+
+|Data Type
+|Column data type
+
+|Correlation
+|Correlation coefficient (-1 to 1)
+
+|Status
+|Recommendation level based on correlation
+
+|Recommendation
+|Suggested action (CLUSTER, REINDEX, or none)
+|===
+
+=== Interpreting Correlation
+
+[cols="1,3"]
+|===
+|Correlation |Action
+
+|> 0.9 or < -0.9
+|Excellent correlation - no action needed
+
+|0.5 to 0.9
+|Good correlation - monitor
+
+|0.1 to 0.5
+|Low correlation - consider CLUSTER for range-scan-heavy tables
+
+|< 0.1
+|Poor correlation - CLUSTER recommended if range queries are common
+|===
+
+=== Improving Correlation
+
+Use `CLUSTER` to physically reorder table rows by an index:
+
+[source,sql]
+----
+-- Reorder table by index
+CLUSTER orders USING idx_orders_created_at;
+
+-- Verify improved correlation
+SELECT tablename, attname, correlation
+FROM pg_stats
+WHERE tablename = 'orders' AND attname = 'created_at';
+----
+
+[WARNING]
+====
+`CLUSTER` requires an exclusive table lock and rewrites the entire table. Schedule during maintenance windows.
+
+Correlation degrades over time as new rows are inserted. Re-CLUSTER periodically for tables with heavy range query workloads.
+====
+
+=== When to Use CLUSTER
+
+CLUSTER is beneficial when:
+
+* Range queries are common (`WHERE timestamp BETWEEN ...`)
+* Table is relatively static or appended to infrequently
+* Physical I/O is a bottleneck
+* Sequential scans are performed regularly
+
+CLUSTER is less useful when:
+
+* Table has high UPDATE/DELETE activity (correlation degrades quickly)
+* Queries are primarily point lookups (`WHERE id = ?`)
+* Table fits in memory (correlation less important)
+
+[[live-charts]]
+== Live Charts
+
+The live charts dashboard (`/diagnostics/live-charts`) displays real-time interactive charts of key database metrics.
+
+=== Available Charts
+
+==== Connections Chart
+
+Tracks connection counts over time:
+
+* Active connections
+* Idle connections
+* Idle in transaction
+* Maximum connections (limit line)
+
+==== Transactions Chart
+
+Monitors transaction activity:
+
+* Commits per second
+* Rollbacks per second
+* Total transactions per second
+
+==== Tuples Chart
+
+Displays tuple (row) operations:
+
+* Tuples returned (SELECT results)
+* Tuples fetched (index scans)
+* Tuples inserted
+* Tuples updated
+* Tuples deleted
+
+==== Cache Chart
+
+Shows buffer cache performance:
+
+* Cache hit ratio percentage
+* Blocks read from disk
+* Blocks hit in cache
+
+=== Chart Controls
+
+*Refresh Interval*
+
+Configure how frequently charts update:
+
+* *3 seconds* - High frequency (increased load)
+* *5 seconds* - Default
+* *10 seconds* - Moderate frequency
+* *30 seconds* - Low frequency
+
+*Time Window*
+
+Charts display the most recent data points:
+
+* Default: Last 50 data points
+* Adjustable via chart controls
+
+*Pause/Resume*
+
+Pause live updates to inspect specific time periods:
+
+* Click *Pause* to freeze chart updates
+* Click *Resume* to continue live monitoring
+
+=== Technology
+
+Charts use Chart.js for rendering and update via htmx-triggered API calls:
+
+* Responsive design (mobile-friendly)
+* Interactive tooltips
+* Zoom and pan capabilities (desktop)
+* Automatic scaling
+
+=== Use Cases
+
+* Monitor database during load tests
+* Observe impact of application deployments
+* Detect anomalies in real-time
+* Troubleshoot performance issues as they occur
+
+[NOTE]
+====
+Live charts continuously poll the database at the configured refresh interval. Avoid very short intervals (< 5s) on production systems with high query volume.
+====
+
+[[xid-wraparound]]
+== Transaction ID Wraparound Monitoring
+
+The XID wraparound dashboard (`/diagnostics/xid-wraparound`) monitors transaction ID age per database to prevent catastrophic wraparound failures.
+
+=== What Is XID Wraparound?
+
+PostgreSQL uses 32-bit transaction IDs (XIDs), which wrap around after approximately 2 billion transactions. When wraparound approaches:
+
+1. PostgreSQL enters read-only mode to prevent data loss
+2. No writes are allowed until vacuum completes
+3. Application failures occur
+
+=== Dashboard Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Database
+|Database name
+
+|Age (Transactions)
+|Current transaction ID age
+
+|Wraparound Limit
+|Maximum age before wraparound (typically 2 billion)
+
+|Percentage
+|Progress toward wraparound (Age / Limit × 100)
+
+|Oldest XID
+|Oldest transaction ID still visible
+
+|Status
+|Risk level (OK, WARNING, CRITICAL)
+
+|Recommendation
+|Suggested action
+|===
+
+=== Risk Levels
+
+[cols="1,1,3"]
+|===
+|Status |Threshold |Action
+
+|OK (Green)
+|< 50%
+|Normal operation - autovacuum is working
+
+|WARNING (Amber)
+|50-75%
+|Monitor closely - verify autovacuum is running
+
+|CRITICAL (Red)
+|> 75%
+|Immediate action required - manual VACUUM needed
+|===
+
+=== Preventing Wraparound
+
+==== Verify Autovacuum Is Running
+
+[source,sql]
+----
+-- Check autovacuum is enabled
+SHOW autovacuum;
+
+-- Check autovacuum launcher is running
+SELECT * FROM pg_stat_activity WHERE backend_type = 'autovacuum launcher';
+----
+
+==== Monitor Vacuum Activity
+
+[source,sql]
+----
+-- Check recent vacuum operations
+SELECT schemaname, relname, last_autovacuum, autovacuum_count
+FROM pg_stat_user_tables
+ORDER BY last_autovacuum NULLS FIRST;
+----
+
+==== Manual VACUUM for Wraparound Prevention
+
+If XID age is high:
+
+[source,sql]
+----
+-- Vacuum entire database (FREEZE to reset XIDs)
+VACUUM FREEZE;
+
+-- Vacuum specific table
+VACUUM FREEZE your_table;
+
+-- Monitor progress
+SELECT phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed
+FROM pg_stat_progress_vacuum;
+----
+
+=== Emergency Wraparound Response
+
+If percentage exceeds 90%:
+
+1. *Immediate VACUUM FREEZE* on all databases
++
+[source,bash]
+----
+# Run on all databases
+for db in $(psql -Atc "SELECT datname FROM pg_database WHERE datallowconn"); do
+  echo "Vacuuming $db..."
+  psql -d "$db" -c "VACUUM FREEZE;"
+done
+----
+
+2. *Monitor vacuum progress* in real-time
++
+[source,sql]
+----
+SELECT datname, age(datfrozenxid) AS age
+FROM pg_database
+ORDER BY age DESC;
+----
+
+3. *Increase autovacuum resources* to prevent recurrence
++
+[source,sql]
+----
+-- In postgresql.conf
+autovacuum_max_workers = 5          -- Increase workers
+autovacuum_naptime = 10s            -- Check more frequently
+autovacuum_vacuum_cost_limit = 1000 -- Allow more I/O
+----
+
+[WARNING]
+====
+If XID age reaches 100%, PostgreSQL will shutdown to prevent data corruption. This is a critical emergency requiring immediate DBA intervention.
+====
+
+=== Long-Running Transactions
+
+Long-running transactions prevent VACUUM from advancing `datfrozenxid`:
+
+[source,sql]
+----
+-- Find long-running transactions
+SELECT pid, usename, datname, state, xact_start,
+       now() - xact_start AS duration
+FROM pg_stat_activity
+WHERE xact_start IS NOT NULL
+ORDER BY xact_start
+LIMIT 20;
+----
+
+Terminate blocking transactions if safe:
+
+[source,sql]
+----
+SELECT pg_terminate_backend(pid);
+----
+
+=== Monitoring Best Practices
+
+* Set up alerts at 50% and 75% thresholds
+* Monitor XID age daily in production
+* Ensure autovacuum is never disabled
+* Review long-running transactions regularly
+* Test vacuum procedures in development
+
+== Dashboard Features
+
+All diagnostics dashboards support standard pg-console features:
+
+=== Auto-Refresh
+
+Configure automatic refresh intervals:
+
+* Off (default)
+* 5 seconds
+* 10 seconds
+* 30 seconds
+* 60 seconds
+
+See xref:dashboards.adoc#auto-refresh[Auto-Refresh] in the main dashboards guide.
+
+=== Dark Mode
+
+Toggle between light and dark colour schemes with the Dark Mode button in the navigation bar.
+
+=== Column Sorting
+
+Click column headers to sort data by that column. Click again to reverse sort order.
+
+== API Access
+
+All diagnostics dashboards have corresponding API endpoints for programmatic access. See xref:api-reference:endpoints.adoc#diagnostics-endpoints[Diagnostics Endpoints] for complete API documentation.
+
+Example:
+
+[source,bash]
+----
+# Get pipeline risk data as JSON
+curl http://localhost:8080/api/diagnostics/pipeline-risk
+
+# Get TOAST bloat analysis
+curl http://localhost:8080/api/diagnostics/toast-bloat
+
+# Get XID wraparound status
+curl http://localhost:8080/api/diagnostics/xid-wraparound
+----
+
+== Troubleshooting
+
+=== Diagnostics Dashboard Not Visible
+
+If diagnostics dashboards are not appearing:
+
+1. Verify diagnostics are enabled in configuration
++
+[source,bash]
+----
+# Check environment variables
+echo $PG_CONSOLE_DASH_DIAGNOSTICS
+echo $PG_CONSOLE_DASH_PIPELINE_RISK
+----
+
+2. Check application logs for configuration errors
++
+[source,bash]
+----
+grep -i "diagnostics" quarkus.log
+----
+
+3. Restart the application after configuration changes
+
+=== No Data Displayed
+
+If dashboards load but show no data:
+
+* *Pipeline Risk*: No tables match configured patterns
+* *TOAST Bloat*: No tables have TOAST storage
+* *Index Redundancy*: No redundant indexes detected (good news!)
+* *Statistical Freshness*: Statistics are current
+* *XID Wraparound*: All databases are healthy
+
+=== Performance Impact
+
+Some diagnostics queries can be resource-intensive:
+
+* *TOAST Bloat*: Scans system catalogs; minimal impact
+* *Index Redundancy*: Analyses all indexes; moderate impact on large schemas
+* *Column Correlation*: Reads `pg_stats`; low impact
+
+If performance is a concern:
+
+* Use longer auto-refresh intervals (30s or 60s)
+* Disable unused diagnostics
+* Run analyses during low-traffic periods
+
+== Next Steps
+
+* Explore xref:dashboards.adoc[core dashboards] for basic monitoring
+* Review xref:configuration.adoc[configuration options] to customise diagnostics
+* Set up xref:admin-guide:alerting.adoc[alerts] for critical diagnostics thresholds
+* Consult xref:troubleshooting.adoc[troubleshooting guide] for common issues

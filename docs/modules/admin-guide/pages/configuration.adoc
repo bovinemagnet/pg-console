@@ -267,6 +267,7 @@ Disable entire dashboard sections:
 ----
 export PG_CONSOLE_DASH_MONITORING=true      # Monitoring section
 export PG_CONSOLE_DASH_ANALYSIS=true        # Analysis section
+export PG_CONSOLE_DASH_DIAGNOSTICS=true     # Diagnostics section
 export PG_CONSOLE_DASH_INFRASTRUCTURE=true  # Infrastructure section
 export PG_CONSOLE_DASH_DATA_CONTROL=true    # Data Control section
 export PG_CONSOLE_DASH_ENTERPRISE=true      # Enterprise section
@@ -277,6 +278,7 @@ export PG_CONSOLE_DASH_SECURITY=true        # Security section
 ----
 pg-console.dashboards.monitoring.enabled=${PG_CONSOLE_DASH_MONITORING:true}
 pg-console.dashboards.analysis.enabled=${PG_CONSOLE_DASH_ANALYSIS:true}
+pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
 pg-console.dashboards.infrastructure.enabled=${PG_CONSOLE_DASH_INFRASTRUCTURE:true}
 pg-console.dashboards.data-control.enabled=${PG_CONSOLE_DASH_DATA_CONTROL:true}
 pg-console.dashboards.enterprise.enabled=${PG_CONSOLE_DASH_ENTERPRISE:true}
@@ -396,6 +398,116 @@ pg-console.dashboards.security.access=${PG_CONSOLE_DASH_SECURITY_ACCESS:true}
 pg-console.dashboards.security.compliance=${PG_CONSOLE_DASH_SECURITY_COMPLIANCE:true}
 pg-console.dashboards.security.recommendations=${PG_CONSOLE_DASH_SECURITY_RECOMMENDATIONS:true}
 ----
+
+[[diagnostics-configuration]]
+=== Diagnostics Section Pages
+
+The diagnostics section provides specialised tools for advanced database analysis. See xref:user-guide:diagnostics.adoc[Advanced Diagnostics] for detailed usage information.
+
+==== Section Toggle
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_DIAGNOSTICS=true  # Enable/disable entire diagnostics section
+----
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
+----
+
+==== Individual Diagnostic Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_PIPELINE_RISK=true        # Queue/pipeline backlog monitoring
+export PG_CONSOLE_DASH_TOAST_BLOAT=true          # TOAST table bloat analysis
+export PG_CONSOLE_DASH_INDEX_REDUNDANCY=true     # Duplicate/overlapping index detection
+export PG_CONSOLE_DASH_STAT_FRESHNESS=true       # Table statistics freshness
+export PG_CONSOLE_DASH_WRITE_READ=true           # Write/read ratio analysis
+export PG_CONSOLE_DASH_HOT_EFFICIENCY=true       # HOT update efficiency monitoring
+export PG_CONSOLE_DASH_CORRELATION=true          # Column correlation analysis
+export PG_CONSOLE_DASH_LIVE_CHARTS=true          # Real-time interactive charts
+export PG_CONSOLE_DASH_XID_WRAPAROUND=true       # Transaction ID wraparound monitoring
+----
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.pipeline-risk=${PG_CONSOLE_DASH_PIPELINE_RISK:true}
+pg-console.dashboards.diagnostics.toast-bloat=${PG_CONSOLE_DASH_TOAST_BLOAT:true}
+pg-console.dashboards.diagnostics.index-redundancy=${PG_CONSOLE_DASH_INDEX_REDUNDANCY:true}
+pg-console.dashboards.diagnostics.statistical-freshness=${PG_CONSOLE_DASH_STAT_FRESHNESS:true}
+pg-console.dashboards.diagnostics.write-read-ratio=${PG_CONSOLE_DASH_WRITE_READ:true}
+pg-console.dashboards.diagnostics.hot-efficiency=${PG_CONSOLE_DASH_HOT_EFFICIENCY:true}
+pg-console.dashboards.diagnostics.correlation=${PG_CONSOLE_DASH_CORRELATION:true}
+pg-console.dashboards.diagnostics.live-charts=${PG_CONSOLE_DASH_LIVE_CHARTS:true}
+pg-console.dashboards.diagnostics.xid-wraparound=${PG_CONSOLE_DASH_XID_WRAPAROUND:true}
+----
+
+==== Diagnostic Thresholds and Configuration
+
+[source,bash]
+----
+# Pipeline Risk Monitoring
+export PG_CONSOLE_QUEUE_PATTERNS=*_queue,*_event,*_job,*_task
+export PG_CONSOLE_QUEUE_STALE_HOURS=24
+
+# TOAST Bloat Analysis
+export PG_CONSOLE_TOAST_BLOAT_WARN=30
+
+# HOT Update Efficiency
+export PG_CONSOLE_HOT_WARN=50
+
+# Transaction ID Wraparound
+export PG_CONSOLE_XID_WARN=50
+export PG_CONSOLE_XID_CRITICAL=75
+----
+
+[source,properties]
+----
+# Pipeline Risk Monitoring
+pg-console.diagnostics.queue-patterns=${PG_CONSOLE_QUEUE_PATTERNS:*_queue,*_event,*_job,*_task}
+pg-console.diagnostics.queue-stale-hours=${PG_CONSOLE_QUEUE_STALE_HOURS:24}
+
+# TOAST Bloat Analysis
+pg-console.diagnostics.toast-bloat-warn-percent=${PG_CONSOLE_TOAST_BLOAT_WARN:30}
+
+# HOT Update Efficiency
+pg-console.diagnostics.hot-efficiency-warn-percent=${PG_CONSOLE_HOT_WARN:50}
+
+# Transaction ID Wraparound
+pg-console.diagnostics.xid-warn-percent=${PG_CONSOLE_XID_WARN:50}
+pg-console.diagnostics.xid-critical-percent=${PG_CONSOLE_XID_CRITICAL:75}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_QUEUE_PATTERNS`
+|`*_queue,*_event,*_job,*_task`
+|Comma-separated table name patterns for pipeline risk monitoring
+
+|`PG_CONSOLE_QUEUE_STALE_HOURS`
+|`24`
+|Hours after which pipeline rows are considered stale
+
+|`PG_CONSOLE_TOAST_BLOAT_WARN`
+|`30`
+|TOAST bloat percentage threshold for warnings
+
+|`PG_CONSOLE_HOT_WARN`
+|`50`
+|HOT update ratio percentage threshold for warnings
+
+|`PG_CONSOLE_XID_WARN`
+|`50`
+|Transaction ID age percentage for warning status
+
+|`PG_CONSOLE_XID_CRITICAL`
+|`75`
+|Transaction ID age percentage for critical status
+|===
 
 === Feature Toggle Examples
 

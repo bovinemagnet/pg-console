@@ -82,6 +82,13 @@ public interface DashboardConfig {
      */
     InsightsConfig insights();
 
+    /**
+     * Diagnostics section configuration (Phase 21).
+     *
+     * @return diagnostics section config
+     */
+    DiagnosticsConfig diagnostics();
+
     // ========================================
     // Monitoring Section
     // ========================================
@@ -503,5 +510,106 @@ public interface DashboardConfig {
         @WithName("runbooks")
         @WithDefault("true")
         boolean runbooksEnabled();
+    }
+
+    // ========================================
+    // Diagnostics Section (Phase 21)
+    // ========================================
+
+    /**
+     * Configuration for the Diagnostics section.
+     * Pages: Pipeline Risk, TOAST Bloat, Index Redundancy, Statistical Freshness,
+     * Write/Read Ratio, HOT Efficiency, Correlation, Live Charts, XID Wraparound.
+     */
+    interface DiagnosticsConfig {
+
+        /**
+         * Enable or disable the entire Diagnostics section.
+         *
+         * @return true if section is enabled
+         */
+        @WithDefault("true")
+        boolean enabled();
+
+        /**
+         * Enable or disable the Pipeline Risk page (/diagnostics/pipeline-risk).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("pipeline-risk")
+        @WithDefault("true")
+        boolean pipelineRiskEnabled();
+
+        /**
+         * Enable or disable the TOAST Bloat page (/diagnostics/toast-bloat).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("toast-bloat")
+        @WithDefault("true")
+        boolean toastBloatEnabled();
+
+        /**
+         * Enable or disable the Index Redundancy page (/diagnostics/index-redundancy).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("index-redundancy")
+        @WithDefault("true")
+        boolean indexRedundancyEnabled();
+
+        /**
+         * Enable or disable the Statistical Freshness page (/diagnostics/statistical-freshness).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("statistical-freshness")
+        @WithDefault("true")
+        boolean statisticalFreshnessEnabled();
+
+        /**
+         * Enable or disable the Write/Read Ratio page (/diagnostics/write-read-ratio).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("write-read-ratio")
+        @WithDefault("true")
+        boolean writeReadRatioEnabled();
+
+        /**
+         * Enable or disable the HOT Efficiency page (/diagnostics/hot-efficiency).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("hot-efficiency")
+        @WithDefault("true")
+        boolean hotEfficiencyEnabled();
+
+        /**
+         * Enable or disable the Correlation page (/diagnostics/correlation).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("correlation")
+        @WithDefault("true")
+        boolean correlationEnabled();
+
+        /**
+         * Enable or disable the Live Charts page (/diagnostics/live-charts).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("live-charts")
+        @WithDefault("true")
+        boolean liveChartsEnabled();
+
+        /**
+         * Enable or disable the XID Wraparound page (/diagnostics/xid-wraparound).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("xid-wraparound")
+        @WithDefault("true")
+        boolean xidWraparoundEnabled();
     }
 }

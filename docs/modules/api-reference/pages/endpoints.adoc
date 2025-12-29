@@ -10,6 +10,7 @@ This page provides a complete reference for all pg-console REST API endpoints, i
 
 * <<core-monitoring,Core Monitoring>> - Essential database monitoring metrics
 * <<insights,Insights & Analysis>> - Intelligent insights and recommendations
+* <<diagnostics,Advanced Diagnostics>> - Specialised diagnostic tools and analysis
 * <<security,Security & Compliance>> - Security monitoring and compliance
 * <<schema-comparison,Schema Comparison>> - Schema comparison and migration
 * <<infrastructure,Infrastructure>> - Replication and background processes
@@ -632,6 +633,664 @@ Identifies tables that need vacuuming or analysing based on bloat, dead tuple co
 [source,bash]
 ----
 curl http://localhost:8080/api/v1/table-maintenance
+----
+
+'''
+
+[#diagnostics]
+== Advanced Diagnostics
+
+Specialised diagnostic endpoints for pipeline monitoring, storage analysis, and system health.
+
+=== GET /api/diagnostics/pipeline-risk
+
+Monitors queue and pipeline tables for processing backlogs and stale data.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalTables": 5,
+    "warningCount": 1,
+    "criticalCount": 0
+  },
+  "risks": [
+    {
+      "tableName": "public.order_events",
+      "oldestRowAge": "15 hours 23 minutes",
+      "oldestRowAgeHours": 15.38,
+      "estimatedRows": 12543,
+      "status": "OK",
+      "message": "Processing normally"
+    },
+    {
+      "tableName": "public.payment_queue",
+      "oldestRowAge": "26 hours 45 minutes",
+      "oldestRowAgeHours": 26.75,
+      "estimatedRows": 234,
+      "status": "WARNING",
+      "message": "Oldest row exceeds threshold (24 hours)"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/pipeline-risk
+----
+
+'''
+
+=== GET /api/diagnostics/toast-bloat
+
+Analyses TOAST (The Oversized-Attribute Storage Technique) table bloat.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalTables": 12,
+    "bloatedCount": 3,
+    "totalReclaimableBytes": 524288000
+  },
+  "bloat": [
+    {
+      "schemaName": "public",
+      "tableName": "documents",
+      "toastTableName": "pg_toast.pg_toast_16385",
+      "mainTableSize": 1073741824,
+      "mainTableSizeFormatted": "1.0 GB",
+      "toastSize": 3221225472,
+      "toastSizeFormatted": "3.0 GB",
+      "toastRatio": 75.0,
+      "bloatPercent": 35.5,
+      "reclaimableBytes": 314572800,
+      "reclaimableFormatted": "300 MB",
+      "status": "WARNING"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/toast-bloat
+----
+
+'''
+
+=== GET /api/diagnostics/index-redundancy
+
+Detects duplicate and overlapping indexes that waste storage space.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalIndexes": 87,
+    "redundantCount": 5,
+    "totalWastedBytes": 209715200
+  },
+  "redundancies": [
+    {
+      "redundantIndex": "idx_orders_customer_id",
+      "tableName": "public.orders",
+      "indexColumns": ["customer_id"],
+      "redundancyType": "OVERLAPPING",
+      "coveredBy": "idx_orders_customer_order_date",
+      "coveringColumns": ["customer_id", "order_date"],
+      "wastedBytes": 52428800,
+      "wastedFormatted": "50 MB",
+      "recommendation": "DROP INDEX CONCURRENTLY idx_orders_customer_id"
+    },
+    {
+      "redundantIndex": "idx_users_email_dup",
+      "tableName": "public.users",
+      "indexColumns": ["email"],
+      "redundancyType": "DUPLICATE",
+      "coveredBy": "idx_users_email",
+      "coveringColumns": ["email"],
+      "wastedBytes": 10485760,
+      "wastedFormatted": "10 MB",
+      "recommendation": "DROP INDEX CONCURRENTLY idx_users_email_dup"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/index-redundancy
+----
+
+'''
+
+=== GET /api/diagnostics/statistical-freshness
+
+Tracks table statistics freshness and predicts when auto-analyse will trigger.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalTables": 45,
+    "staleCount": 8,
+    "needsAnalyseCount": 3
+  },
+  "statistics": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "lastAnalyse": "2025-12-20T03:00:00Z",
+      "lastAutoanalyse": "2025-12-27T08:15:00Z",
+      "daysSinceAnalyse": 1.1,
+      "estimatedRows": 152000,
+      "rowsModified": 12500,
+      "modificationPercent": 8.22,
+      "autoAnalyseThreshold": 15250,
+      "status": "OK",
+      "recommendation": null
+    },
+    {
+      "schemaName": "public",
+      "tableName": "user_sessions",
+      "lastAnalyse": "2025-12-15T03:00:00Z",
+      "lastAutoanalyse": "2025-12-15T03:00:00Z",
+      "daysSinceAnalyse": 13.0,
+      "estimatedRows": 50000,
+      "rowsModified": 15000,
+      "modificationPercent": 30.0,
+      "autoAnalyseThreshold": 5050,
+      "status": "WARNING",
+      "recommendation": "ANALYSE user_sessions"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/statistical-freshness
+----
+
+'''
+
+=== GET /api/diagnostics/write-read-ratio
+
+Classifies tables by workload pattern (read-heavy, write-heavy, balanced, idle).
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalTables": 45,
+    "readHeavy": 28,
+    "writeHeavy": 8,
+    "balanced": 6,
+    "idle": 3
+  },
+  "tables": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "inserts": 54321,
+      "updates": 12345,
+      "deletes": 987,
+      "totalWrites": 67653,
+      "seqScans": 234,
+      "indexScans": 987654,
+      "totalReads": 987888,
+      "writePercent": 6.4,
+      "classification": "READ_HEAVY"
+    },
+    {
+      "schemaName": "public",
+      "tableName": "audit_log",
+      "inserts": 1523847,
+      "updates": 0,
+      "deletes": 0,
+      "totalWrites": 1523847,
+      "seqScans": 12,
+      "indexScans": 543,
+      "totalReads": 555,
+      "writePercent": 99.96,
+      "classification": "WRITE_HEAVY"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/write-read-ratio
+----
+
+'''
+
+=== GET /api/diagnostics/hot-efficiency
+
+Monitors Heap-Only Tuple (HOT) update efficiency.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalTables": 45,
+    "lowEfficiencyCount": 5,
+    "averageHotRatio": 72.5
+  },
+  "efficiency": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "totalUpdates": 12345,
+      "hotUpdates": 8765,
+      "nonHotUpdates": 3580,
+      "hotRatio": 71.0,
+      "status": "GOOD",
+      "recommendation": null
+    },
+    {
+      "schemaName": "public",
+      "tableName": "products",
+      "totalUpdates": 9876,
+      "hotUpdates": 2468,
+      "nonHotUpdates": 7408,
+      "hotRatio": 25.0,
+      "status": "WARNING",
+      "recommendation": "Consider increasing fillfactor or reducing index count"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/hot-efficiency
+----
+
+'''
+
+=== GET /api/diagnostics/correlation
+
+Shows physical vs logical ordering correlation for indexed columns.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalColumns": 87,
+    "lowCorrelationCount": 12,
+    "averageCorrelation": 0.65
+  },
+  "correlations": [
+    {
+      "schemaName": "public",
+      "tableName": "orders",
+      "columnName": "created_at",
+      "dataType": "timestamp",
+      "correlation": 0.98,
+      "status": "EXCELLENT",
+      "recommendation": null
+    },
+    {
+      "schemaName": "public",
+      "tableName": "products",
+      "columnName": "category_id",
+      "dataType": "integer",
+      "correlation": 0.15,
+      "status": "POOR",
+      "recommendation": "Consider CLUSTER if range queries are common"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/correlation
+----
+
+'''
+
+=== GET /api/diagnostics/xid-wraparound
+
+Monitors transaction ID age per database to prevent wraparound failures.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalDatabases": 3,
+    "warningCount": 0,
+    "criticalCount": 0,
+    "maxPercentage": 35.5
+  },
+  "databases": [
+    {
+      "databaseName": "postgres",
+      "age": 710678234,
+      "wraparoundLimit": 2000000000,
+      "percentage": 35.5,
+      "oldestXid": 123456789,
+      "status": "OK",
+      "recommendation": null
+    },
+    {
+      "databaseName": "myapp",
+      "age": 1250000000,
+      "wraparoundLimit": 2000000000,
+      "percentage": 62.5,
+      "oldestXid": 987654321,
+      "status": "WARNING",
+      "recommendation": "Monitor closely - verify autovacuum is running"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/xid-wraparound
+----
+
+'''
+
+=== GET /api/diagnostics/live-charts/connections
+
+Returns real-time connection metrics for live charting.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "data": {
+    "active": 12,
+    "idle": 8,
+    "idleInTransaction": 1,
+    "maxConnections": 100,
+    "total": 21
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/live-charts/connections
+----
+
+'''
+
+=== GET /api/diagnostics/live-charts/transactions
+
+Returns real-time transaction metrics for live charting.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "data": {
+    "commits": 12345678,
+    "rollbacks": 123,
+    "commitsPerSecond": 245.3,
+    "rollbacksPerSecond": 0.2
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/live-charts/transactions
+----
+
+'''
+
+=== GET /api/diagnostics/live-charts/tuples
+
+Returns real-time tuple (row) operation metrics for live charting.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "data": {
+    "returned": 1523847,
+    "fetched": 982341,
+    "inserted": 54321,
+    "updated": 12345,
+    "deleted": 987
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/live-charts/tuples
+----
+
+'''
+
+=== GET /api/diagnostics/live-charts/cache
+
+Returns real-time cache hit ratio metrics for live charting.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "data": {
+    "cacheHitRatio": 99.5,
+    "blocksRead": 987654,
+    "blocksHit": 98765432,
+    "totalBlocks": 98766086
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/live-charts/cache
 ----
 
 '''

@@ -2,4 +2,5 @@
 ** xref:installation.adoc[Installation]
 ** xref:configuration.adoc[Configuration]
 ** xref:dashboards.adoc[Using Dashboards]
+** xref:diagnostics.adoc[Advanced Diagnostics]
 ** xref:troubleshooting.adoc[Troubleshooting]

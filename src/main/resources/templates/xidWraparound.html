@@ -1,0 +1,98 @@
+{#include base}
+{#title}XID Wraparound - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/diagnostics/xid-wraparound?instance={instance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>XID Wraparound Monitoring</h1>
+        <p class="text-muted">Transaction ID age tracking to prevent wraparound emergencies</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <strong>About XID Wraparound:</strong> PostgreSQL uses 32-bit transaction IDs that can wrap around after ~2 billion transactions.
+            Aggressive vacuuming prevents this. Warning at {warnPercent}%, Critical at {criticalPercent}%.
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        {#if xids.isEmpty()}
+        <div class="alert alert-info">
+            No databases found.
+        </div>
+        {#else}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Database</th>
+                        <th>XID Age</th>
+                        <th>Progress to Wraparound</th>
+                        <th>Oldest Table</th>
+                        <th>Recommendation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for x in xids}
+                    <tr>
+                        <td><strong>{x.databaseName}</strong></td>
+                        <td>{x.xidAgeDisplay}</td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                {#let pct=x.calculatePercentToWraparound}
+                                <div class="progress-bar {#if pct >= criticalPercent}bg-danger{#else if pct >= warnPercent}bg-warning{#else}bg-success{/if}"
+                                     role="progressbar"
+                                     style="width: {pct}%"
+                                     aria-valuenow="{pct}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    {pct.intValue()}%
+                                </div>
+                                {/let}
+                            </div>
+                        </td>
+                        <td>
+                            {#if x.oldestXidFullTableName}
+                                <code>{x.oldestXidFullTableName}</code>
+                            {#else}
+                                <span class="text-muted">-</span>
+                            {/if}
+                        </td>
+                        <td>
+                            {#let pct=x.calculatePercentToWraparound}
+                            <span class="{#if pct >= criticalPercent}text-danger{#else if pct >= warnPercent}text-warning{#else}text-success{/if}">
+                                {x.recommendation}
+                            </span>
+                            {/let}
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Vacuum Commands</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Run these commands to freeze old transactions:</p>
+                {#for x in xids}
+                {#if x.oldestXidFullTableName}
+                <pre class="bg-dark text-light p-2 rounded"><code>{x.vacuumFreezeCommand}</code></pre>
+                {/if}
+                {/for}
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+
+</div>
+
+{/include}

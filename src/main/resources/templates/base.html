@@ -1065,6 +1065,72 @@
             </div>
             {/if}
 
+            <!-- Diagnostics Section (Phase 21) -->
+            {#if toggles.diagnosticsSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-diagnostics" data-section="diagnostics">
+                <div class="nav-section-title" id="nav-diagnostics">
+                    <span>Diagnostics</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.pipelineRisk}
+                    <a class="nav-link" href="/diagnostics/pipeline-risk?instance={currentInstance ?: 'default'}" data-title="Pipeline Risk">
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                        <span class="nav-link-text">Pipeline Risk</span>
+                    </a>
+                    {/if}
+                    {#if toggles.toastBloat}
+                    <a class="nav-link" href="/diagnostics/toast-bloat?instance={currentInstance ?: 'default'}" data-title="TOAST Bloat">
+                        <i class="bi bi-box-seam" aria-hidden="true"></i>
+                        <span class="nav-link-text">TOAST Bloat</span>
+                    </a>
+                    {/if}
+                    {#if toggles.indexRedundancy}
+                    <a class="nav-link" href="/diagnostics/index-redundancy?instance={currentInstance ?: 'default'}" data-title="Index Redundancy">
+                        <i class="bi bi-layers" aria-hidden="true"></i>
+                        <span class="nav-link-text">Index Redundancy</span>
+                    </a>
+                    {/if}
+                    {#if toggles.statisticalFreshness}
+                    <a class="nav-link" href="/diagnostics/statistical-freshness?instance={currentInstance ?: 'default'}" data-title="Statistics Freshness">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <span class="nav-link-text">Stats Freshness</span>
+                    </a>
+                    {/if}
+                    {#if toggles.writeReadRatio}
+                    <a class="nav-link" href="/diagnostics/write-read-ratio?instance={currentInstance ?: 'default'}" data-title="Write/Read Ratio">
+                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                        <span class="nav-link-text">Write/Read Ratio</span>
+                    </a>
+                    {/if}
+                    {#if toggles.hotEfficiency}
+                    <a class="nav-link" href="/diagnostics/hot-efficiency?instance={currentInstance ?: 'default'}" data-title="HOT Efficiency">
+                        <i class="bi bi-fire" aria-hidden="true"></i>
+                        <span class="nav-link-text">HOT Efficiency</span>
+                    </a>
+                    {/if}
+                    {#if toggles.correlation}
+                    <a class="nav-link" href="/diagnostics/correlation?instance={currentInstance ?: 'default'}" data-title="Correlation">
+                        <i class="bi bi-sort-numeric-down" aria-hidden="true"></i>
+                        <span class="nav-link-text">Correlation</span>
+                    </a>
+                    {/if}
+                    {#if toggles.liveCharts}
+                    <a class="nav-link" href="/diagnostics/live-charts?instance={currentInstance ?: 'default'}" data-title="Live Charts">
+                        <i class="bi bi-graph-up" aria-hidden="true"></i>
+                        <span class="nav-link-text">Live Charts</span>
+                    </a>
+                    {/if}
+                    {#if toggles.xidWraparound}
+                    <a class="nav-link" href="/diagnostics/xid-wraparound?instance={currentInstance ?: 'default'}" data-title="XID Wraparound">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <span class="nav-link-text">XID Wraparound</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
             <!-- Infrastructure Section -->
             {#if toggles.infrastructureSection}
             <div class="nav-section" role="group" aria-labelledby="nav-infra" data-section="infrastructure">

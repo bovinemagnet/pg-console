@@ -414,6 +414,100 @@ public class FeatureToggleService {
     }
 
     // ========================================
+    // Diagnostics Section (Phase 21)
+    // ========================================
+
+    /**
+     * Checks if the Diagnostics section is enabled.
+     *
+     * @return true if section is enabled
+     */
+    public boolean isDiagnosticsSectionEnabled() {
+        return dashboardConfig.diagnostics().enabled();
+    }
+
+    /**
+     * Checks if the Pipeline Risk page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isPipelineRiskEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().pipelineRiskEnabled();
+    }
+
+    /**
+     * Checks if the TOAST Bloat page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isToastBloatEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().toastBloatEnabled();
+    }
+
+    /**
+     * Checks if the Index Redundancy page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isIndexRedundancyEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().indexRedundancyEnabled();
+    }
+
+    /**
+     * Checks if the Statistical Freshness page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isStatisticalFreshnessEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().statisticalFreshnessEnabled();
+    }
+
+    /**
+     * Checks if the Write/Read Ratio page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isWriteReadRatioEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().writeReadRatioEnabled();
+    }
+
+    /**
+     * Checks if the HOT Efficiency page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isHotEfficiencyEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().hotEfficiencyEnabled();
+    }
+
+    /**
+     * Checks if the Correlation page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isCorrelationEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().correlationEnabled();
+    }
+
+    /**
+     * Checks if the Live Charts page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isLiveChartsEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().liveChartsEnabled();
+    }
+
+    /**
+     * Checks if the XID Wraparound page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isXidWraparoundEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().xidWraparoundEnabled();
+    }
+
+    // ========================================
     // Guard methods
     // ========================================
 
@@ -477,6 +571,16 @@ public class FeatureToggleService {
             case "forecasts" -> isForecastsEnabled();
             case "recommendations" -> isInsightsRecommendationsEnabled();
             case "runbooks" -> isRunbooksEnabled();
+            // Diagnostics (Phase 21)
+            case "pipeline-risk" -> isPipelineRiskEnabled();
+            case "toast-bloat" -> isToastBloatEnabled();
+            case "index-redundancy" -> isIndexRedundancyEnabled();
+            case "statistical-freshness" -> isStatisticalFreshnessEnabled();
+            case "write-read-ratio" -> isWriteReadRatioEnabled();
+            case "hot-efficiency" -> isHotEfficiencyEnabled();
+            case "correlation" -> isCorrelationEnabled();
+            case "live-charts" -> isLiveChartsEnabled();
+            case "xid-wraparound" -> isXidWraparoundEnabled();
             // System (always enabled)
             case "about" -> true;
             default -> true;
@@ -548,6 +652,20 @@ public class FeatureToggleService {
         toggles.put("forecasts", isForecastsEnabled());
         toggles.put("insightsRecommendations", isInsightsRecommendationsEnabled());
         toggles.put("runbooks", isRunbooksEnabled());
+
+        // Diagnostics section (Phase 21)
+        toggles.put("diagnosticsSection", isDiagnosticsSectionEnabled());
+
+        // Diagnostics pages
+        toggles.put("pipelineRisk", isPipelineRiskEnabled());
+        toggles.put("toastBloat", isToastBloatEnabled());
+        toggles.put("indexRedundancy", isIndexRedundancyEnabled());
+        toggles.put("statisticalFreshness", isStatisticalFreshnessEnabled());
+        toggles.put("writeReadRatio", isWriteReadRatioEnabled());
+        toggles.put("hotEfficiency", isHotEfficiencyEnabled());
+        toggles.put("correlation", isCorrelationEnabled());
+        toggles.put("liveCharts", isLiveChartsEnabled());
+        toggles.put("xidWraparound", isXidWraparoundEnabled());
 
         return toggles;
     }

@@ -516,38 +516,38 @@ Product Specification: Postgres Insight Dashboard
   - Test data factories (TestDataFactory with model builders)
   - Testcontainers for PostgreSQL (PostgresTestResource, PostgresTestContainer)
 
-### Phase 19 — Documentation Generation (Planned)
-- [ ] **Antora Documentation Site**
+### Phase 19 — Documentation Generation ✅ COMPLETE
+- [x] **Antora Documentation Site**
   - Full Antora documentation structure
   - Multiple modules (user guide, admin guide, API reference, developer guide)
   - Navigation hierarchy with nav.adoc files
   - Cross-module references and linking
   - Versioned documentation support
-- [ ] **AsciiDoc Content**
+- [x] **AsciiDoc Content**
   - Comprehensive user documentation
   - Installation and configuration guides
   - Feature documentation with examples
   - Troubleshooting guides
   - Best practices and recommendations
-- [ ] **Mermaid Diagram Generation**
+- [x] **Mermaid Diagram Generation**
   - Architecture diagrams (component, deployment)
   - Entity-relationship diagrams from schema
   - Sequence diagrams for key workflows
   - Flowcharts for decision processes
   - Diagrams externalised to examples directory
-- [ ] **Schema Documentation**
+- [ ] **Schema Documentation** (deferred)
   - Automated data dictionary generation
   - Table and column descriptions
   - Foreign key relationship documentation
   - Index documentation with usage statistics
   - Export as AsciiDoc tables
-- [ ] **API Documentation**
+- [x] **API Documentation**
   - OpenAPI/Swagger specification generation
   - REST endpoint documentation
   - Request/response examples
   - Authentication documentation
   - Rate limiting and error codes
-- [ ] **Interactive Examples**
+- [x] **Interactive Examples**
   - Code snippets with syntax highlighting
   - Copy-to-clipboard functionality
   - Runnable curl examples
@@ -590,6 +590,49 @@ Product Specification: Postgres Insight Dashboard
   - Development mode with hot reload
   - Plugin testing utilities
   - Documentation and examples
+
+### Phase 21 — Enhanced Database Diagnostics & Interactive Charts ✅ COMPLETE
+- [x] **Pipeline/Queue Risk Monitoring**
+  - Oldest row age tracking for event/queue tables
+  - Queue depth and staleness warnings
+  - Configurable table patterns for queue detection
+- [x] **TOAST Bloat Analysis**
+  - TOAST table size vs main table ratio
+  - TOAST-specific bloat percentage
+  - Large object storage efficiency metrics
+- [x] **Index Redundancy Detection**
+  - Duplicate/overlapping index identification
+  - Index-to-table size ratio warnings
+  - Missing foreign key index detection
+- [x] **Statistical Freshness Monitoring**
+  - Percentage modified since last ANALYZE
+  - Auto-analyze prediction
+  - Priority ranking for stale tables
+- [x] **Write/Read Ratio Analysis**
+  - Per-table DML vs scan breakdown
+  - Workload pattern classification
+  - Dominant operation indicators
+- [x] **HOT Update Efficiency**
+  - HOT update ratio tracking
+  - Fill factor recommendations
+  - Bloat candidate identification
+- [x] **Column Correlation Statistics**
+  - Physical vs logical ordering analysis
+  - CLUSTER recommendations
+  - Range query optimisation hints
+- [x] **Interactive Live Charts**
+  - Adjustable refresh intervals (3s/5s/10s/30s)
+  - Pause/resume controls
+  - Connection, commit, tuple, cache trends
+  - WAL and checkpoint monitoring
+- [x] **Enhanced XID Wraparound Monitoring**
+  - Percentage to wraparound with visual indicators
+  - Per-database XID age tracking
+  - Emergency vacuum recommendations
+- [ ] **Tooltip Drill-downs** (deferred to future phase)
+  - Hover tooltips with top-N details
+  - Context-sensitive metric explanations
+  - Quick action links
 
 ---
 
@@ -1764,31 +1807,35 @@ gradle21w jacocoTestReport
 gradle21w jacocoTestCoverageVerification
 ```
 
-Phase 19 — Documentation Generation (Planned)
+Phase 19 — Documentation Generation ✅ COMPLETE
 
 Deliverables:
 
-Antora documentation site with versioned modules
+Antora documentation site with versioned modules - DONE
 
-AsciiDoc content for user, admin, and developer guides
+AsciiDoc content for user, admin, and developer guides - DONE
 
-Mermaid diagrams for architecture, ERD, and workflows
+Mermaid diagrams for architecture, ERD, and workflows - DONE
 
-Automated schema documentation (data dictionary)
+Automated schema documentation (data dictionary) - Deferred
 
-OpenAPI/Swagger API specification
+OpenAPI/Swagger API specification - DONE
 
 Acceptance Criteria:
 
-Antora site builds with `gradle21w antora` command
+Antora site builds with `gradle21w antora` command - DONE
 
-Documentation modules: user-guide, admin-guide, api-reference, developer-guide
+Documentation modules: user-guide, admin-guide, api-reference, developer-guide - DONE
 
-Mermaid diagrams render in documentation and externalised to examples/
+Mermaid diagrams render in documentation and externalised to examples/ - DONE
 
-Schema documentation auto-generated from database metadata
+Schema documentation auto-generated from database metadata - Deferred
 
-OpenAPI spec available at /q/openapi endpoint
+OpenAPI spec available at /q/openapi endpoint - DONE
+
+Known Limitations:
+
+Automated schema documentation (data dictionary) deferred to future phase
 
 Documentation Structure:
 
@@ -1799,22 +1846,47 @@ docs/
 │   ├── ROOT/
 │   │   ├── nav.adoc
 │   │   └── pages/
+│   │       ├── index.adoc
+│   │       └── quick-start.adoc
 │   ├── user-guide/
 │   │   ├── nav.adoc
 │   │   └── pages/
+│   │       ├── index.adoc
+│   │       ├── installation.adoc
+│   │       ├── configuration.adoc
+│   │       ├── dashboards.adoc
+│   │       └── troubleshooting.adoc
 │   ├── admin-guide/
 │   │   ├── nav.adoc
 │   │   └── pages/
+│   │       ├── index.adoc
+│   │       ├── deployment.adoc
+│   │       ├── configuration.adoc
+│   │       ├── security.adoc
+│   │       ├── multi-instance.adoc
+│   │       ├── alerting.adoc
+│   │       └── cli-reference.adoc
 │   ├── api-reference/
 │   │   ├── nav.adoc
 │   │   └── pages/
+│   │       ├── index.adoc
+│   │       ├── rest-api.adoc
+│   │       └── endpoints.adoc
 │   └── developer-guide/
 │       ├── nav.adoc
+│       ├── examples/
+│       │   ├── architecture.mmd
+│       │   ├── erd-schema.mmd
+│       │   └── workflow-alerting.mmd
 │       └── pages/
+│           ├── index.adoc
+│           ├── architecture.adoc
+│           ├── database-schema.adoc
+│           └── testing.adoc
 └── examples/
     ├── architecture.mmd
-    ├── erd.mmd
-    └── workflow-*.mmd
+    ├── erd-schema.mmd
+    └── workflow-alerting.mmd
 ```
 
 Phase 20 — Plugin & Extension System (Planned)
@@ -1875,6 +1947,93 @@ pg-console.plugins.auto-update=${PG_CONSOLE_PLUGINS_AUTO_UPDATE:false}
 pg-console.plugins.marketplace.enabled=${PG_CONSOLE_MARKETPLACE_ENABLED:false}
 pg-console.plugins.marketplace.url=${PG_CONSOLE_MARKETPLACE_URL:https://plugins.pg-console.io}
 ```
+
+Phase 21 — Enhanced Database Diagnostics & Interactive Charts ✅ COMPLETE
+
+Deliverables:
+
+Pipeline/Queue Risk Monitoring with oldest row age tracking - DONE
+
+TOAST Bloat Analysis separate from table bloat - DONE
+
+Index Redundancy Detection with duplicate and missing FK indexes - DONE
+
+Statistical Freshness Monitoring with auto-analyze predictions - DONE
+
+Write/Read Ratio Analysis for workload classification - DONE
+
+HOT Update Efficiency tracking for fill factor recommendations - DONE
+
+Column Correlation Statistics for CLUSTER recommendations - DONE
+
+Interactive Live Charts with adjustable refresh and pause/resume - DONE
+
+Enhanced XID Wraparound Monitoring with visual indicators - DONE
+
+Tooltip Drill-downs for quick access to details - Deferred to future phase
+
+Acceptance Criteria:
+
+Queue tables display oldest row age with staleness warnings - DONE
+
+TOAST bloat percentage shown separately from table bloat - DONE
+
+Duplicate indexes identified with wasted space calculation - DONE
+
+Tables ranked by statistical staleness (% modified since ANALYZE) - DONE
+
+Write-heavy vs read-heavy tables classified automatically - DONE
+
+HOT update ratio displayed with fill factor suggestions - DONE
+
+Column correlations shown with CLUSTER recommendations - DONE
+
+Charts support 3s/5s/10s/30s refresh with pause/resume controls - DONE
+
+XID wraparound shows percentage to threshold per database - DONE
+
+Tooltips show top-5 details on hover without page navigation - Deferred
+
+Configuration Properties:
+
+```properties
+# Diagnostics section toggle
+pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
+
+# Individual page toggles
+pg-console.dashboards.diagnostics.pipeline-risk=${PG_CONSOLE_DASH_PIPELINE_RISK:true}
+pg-console.dashboards.diagnostics.toast-bloat=${PG_CONSOLE_DASH_TOAST_BLOAT:true}
+pg-console.dashboards.diagnostics.index-redundancy=${PG_CONSOLE_DASH_INDEX_REDUNDANCY:true}
+pg-console.dashboards.diagnostics.statistical-freshness=${PG_CONSOLE_DASH_STAT_FRESHNESS:true}
+pg-console.dashboards.diagnostics.write-read-ratio=${PG_CONSOLE_DASH_WRITE_READ:true}
+pg-console.dashboards.diagnostics.hot-efficiency=${PG_CONSOLE_DASH_HOT_EFFICIENCY:true}
+pg-console.dashboards.diagnostics.correlation=${PG_CONSOLE_DASH_CORRELATION:true}
+pg-console.dashboards.diagnostics.live-charts=${PG_CONSOLE_DASH_LIVE_CHARTS:true}
+pg-console.dashboards.diagnostics.xid-wraparound=${PG_CONSOLE_DASH_XID_WRAPAROUND:true}
+
+# Queue/pipeline table patterns (comma-separated)
+pg-console.diagnostics.queue-patterns=${PG_CONSOLE_QUEUE_PATTERNS:*_queue,*_event,*_job,*_task}
+
+# Thresholds
+pg-console.diagnostics.queue-stale-hours=${PG_CONSOLE_QUEUE_STALE_HOURS:24}
+pg-console.diagnostics.toast-bloat-warn-percent=${PG_CONSOLE_TOAST_BLOAT_WARN:30}
+pg-console.diagnostics.hot-efficiency-warn-percent=${PG_CONSOLE_HOT_WARN:50}
+pg-console.diagnostics.xid-warn-percent=${PG_CONSOLE_XID_WARN:50}
+pg-console.diagnostics.xid-critical-percent=${PG_CONSOLE_XID_CRITICAL:75}
+```
+
+New Dashboard Routes:
+
+- `/diagnostics` - Enhanced diagnostics overview
+- `/diagnostics/pipeline-risk` - Queue/pipeline table monitoring
+- `/diagnostics/toast-bloat` - TOAST table bloat analysis
+- `/diagnostics/index-redundancy` - Duplicate and missing index detection
+- `/diagnostics/statistical-freshness` - Table statistics staleness
+- `/diagnostics/write-read-ratio` - Workload pattern analysis
+- `/diagnostics/hot-efficiency` - HOT update efficiency
+- `/diagnostics/correlation` - Column correlation statistics
+- `/diagnostics/live-charts` - Interactive real-time charts
+- `/diagnostics/xid-wraparound` - Transaction ID wraparound monitoring
 
 Configuration Specification (example)
 Required

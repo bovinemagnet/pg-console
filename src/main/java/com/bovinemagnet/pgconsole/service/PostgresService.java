@@ -2,15 +2,24 @@ package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
+import com.bovinemagnet.pgconsole.model.ColumnCorrelation;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
 import com.bovinemagnet.pgconsole.model.ExplainPlan;
+import com.bovinemagnet.pgconsole.model.HotUpdateEfficiency;
+import com.bovinemagnet.pgconsole.model.IndexRedundancy;
 import com.bovinemagnet.pgconsole.model.InstanceInfo;
+import com.bovinemagnet.pgconsole.model.LiveChartData;
 import com.bovinemagnet.pgconsole.model.LockInfo;
 import com.bovinemagnet.pgconsole.model.OverviewStats;
+import com.bovinemagnet.pgconsole.model.PipelineRisk;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
+import com.bovinemagnet.pgconsole.model.StatisticalFreshness;
 import com.bovinemagnet.pgconsole.model.TableStats;
+import com.bovinemagnet.pgconsole.model.ToastBloat;
 import com.bovinemagnet.pgconsole.model.WaitEventSummary;
+import com.bovinemagnet.pgconsole.model.WriteReadRatio;
+import com.bovinemagnet.pgconsole.model.XidWraparound;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -18,6 +27,7 @@ import org.jboss.logging.Logger;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1397,5 +1407,869 @@ public class PostgresService {
      */
     public ExplainPlan explainQuery(String query, boolean analyse, boolean buffers) {
         return explainQuery("default", query, analyse, buffers);
+    }
+
+    // ========================================
+    // Phase 21: Enhanced Database Diagnostics
+    // ========================================
+
+    // ========== Pipeline Risk Monitoring ==========
+
+    /**
+     * Retrieves pipeline/queue table risk metrics for the specified instance.
+     * <p>
+     * Identifies tables that may be queue or pipeline tables based on naming patterns
+     * and tracks the age of the oldest row to detect processing backlogs.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @param tablePatterns list of table name patterns to check (e.g., "%queue%", "%event%")
+     * @param staleThresholdHours number of hours after which a row is considered stale
+     * @return list of pipeline risk metrics
+     */
+    public List<PipelineRisk> getPipelineRisk(String instanceName, List<String> tablePatterns, int staleThresholdHours) {
+        List<PipelineRisk> risks = new ArrayList<>();
+
+        // First, find tables matching the patterns
+        StringBuilder patternCondition = new StringBuilder();
+        if (tablePatterns != null && !tablePatterns.isEmpty()) {
+            patternCondition.append("(");
+            for (int i = 0; i < tablePatterns.size(); i++) {
+                if (i > 0) patternCondition.append(" OR ");
+                patternCondition.append("relname ILIKE ?");
+            }
+            patternCondition.append(")");
+        } else {
+            patternCondition.append("(relname ILIKE '%queue%' OR relname ILIKE '%event%' OR relname ILIKE '%job%' OR relname ILIKE '%task%')");
+        }
+
+        String findTablesSql = """
+            SELECT
+                schemaname,
+                relname as tablename,
+                n_live_tup as row_count
+            FROM pg_stat_user_tables
+            WHERE """ + patternCondition + """
+            ORDER BY n_live_tup DESC
+            LIMIT 50
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             PreparedStatement stmt = conn.prepareStatement(findTablesSql)) {
+
+            if (tablePatterns != null && !tablePatterns.isEmpty()) {
+                for (int i = 0; i < tablePatterns.size(); i++) {
+                    stmt.setString(i + 1, tablePatterns.get(i));
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    PipelineRisk risk = new PipelineRisk();
+                    risk.setSchemaName(rs.getString("schemaname"));
+                    risk.setTableName(rs.getString("tablename"));
+                    risk.setRowCount(rs.getLong("row_count"));
+                    risks.add(risk);
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query pipeline tables on %s: %s", instanceName, e.getMessage());
+        }
+
+        // For each table, try to get the oldest row timestamp
+        // This requires tables to have a timestamp column - we check for common patterns
+        for (PipelineRisk risk : risks) {
+            String checkOldestSql = """
+                SELECT
+                    column_name
+                FROM information_schema.columns
+                WHERE table_schema = ? AND table_name = ?
+                AND (column_name ILIKE '%created%' OR column_name ILIKE '%timestamp%'
+                     OR column_name ILIKE '%time%' OR column_name ILIKE '%date%')
+                AND data_type IN ('timestamp without time zone', 'timestamp with time zone', 'timestamptz')
+                ORDER BY ordinal_position
+                LIMIT 1
+                """;
+
+            try (Connection conn = getDataSource(instanceName).getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(checkOldestSql)) {
+
+                stmt.setString(1, risk.getSchemaName());
+                stmt.setString(2, risk.getTableName());
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        String timeColumn = rs.getString("column_name");
+                        risk.setTimestampColumn(timeColumn);
+
+                        // Get the oldest row age
+                        String oldestSql = String.format(
+                            "SELECT EXTRACT(EPOCH FROM (NOW() - MIN(%s)))::bigint as oldest_age_seconds FROM %s.%s",
+                            timeColumn, risk.getSchemaName(), risk.getTableName());
+
+                        try (Statement ageStmt = conn.createStatement();
+                             ResultSet ageRs = ageStmt.executeQuery(oldestSql)) {
+                            if (ageRs.next()) {
+                                long ageSeconds = ageRs.getLong("oldest_age_seconds");
+                                if (!ageRs.wasNull()) {
+                                    risk.setOldestRowTimestamp(Instant.now().minusSeconds(ageSeconds));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                LOG.debugf("Could not determine oldest row for %s.%s: %s",
+                    risk.getSchemaName(), risk.getTableName(), e.getMessage());
+            }
+        }
+
+        return risks;
+    }
+
+    /**
+     * Retrieves pipeline/queue table risk metrics for the default instance.
+     *
+     * @param tablePatterns list of table name patterns to check
+     * @param staleThresholdHours number of hours after which a row is considered stale
+     * @return list of pipeline risk metrics
+     * @see #getPipelineRisk(String, List, int)
+     */
+    public List<PipelineRisk> getPipelineRisk(List<String> tablePatterns, int staleThresholdHours) {
+        return getPipelineRisk("default", tablePatterns, staleThresholdHours);
+    }
+
+    // ========== TOAST Bloat Analysis ==========
+
+    /**
+     * Retrieves TOAST table bloat analysis for the specified instance.
+     * <p>
+     * Analyses tables with TOAST storage to identify bloat in out-of-line storage.
+     * TOAST tables store large values separately from the main table.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of TOAST bloat metrics
+     */
+    public List<ToastBloat> getToastBloat(String instanceName) {
+        List<ToastBloat> bloats = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                c.relnamespace::regnamespace::text as schema_name,
+                c.relname as table_name,
+                pg_relation_size(c.oid) as main_table_bytes,
+                COALESCE(pg_relation_size(c.reltoastrelid), 0) as toast_table_bytes,
+                pg_total_relation_size(c.oid) as total_bytes,
+                t.relname as toast_table_name,
+                COALESCE(pg_stat_get_live_tuples(c.reltoastrelid), 0) as toast_live_tuples,
+                COALESCE(pg_stat_get_dead_tuples(c.reltoastrelid), 0) as toast_dead_tuples
+            FROM pg_class c
+            LEFT JOIN pg_class t ON c.reltoastrelid = t.oid
+            WHERE c.relkind = 'r'
+              AND c.reltoastrelid != 0
+              AND c.relnamespace::regnamespace::text NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+            ORDER BY pg_relation_size(c.reltoastrelid) DESC NULLS LAST
+            LIMIT 50
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                ToastBloat bloat = new ToastBloat();
+                bloat.setSchemaName(rs.getString("schema_name"));
+                bloat.setTableName(rs.getString("table_name"));
+                bloat.setMainTableSizeBytes(rs.getLong("main_table_bytes"));
+                bloat.setToastTableSizeBytes(rs.getLong("toast_table_bytes"));
+                bloat.setToastTableName(rs.getString("toast_table_name"));
+                bloat.setnLiveTup(rs.getLong("toast_live_tuples"));
+                bloat.setnDeadTup(rs.getLong("toast_dead_tuples"));
+                bloats.add(bloat);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query TOAST bloat on %s: %s", instanceName, e.getMessage());
+        }
+
+        return bloats;
+    }
+
+    /**
+     * Retrieves TOAST table bloat analysis for the default instance.
+     *
+     * @return list of TOAST bloat metrics
+     * @see #getToastBloat(String)
+     */
+    public List<ToastBloat> getToastBloat() {
+        return getToastBloat("default");
+    }
+
+    // ========== Index Redundancy Detection ==========
+
+    /**
+     * Retrieves redundant and overlapping index analysis for the specified instance.
+     * <p>
+     * Identifies indexes that are potentially redundant because they duplicate
+     * or are subsets of other indexes on the same table.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of index redundancy findings
+     */
+    public List<IndexRedundancy> getIndexRedundancy(String instanceName) {
+        List<IndexRedundancy> redundancies = new ArrayList<>();
+
+        String sql = """
+            WITH index_cols AS (
+                SELECT
+                    i.indexrelid,
+                    i.indrelid,
+                    i.indkey::int[] as col_array,
+                    pg_get_indexdef(i.indexrelid) as index_def,
+                    c.relname as index_name,
+                    t.relname as table_name,
+                    n.nspname as schema_name,
+                    pg_relation_size(i.indexrelid) as index_size,
+                    COALESCE(s.idx_scan, 0) as idx_scan,
+                    COALESCE(s.idx_tup_read, 0) as idx_tup_read
+                FROM pg_index i
+                JOIN pg_class c ON i.indexrelid = c.oid
+                JOIN pg_class t ON i.indrelid = t.oid
+                JOIN pg_namespace n ON t.relnamespace = n.oid
+                LEFT JOIN pg_stat_user_indexes s ON i.indexrelid = s.indexrelid
+                WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND NOT i.indisprimary
+            )
+            SELECT
+                a.schema_name,
+                a.table_name,
+                a.index_name,
+                a.index_def,
+                a.index_size,
+                a.idx_scan,
+                b.index_name as overlapping_index,
+                b.index_def as overlapping_def,
+                b.index_size as overlapping_size,
+                b.idx_scan as overlapping_idx_scan,
+                'OVERLAPPING' as redundancy_type
+            FROM index_cols a
+            JOIN index_cols b ON a.indrelid = b.indrelid
+                AND a.indexrelid != b.indexrelid
+                AND a.col_array[1:array_length(b.col_array, 1)] = b.col_array
+                AND array_length(a.col_array, 1) > array_length(b.col_array, 1)
+            ORDER BY a.index_size DESC
+            LIMIT 50
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                IndexRedundancy redundancy = new IndexRedundancy();
+                redundancy.setSchemaName(rs.getString("schema_name"));
+                redundancy.setTableName(rs.getString("table_name"));
+                redundancy.setIndexName(rs.getString("index_name"));
+                redundancy.setIndexSizeBytes(rs.getLong("index_size"));
+                redundancy.setIndexScans(rs.getLong("idx_scan"));
+                redundancy.setRelatedIndexName(rs.getString("overlapping_index"));
+                redundancy.setRedundancyType(IndexRedundancy.RedundancyType.OVERLAPPING);
+                redundancies.add(redundancy);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query index redundancy on %s: %s", instanceName, e.getMessage());
+        }
+
+        return redundancies;
+    }
+
+    /**
+     * Retrieves redundant and overlapping index analysis for the default instance.
+     *
+     * @return list of index redundancy findings
+     * @see #getIndexRedundancy(String)
+     */
+    public List<IndexRedundancy> getIndexRedundancy() {
+        return getIndexRedundancy("default");
+    }
+
+    // ========== Statistical Freshness Monitoring ==========
+
+    /**
+     * Retrieves table statistics freshness for the specified instance.
+     * <p>
+     * Tracks when tables were last analysed and estimates how stale
+     * the statistics might be based on DML activity.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of statistical freshness metrics
+     */
+    public List<StatisticalFreshness> getStatisticalFreshness(String instanceName) {
+        List<StatisticalFreshness> results = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                schemaname as schema_name,
+                relname as table_name,
+                n_live_tup as live_tuples,
+                n_dead_tup as dead_tuples,
+                n_mod_since_analyze as modified_since_analyze,
+                last_analyze,
+                last_autoanalyze,
+                GREATEST(last_analyze, last_autoanalyze) as last_stats_update,
+                n_tup_ins + n_tup_upd + n_tup_del as total_modifications,
+                CASE
+                    WHEN n_live_tup = 0 THEN 0
+                    ELSE ROUND(100.0 * n_mod_since_analyze / GREATEST(n_live_tup, 1), 2)
+                END as percent_modified
+            FROM pg_stat_user_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY n_mod_since_analyze DESC NULLS LAST
+            LIMIT 100
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                StatisticalFreshness freshness = new StatisticalFreshness();
+                freshness.setSchemaName(rs.getString("schema_name"));
+                freshness.setTableName(rs.getString("table_name"));
+                freshness.setnLiveTup(rs.getLong("live_tuples"));
+                freshness.setnDeadTup(rs.getLong("dead_tuples"));
+                freshness.setnModSinceAnalyze(rs.getLong("modified_since_analyze"));
+
+                Timestamp lastAnalyze = rs.getTimestamp("last_analyze");
+                freshness.setLastAnalyze(lastAnalyze != null ? lastAnalyze.toInstant() : null);
+
+                Timestamp lastAutoanalyze = rs.getTimestamp("last_autoanalyze");
+                freshness.setLastAutoanalyze(lastAutoanalyze != null ? lastAutoanalyze.toInstant() : null);
+
+                // Note: last_stats_update, total_modifications, percent_modified are calculated
+                results.add(freshness);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query statistical freshness on %s: %s", instanceName, e.getMessage());
+        }
+
+        return results;
+    }
+
+    /**
+     * Retrieves table statistics freshness for the default instance.
+     *
+     * @return list of statistical freshness metrics
+     * @see #getStatisticalFreshness(String)
+     */
+    public List<StatisticalFreshness> getStatisticalFreshness() {
+        return getStatisticalFreshness("default");
+    }
+
+    // ========== Write/Read Ratio Analysis ==========
+
+    /**
+     * Retrieves write/read ratio analysis for the specified instance.
+     * <p>
+     * Identifies table access patterns to classify tables as read-heavy,
+     * write-heavy, or balanced based on DML vs scan operations.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of write/read ratio metrics
+     */
+    public List<WriteReadRatio> getWriteReadRatio(String instanceName) {
+        List<WriteReadRatio> results = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                schemaname as schema_name,
+                relname as table_name,
+                seq_scan,
+                seq_tup_read,
+                COALESCE(idx_scan, 0) as idx_scan,
+                COALESCE(idx_tup_fetch, 0) as idx_tup_fetch,
+                n_tup_ins as inserts,
+                n_tup_upd as updates,
+                n_tup_del as deletes,
+                n_tup_ins + n_tup_upd + n_tup_del as total_writes,
+                seq_scan + COALESCE(idx_scan, 0) as total_scans,
+                n_live_tup as live_tuples
+            FROM pg_stat_user_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY (n_tup_ins + n_tup_upd + n_tup_del + seq_scan + COALESCE(idx_scan, 0)) DESC
+            LIMIT 100
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                WriteReadRatio ratio = new WriteReadRatio();
+                ratio.setSchemaName(rs.getString("schema_name"));
+                ratio.setTableName(rs.getString("table_name"));
+                ratio.setSeqScan(rs.getLong("seq_scan"));
+                ratio.setSeqTupRead(rs.getLong("seq_tup_read"));
+                ratio.setIdxScan(rs.getLong("idx_scan"));
+                ratio.setIdxTupFetch(rs.getLong("idx_tup_fetch"));
+                ratio.setnTupIns(rs.getLong("inserts"));
+                ratio.setnTupUpd(rs.getLong("updates"));
+                ratio.setnTupDel(rs.getLong("deletes"));
+                ratio.setnLiveTup(rs.getLong("live_tuples"));
+                // Note: total_writes and total_scans are calculated by the model
+                results.add(ratio);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query write/read ratio on %s: %s", instanceName, e.getMessage());
+        }
+
+        return results;
+    }
+
+    /**
+     * Retrieves write/read ratio analysis for the default instance.
+     *
+     * @return list of write/read ratio metrics
+     * @see #getWriteReadRatio(String)
+     */
+    public List<WriteReadRatio> getWriteReadRatio() {
+        return getWriteReadRatio("default");
+    }
+
+    // ========== HOT Update Efficiency ==========
+
+    /**
+     * Retrieves HOT (Heap-Only Tuple) update efficiency for the specified instance.
+     * <p>
+     * HOT updates avoid index maintenance when only non-indexed columns change.
+     * Low HOT efficiency indicates potential for fill factor tuning.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of HOT efficiency metrics
+     */
+    public List<HotUpdateEfficiency> getHotEfficiency(String instanceName) {
+        List<HotUpdateEfficiency> results = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                schemaname as schema_name,
+                relname as table_name,
+                n_tup_upd as total_updates,
+                n_tup_hot_upd as hot_updates,
+                CASE
+                    WHEN n_tup_upd = 0 THEN 100.0
+                    ELSE ROUND(100.0 * n_tup_hot_upd / n_tup_upd, 2)
+                END as hot_ratio_percent,
+                n_live_tup as live_tuples,
+                n_dead_tup as dead_tuples,
+                pg_total_relation_size(schemaname || '.' || relname) as table_size_bytes
+            FROM pg_stat_user_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+              AND n_tup_upd > 0
+            ORDER BY n_tup_upd DESC
+            LIMIT 100
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                HotUpdateEfficiency efficiency = new HotUpdateEfficiency();
+                efficiency.setSchemaName(rs.getString("schema_name"));
+                efficiency.setTableName(rs.getString("table_name"));
+                efficiency.setnTupUpd(rs.getLong("total_updates"));
+                efficiency.setnTupHotUpd(rs.getLong("hot_updates"));
+                efficiency.setnLiveTup(rs.getLong("live_tuples"));
+                efficiency.setnDeadTup(rs.getLong("dead_tuples"));
+                efficiency.setTableSizeBytes(rs.getLong("table_size_bytes"));
+                results.add(efficiency);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query HOT efficiency on %s: %s", instanceName, e.getMessage());
+        }
+
+        return results;
+    }
+
+    /**
+     * Retrieves HOT (Heap-Only Tuple) update efficiency for the default instance.
+     *
+     * @return list of HOT efficiency metrics
+     * @see #getHotEfficiency(String)
+     */
+    public List<HotUpdateEfficiency> getHotEfficiency() {
+        return getHotEfficiency("default");
+    }
+
+    // ========== Column Correlation Statistics ==========
+
+    /**
+     * Retrieves column correlation statistics for CLUSTER recommendations.
+     * <p>
+     * Low correlation between physical and logical row ordering can hurt
+     * range query performance. CLUSTER can improve this.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of column correlation metrics
+     */
+    public List<ColumnCorrelation> getColumnCorrelation(String instanceName) {
+        List<ColumnCorrelation> results = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                s.schemaname as schema_name,
+                s.tablename as table_name,
+                s.attname as column_name,
+                s.correlation,
+                s.n_distinct,
+                s.null_frac,
+                pg_total_relation_size(s.schemaname || '.' || s.tablename) as table_size_bytes,
+                t.seq_scan,
+                t.idx_scan,
+                i.indexname as index_name
+            FROM pg_stats s
+            JOIN pg_stat_user_tables t ON s.schemaname = t.schemaname AND s.tablename = t.relname
+            LEFT JOIN pg_indexes i ON s.schemaname = i.schemaname
+                AND s.tablename = i.tablename
+                AND i.indexdef LIKE '%(' || s.attname || ')%'
+            WHERE s.schemaname NOT IN ('pg_catalog', 'information_schema')
+              AND s.correlation IS NOT NULL
+              AND ABS(s.correlation) < 0.9
+            ORDER BY ABS(s.correlation) ASC, pg_total_relation_size(s.schemaname || '.' || s.tablename) DESC
+            LIMIT 100
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                ColumnCorrelation corr = new ColumnCorrelation();
+                corr.setSchemaName(rs.getString("schema_name"));
+                corr.setTableName(rs.getString("table_name"));
+                corr.setColumnName(rs.getString("column_name"));
+                corr.setCorrelation(rs.getDouble("correlation"));
+                corr.setnDistinct(rs.getLong("n_distinct"));
+                corr.setNullFrac(rs.getDouble("null_frac"));
+                corr.setTableSizeBytes(rs.getLong("table_size_bytes"));
+                corr.setSeqScan(rs.getLong("seq_scan"));
+                corr.setIdxScan(rs.getLong("idx_scan"));
+                corr.setIndexName(rs.getString("index_name"));
+                results.add(corr);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query column correlation on %s: %s", instanceName, e.getMessage());
+        }
+
+        return results;
+    }
+
+    /**
+     * Retrieves column correlation statistics for the default instance.
+     *
+     * @return list of column correlation metrics
+     * @see #getColumnCorrelation(String)
+     */
+    public List<ColumnCorrelation> getColumnCorrelation() {
+        return getColumnCorrelation("default");
+    }
+
+    // ========== XID Wraparound Monitoring ==========
+
+    /**
+     * Retrieves XID (Transaction ID) wraparound risk metrics for the specified instance.
+     * <p>
+     * PostgreSQL uses 32-bit transaction IDs that wrap around. Aggressive vacuuming
+     * is required to prevent wraparound, which would cause data loss.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return list of XID wraparound metrics per database
+     */
+    public List<XidWraparound> getXidWraparound(String instanceName) {
+        List<XidWraparound> results = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                d.datname as database_name,
+                d.datfrozenxid::text::bigint as datfrozenxid,
+                age(d.datfrozenxid) as xid_age,
+                ROUND(100.0 * age(d.datfrozenxid) / 2147483647, 2) as percent_to_wraparound,
+                (SELECT setting::bigint FROM pg_settings WHERE name = 'autovacuum_freeze_max_age') as autovacuum_freeze_max_age
+            FROM pg_database d
+            WHERE d.datistemplate = false
+            ORDER BY age(d.datfrozenxid) DESC
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                XidWraparound xid = new XidWraparound();
+                xid.setDatabaseName(rs.getString("database_name"));
+                xid.setDatfrozenxid(rs.getLong("datfrozenxid"));
+                xid.setXidAge(rs.getLong("xid_age"));
+                xid.setPercentToWraparound(rs.getLong("percent_to_wraparound"));
+                xid.setAutovacuumFreezeMaxAge(rs.getLong("autovacuum_freeze_max_age"));
+                results.add(xid);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to query XID wraparound on %s: %s", instanceName, e.getMessage());
+        }
+
+        // Get oldest unfrozen table per database
+        for (XidWraparound xid : results) {
+            String oldestTableSql = """
+                SELECT
+                    n.nspname as schema_name,
+                    c.relname as table_name,
+                    c.relfrozenxid::text::bigint as relfrozenxid,
+                    age(c.relfrozenxid) as rel_xid_age
+                FROM pg_class c
+                JOIN pg_namespace n ON c.relnamespace = n.oid
+                WHERE c.relkind = 'r'
+                  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+                ORDER BY age(c.relfrozenxid) DESC
+                LIMIT 1
+                """;
+
+            try (Connection conn = getDataSource(instanceName).getConnection();
+                 Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(oldestTableSql)) {
+
+                if (rs.next()) {
+                    xid.setOldestXidSchema(rs.getString("schema_name"));
+                    xid.setOldestXidTable(rs.getString("table_name"));
+                    xid.setOldestRelFrozenXid(rs.getLong("rel_xid_age"));
+                }
+            } catch (SQLException e) {
+                LOG.debugf("Could not get oldest table for XID on %s: %s", instanceName, e.getMessage());
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Retrieves XID (Transaction ID) wraparound risk metrics for the default instance.
+     *
+     * @return list of XID wraparound metrics per database
+     * @see #getXidWraparound(String)
+     */
+    public List<XidWraparound> getXidWraparound() {
+        return getXidWraparound("default");
+    }
+
+    // ========== Live Chart Data ==========
+
+    /**
+     * Retrieves live chart data for connection monitoring.
+     * <p>
+     * Returns current connection counts by state for real-time charting.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return LiveChartData with connection series
+     */
+    public LiveChartData getConnectionsChartData(String instanceName) {
+        LiveChartData chart = LiveChartData.createConnectionsChart();
+        chart.setLastUpdated(Instant.now());
+
+        String sql = """
+            SELECT
+                COUNT(*) FILTER (WHERE state = 'active') as active,
+                COUNT(*) FILTER (WHERE state = 'idle') as idle,
+                COUNT(*) FILTER (WHERE state = 'idle in transaction') as idle_in_transaction
+            FROM pg_stat_activity
+            WHERE pid != pg_backend_pid()
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            if (rs.next()) {
+                Instant now = Instant.now();
+                chart.getSeriesByName("Active").addPoint(now, rs.getDouble("active"));
+                chart.getSeriesByName("Idle").addPoint(now, rs.getDouble("idle"));
+                chart.getSeriesByName("Idle in Transaction").addPoint(now, rs.getDouble("idle_in_transaction"));
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get connections chart data on %s: %s", instanceName, e.getMessage());
+        }
+
+        return chart;
+    }
+
+    /**
+     * Retrieves live chart data for connection monitoring on the default instance.
+     *
+     * @return LiveChartData with connection series
+     * @see #getConnectionsChartData(String)
+     */
+    public LiveChartData getConnectionsChartData() {
+        return getConnectionsChartData("default");
+    }
+
+    /**
+     * Retrieves live chart data for transaction rate monitoring.
+     * <p>
+     * Returns current commit and rollback counts for rate calculation.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return LiveChartData with transaction series
+     */
+    public LiveChartData getTransactionsChartData(String instanceName) {
+        LiveChartData chart = LiveChartData.createTransactionsChart();
+        chart.setLastUpdated(Instant.now());
+
+        String sql = """
+            SELECT
+                xact_commit as commits,
+                xact_rollback as rollbacks
+            FROM pg_stat_database
+            WHERE datname = current_database()
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            if (rs.next()) {
+                Instant now = Instant.now();
+                chart.getSeriesByName("Commits").addPoint(now, rs.getDouble("commits"));
+                chart.getSeriesByName("Rollbacks").addPoint(now, rs.getDouble("rollbacks"));
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get transactions chart data on %s: %s", instanceName, e.getMessage());
+        }
+
+        return chart;
+    }
+
+    /**
+     * Retrieves live chart data for transaction rate monitoring on the default instance.
+     *
+     * @return LiveChartData with transaction series
+     * @see #getTransactionsChartData(String)
+     */
+    public LiveChartData getTransactionsChartData() {
+        return getTransactionsChartData("default");
+    }
+
+    /**
+     * Retrieves live chart data for tuple operations monitoring.
+     * <p>
+     * Returns current insert, update, and delete counts.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return LiveChartData with tuple operation series
+     */
+    public LiveChartData getTuplesChartData(String instanceName) {
+        LiveChartData chart = LiveChartData.createTuplesChart();
+        chart.setLastUpdated(Instant.now());
+
+        String sql = """
+            SELECT
+                tup_inserted as inserted,
+                tup_updated as updated,
+                tup_deleted as deleted
+            FROM pg_stat_database
+            WHERE datname = current_database()
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            if (rs.next()) {
+                Instant now = Instant.now();
+                chart.getSeriesByName("Inserted").addPoint(now, rs.getDouble("inserted"));
+                chart.getSeriesByName("Updated").addPoint(now, rs.getDouble("updated"));
+                chart.getSeriesByName("Deleted").addPoint(now, rs.getDouble("deleted"));
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get tuples chart data on %s: %s", instanceName, e.getMessage());
+        }
+
+        return chart;
+    }
+
+    /**
+     * Retrieves live chart data for tuple operations monitoring on the default instance.
+     *
+     * @return LiveChartData with tuple operation series
+     * @see #getTuplesChartData(String)
+     */
+    public LiveChartData getTuplesChartData() {
+        return getTuplesChartData("default");
+    }
+
+    /**
+     * Retrieves live chart data for cache hit ratio monitoring.
+     * <p>
+     * Returns current buffer and index cache hit ratios.
+     *
+     * @param instanceName the name of the PostgreSQL instance to query
+     * @return LiveChartData with cache hit ratio series
+     */
+    public LiveChartData getCacheChartData(String instanceName) {
+        LiveChartData chart = LiveChartData.createCacheChart();
+        chart.setLastUpdated(Instant.now());
+
+        String sql = """
+            SELECT
+                CASE WHEN (blks_hit + blks_read) = 0 THEN 100.0
+                     ELSE 100.0 * blks_hit / (blks_hit + blks_read)
+                END as buffer_hit_ratio
+            FROM pg_stat_database
+            WHERE datname = current_database()
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            if (rs.next()) {
+                Instant now = Instant.now();
+                chart.getSeriesByName("Buffer Cache").addPoint(now, rs.getDouble("buffer_hit_ratio"));
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to get cache chart data on %s: %s", instanceName, e.getMessage());
+        }
+
+        // Get index hit ratio separately
+        String indexSql = """
+            SELECT
+                CASE WHEN (idx_blks_hit + idx_blks_read) = 0 THEN 100.0
+                     ELSE 100.0 * idx_blks_hit / (idx_blks_hit + idx_blks_read)
+                END as index_hit_ratio
+            FROM pg_statio_user_tables
+            WHERE idx_blks_hit + idx_blks_read > 0
+            LIMIT 1
+            """;
+
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(indexSql)) {
+
+            if (rs.next()) {
+                Instant now = Instant.now();
+                chart.getSeriesByName("Index Cache").addPoint(now, rs.getDouble("index_hit_ratio"));
+            }
+        } catch (SQLException e) {
+            // Index cache data may not be available
+            LOG.debugf("Could not get index cache data on %s: %s", instanceName, e.getMessage());
+        }
+
+        return chart;
+    }
+
+    /**
+     * Retrieves live chart data for cache hit ratio monitoring on the default instance.
+     *
+     * @return LiveChartData with cache hit ratio series
+     * @see #getCacheChartData(String)
+     */
+    public LiveChartData getCacheChartData() {
+        return getCacheChartData("default");
     }
 }
