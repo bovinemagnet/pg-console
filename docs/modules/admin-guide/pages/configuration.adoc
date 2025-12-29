@@ -120,9 +120,48 @@ export PG_CONSOLE_DATABASES=app_prod,analytics_prod
 export PG_CONSOLE_DATABASES=sim_prd_eplus
 ----
 
+== Schema and Persistence Mode
+
+pg-console can operate in two modes: with full persistence (default) or in schema-free read-only mode.
+
+[source,bash]
+----
+export PG_CONSOLE_SCHEMA_ENABLED=true          # Enable pgconsole schema creation
+export PG_CONSOLE_IN_MEMORY_MINUTES=30         # In-memory retention (when schema disabled)
+----
+
+[source,properties]
+----
+pg-console.schema.enabled=${PG_CONSOLE_SCHEMA_ENABLED:true}
+pg-console.history.in-memory-minutes=${PG_CONSOLE_IN_MEMORY_MINUTES:30}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_SCHEMA_ENABLED`
+|`true`
+|Enable creation of `pgconsole` schema for persistent storage. When `false`, pg-console operates in read-only mode without creating any database objects.
+
+|`PG_CONSOLE_IN_MEMORY_MINUTES`
+|`30`
+|Minutes of trend data to retain in memory when schema is disabled. Used for short-term sparklines without database persistence.
+|===
+
+When `PG_CONSOLE_SCHEMA_ENABLED=false`:
+
+* No `pgconsole` schema is created
+* Flyway migrations are skipped
+* Real-time monitoring continues to work normally
+* Short-term trends use in-memory storage
+* Long-term history, bookmarks, audit logging, and alerts are unavailable
+
+See xref:schema-free-mode.adoc[Schema-Free Mode] for detailed information about read-only operation.
+
 == History Sampling
 
-pg-console samples database metrics at regular intervals to provide historical analysis and sparkline graphs.
+pg-console samples database metrics at regular intervals to provide historical analysis and sparkline graphs. This feature requires `PG_CONSOLE_SCHEMA_ENABLED=true`.
 
 [source,bash]
 ----
@@ -146,7 +185,7 @@ pg-console.history.top-queries=${PG_CONSOLE_HISTORY_TOP_QUERIES:50}
 
 |`PG_CONSOLE_HISTORY_ENABLED`
 |`true`
-|Enable or disable historical metric sampling
+|Enable or disable historical metric sampling (requires schema enabled)
 
 |`PG_CONSOLE_HISTORY_INTERVAL`
 |`60`
@@ -174,7 +213,7 @@ Typical storage usage: 100-500 MB per week with default settings.
 
 === Disabling History
 
-To disable history sampling (e.g., for read-only monitoring):
+To disable history sampling whilst keeping the `pgconsole` schema:
 
 [source,bash]
 ----
@@ -186,7 +225,8 @@ This disables:
 * Scheduled metric sampling
 * Historical data storage
 * Sparkline graphs in dashboards
-* Flyway schema migrations to `pgconsole` schema
+
+For completely read-only monitoring without any schema creation, use `PG_CONSOLE_SCHEMA_ENABLED=false` instead. See xref:schema-free-mode.adoc[Schema-Free Mode].
 
 == Multi-Instance Monitoring
 
@@ -1278,6 +1318,17 @@ export POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=postgres
 export PG_CONSOLE_HISTORY_ENABLED=false  # Disable history in dev
+----
+
+=== Read-Only Monitoring (Schema-Free Mode)
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/production?ssl=true
+export POSTGRES_USER=readonly_monitor
+export POSTGRES_PASSWORD=${DB_PASSWORD}
+export PG_CONSOLE_SCHEMA_ENABLED=false   # No schema creation
+export PG_CONSOLE_IN_MEMORY_MINUTES=60   # Keep 1 hour of trends in memory
 ----
 
 === Production Single-Instance

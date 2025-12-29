@@ -634,6 +634,32 @@ Product Specification: Postgres Insight Dashboard
   - Context-sensitive metric explanations
   - Quick action links
 
+### Phase 22 — Schema-Free Mode (Read-Only Operation) ✅ COMPLETE
+- [x] **Schema Toggle Configuration**
+  - `PG_CONSOLE_SCHEMA_ENABLED` environment variable (default: true)
+  - When false: No pgconsole schema created, complete read-only operation
+  - Conditional Flyway migration (skip when disabled)
+- [x] **In-Memory Trend Collection**
+  - Short-term metrics stored in memory (configurable, default 30 minutes)
+  - `PG_CONSOLE_IN_MEMORY_MINUTES` configuration
+  - System metrics: connections, active queries, blocked queries, cache hit ratio
+  - Data lost on restart (expected behaviour)
+- [x] **Feature Degradation**
+  - Disabled when schema off: history, audit logging, bookmarks, alerting history, anomaly detection
+  - Still working: all real-time monitoring (activity, locks, slow queries, tables, databases, etc.)
+- [x] **Startup Logging**
+  - Clear indication of schema mode at startup
+  - List of enabled/disabled features
+- [x] **UI Mode Indicator**
+  - Dismissible warning banner on all pages when schema disabled
+  - Shows "Read-Only Mode" with explanation of unavailable features
+  - Displays in-memory retention period (e.g., "30 minutes")
+  - Dismissal persisted in localStorage
+  - Template data (`schemaEnabled`, `inMemoryMinutes`) passed to all pages
+- [x] **Sparkline Fallback**
+  - Sparklines use in-memory data when schema disabled
+  - Query-level sparklines show empty (no in-memory storage for query metrics)
+
 ---
 
 1. Purpose
@@ -2034,6 +2060,53 @@ New Dashboard Routes:
 - `/diagnostics/correlation` - Column correlation statistics
 - `/diagnostics/live-charts` - Interactive real-time charts
 - `/diagnostics/xid-wraparound` - Transaction ID wraparound monitoring
+
+### Phase 22 — Schema-Free Mode (Read-Only Operation) ✅ COMPLETE
+- [x] **Schema Toggle Configuration**
+  - `PG_CONSOLE_SCHEMA_ENABLED` environment variable (default: true)
+  - When false: No pgconsole schema created, complete read-only operation
+  - Conditional Flyway migration (skip when disabled)
+- [x] **In-Memory Trend Collection**
+  - Short-term metrics stored in memory (configurable, default 30 minutes)
+  - `PG_CONSOLE_IN_MEMORY_MINUTES` configuration
+  - System metrics: connections, active queries, blocked queries, cache hit ratio
+  - Data lost on restart (expected behaviour)
+- [x] **Feature Degradation**
+  - Disabled when schema off: history, audit logging, bookmarks, alerting history, anomaly detection
+  - Still working: all real-time monitoring (activity, locks, slow queries, tables, databases, etc.)
+  - UI shows appropriate messages for unavailable features
+- [x] **Startup Logging**
+  - Clear indication of schema mode at startup
+  - List of enabled/disabled features
+- [x] **UI Mode Indicator**
+  - Dismissible warning banner on all pages when schema disabled
+  - Shows "Read-Only Mode" with explanation of unavailable features
+  - Displays in-memory retention period (e.g., "30 minutes")
+  - Dismissal persisted in localStorage
+  - Template data (`schemaEnabled`, `inMemoryMinutes`) passed to all pages
+- [x] **Sparkline Fallback**
+  - Sparklines use in-memory data when schema disabled
+  - Query-level sparklines show empty (no in-memory storage for query metrics)
+
+Acceptance Criteria:
+
+- Application starts without pgconsole schema when `PG_CONSOLE_SCHEMA_ENABLED=false` - DONE
+- Flyway migrations skipped when schema disabled - DONE
+- In-memory sampler collects system metrics every 30 seconds - DONE
+- Sparklines display short-term trends from in-memory data - DONE
+- Startup log clearly indicates schema mode - DONE
+- Read-only mode banner appears on all pages when schema disabled - DONE
+- Banner dismissal persisted in localStorage - DONE
+
+Configuration Properties:
+
+```properties
+# Schema-free mode (read-only)
+pg-console.schema.enabled=${PG_CONSOLE_SCHEMA_ENABLED:true}
+pg-console.schema.in-memory-minutes=${PG_CONSOLE_IN_MEMORY_MINUTES:30}
+```
+
+---
 
 Configuration Specification (example)
 Required

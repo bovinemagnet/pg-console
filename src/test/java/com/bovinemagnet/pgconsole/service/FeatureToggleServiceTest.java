@@ -54,6 +54,9 @@ class FeatureToggleServiceTest {
     @Mock
     DashboardConfig.InsightsConfig insightsConfig;
 
+    @Mock
+    DashboardConfig.DiagnosticsConfig diagnosticsConfig;
+
     @InjectMocks
     FeatureToggleService featureToggleService;
 
@@ -66,6 +69,7 @@ class FeatureToggleServiceTest {
         lenient().when(dashboardConfig.enterprise()).thenReturn(enterpriseConfig);
         lenient().when(dashboardConfig.security()).thenReturn(securityConfig);
         lenient().when(dashboardConfig.insights()).thenReturn(insightsConfig);
+        lenient().when(dashboardConfig.diagnostics()).thenReturn(diagnosticsConfig);
     }
 
     @Nested
@@ -297,6 +301,17 @@ class FeatureToggleServiceTest {
             when(insightsConfig.forecastsEnabled()).thenReturn(true);
             when(insightsConfig.recommendationsEnabled()).thenReturn(true);
             when(insightsConfig.runbooksEnabled()).thenReturn(true);
+
+            when(diagnosticsConfig.enabled()).thenReturn(true);
+            when(diagnosticsConfig.pipelineRiskEnabled()).thenReturn(true);
+            when(diagnosticsConfig.toastBloatEnabled()).thenReturn(true);
+            when(diagnosticsConfig.indexRedundancyEnabled()).thenReturn(true);
+            when(diagnosticsConfig.statisticalFreshnessEnabled()).thenReturn(true);
+            when(diagnosticsConfig.writeReadRatioEnabled()).thenReturn(true);
+            when(diagnosticsConfig.hotEfficiencyEnabled()).thenReturn(true);
+            when(diagnosticsConfig.correlationEnabled()).thenReturn(true);
+            when(diagnosticsConfig.liveChartsEnabled()).thenReturn(true);
+            when(diagnosticsConfig.xidWraparoundEnabled()).thenReturn(true);
 
             Map<String, Boolean> toggles = featureToggleService.getAllToggles();
 

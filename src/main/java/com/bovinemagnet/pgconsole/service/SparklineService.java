@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
 import com.bovinemagnet.pgconsole.repository.HistoryRepository;
@@ -11,6 +12,9 @@ import java.util.function.Function;
 
 /**
  * Service for generating SVG sparkline charts.
+ * <p>
+ * Supports both persistent history (when schema is enabled) and in-memory
+ * metrics (when schema is disabled for read-only mode).
  *
  * @author Paul Snow
  * @version 0.0.0
@@ -20,6 +24,12 @@ public class SparklineService {
 
     @Inject
     HistoryRepository historyRepository;
+
+    @Inject
+    InMemoryMetricsStore inMemoryMetricsStore;
+
+    @Inject
+    InstanceConfig config;
 
     // Sparkline colours
     public static final String COLOUR_PRIMARY = "#0d6efd";
@@ -177,6 +187,8 @@ public class SparklineService {
      * <p>
      * Creates an area sparkline showing the total connection count trend over the
      * specified time period. Uses the primary colour (blue) for the visualisation.
+     * <p>
+     * When schema is disabled, uses in-memory metrics for short-term trends.
      *
      * @param instanceId the database instance identifier
      * @param hours the number of hours of history to retrieve
@@ -185,7 +197,7 @@ public class SparklineService {
      * @return an SVG string representing the connections trend sparkline
      */
     public String getConnectionsSparkline(String instanceId, int hours, int width, int height) {
-        List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
+        List<SystemMetricsHistory> history = getSystemMetricsHistory(instanceId, hours);
         List<Double> values = history.stream()
             .map(h -> (double) h.getTotalConnections())
             .toList();
@@ -212,6 +224,8 @@ public class SparklineService {
      * <p>
      * Creates an area sparkline showing the count of actively executing queries over time.
      * Uses the success colour (green) for the visualisation.
+     * <p>
+     * When schema is disabled, uses in-memory metrics for short-term trends.
      *
      * @param instanceId the database instance identifier
      * @param hours the number of hours of history to retrieve
@@ -220,7 +234,7 @@ public class SparklineService {
      * @return an SVG string representing the active queries trend sparkline
      */
     public String getActiveQueriesSparkline(String instanceId, int hours, int width, int height) {
-        List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
+        List<SystemMetricsHistory> history = getSystemMetricsHistory(instanceId, hours);
         List<Double> values = history.stream()
             .map(h -> (double) h.getActiveQueries())
             .toList();
@@ -246,6 +260,8 @@ public class SparklineService {
      * <p>
      * Creates an area sparkline showing the count of blocked (waiting for locks) queries over time.
      * Uses the danger colour (red) for the visualisation.
+     * <p>
+     * When schema is disabled, uses in-memory metrics for short-term trends.
      *
      * @param instanceId the database instance identifier
      * @param hours the number of hours of history to retrieve
@@ -254,7 +270,7 @@ public class SparklineService {
      * @return an SVG string representing the blocked queries trend sparkline
      */
     public String getBlockedQueriesSparkline(String instanceId, int hours, int width, int height) {
-        List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
+        List<SystemMetricsHistory> history = getSystemMetricsHistory(instanceId, hours);
         List<Double> values = history.stream()
             .map(h -> (double) h.getBlockedQueries())
             .toList();
@@ -280,6 +296,8 @@ public class SparklineService {
      * <p>
      * Creates a line sparkline showing the buffer cache hit ratio percentage over time.
      * Uses the info colour (cyan) for the visualisation. Missing or null values default to 100%.
+     * <p>
+     * When schema is disabled, uses in-memory metrics for short-term trends.
      *
      * @param instanceId the database instance identifier
      * @param hours the number of hours of history to retrieve
@@ -288,7 +306,7 @@ public class SparklineService {
      * @return an SVG string representing the cache hit ratio trend sparkline
      */
     public String getCacheHitRatioSparkline(String instanceId, int hours, int width, int height) {
-        List<SystemMetricsHistory> history = historyRepository.getSystemMetricsHistory(instanceId, hours);
+        List<SystemMetricsHistory> history = getSystemMetricsHistory(instanceId, hours);
         List<Double> values = history.stream()
             .map(h -> h.getCacheHitRatio() != null ? h.getCacheHitRatio() : 100.0)
             .toList();
@@ -379,5 +397,34 @@ public class SparklineService {
      */
     public String getQueryCallsSparkline(String queryId, int hours, int width, int height) {
         return getQueryCallsSparkline("default", queryId, hours, width, height);
+    }
+
+    // --- Helper methods for data source routing ---
+
+    /**
+     * Retrieves system metrics history from the appropriate data source.
+     * <p>
+     * When schema is enabled, retrieves from the persistent history repository.
+     * When schema is disabled (read-only mode), retrieves from in-memory store.
+     *
+     * @param instanceId the database instance identifier
+     * @param hours the number of hours of history to retrieve
+     * @return list of system metrics history, may be empty if no data available
+     */
+    private List<SystemMetricsHistory> getSystemMetricsHistory(String instanceId, int hours) {
+        if (config.schema().enabled()) {
+            return historyRepository.getSystemMetricsHistory(instanceId, hours);
+        } else {
+            return inMemoryMetricsStore.getSystemMetricsHistory(instanceId, hours);
+        }
+    }
+
+    /**
+     * Checks if the schema is enabled (persistent storage mode).
+     *
+     * @return true if schema is enabled, false for read-only mode
+     */
+    public boolean isSchemaEnabled() {
+        return config.schema().enabled();
     }
 }

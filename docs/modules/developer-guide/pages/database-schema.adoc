@@ -8,7 +8,7 @@ This page describes the database schema used by pg-console for storing historica
 
 == Overview
 
-pg-console creates a dedicated schema named `pgconsole` in the monitored PostgreSQL database. This schema stores:
+By default, pg-console creates a dedicated schema named `pgconsole` in the monitored PostgreSQL database. This schema stores:
 
 * Historical overview statistics (connections, cache hits, database size)
 * Historical query performance metrics from `pg_stat_statements`
@@ -17,6 +17,17 @@ pg-console creates a dedicated schema named `pgconsole` in the monitored Postgre
 The schema is created and managed automatically using Flyway migrations, which run on application startup.
 
 IMPORTANT: pg-console requires `CREATE SCHEMA` and `CREATE TABLE` privileges to initialise its schema. See xref:admin-guide:deployment.adoc#database-permissions[Database Permissions] for details.
+
+=== Schema-Free Mode
+
+pg-console can also operate without creating any database schema. When `PG_CONSOLE_SCHEMA_ENABLED=false`, all schema creation is disabled:
+
+* No `pgconsole` schema is created
+* Flyway migrations are completely skipped
+* Real-time monitoring continues to work normally
+* Short-term trends use in-memory storage instead of database persistence
+
+This is particularly useful for read-only monitoring scenarios. See xref:admin-guide:schema-free-mode.adoc[Schema-Free Mode] for complete details.
 
 == Schema Design
 
@@ -267,6 +278,8 @@ LIMIT 10;
 == Flyway Migrations
 
 pg-console uses Flyway to manage database schema migrations. Migration scripts are located in `src/main/resources/db/migration/` and follow Flyway's naming convention.
+
+NOTE: When operating in xref:admin-guide:schema-free-mode.adoc[Schema-Free Mode] (`PG_CONSOLE_SCHEMA_ENABLED=false`), Flyway is completely disabled and no migrations run.
 
 === Migration Files
 

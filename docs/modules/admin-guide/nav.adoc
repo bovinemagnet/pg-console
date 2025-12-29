@@ -1,6 +1,7 @@
 * xref:index.adoc[Administration Guide]
 ** xref:deployment.adoc[Deployment]
 ** xref:configuration.adoc[Configuration Reference]
+** xref:schema-free-mode.adoc[Schema-Free Mode]
 ** xref:security.adoc[Security Configuration]
 ** xref:multi-instance.adoc[Multi-Instance Monitoring]
 ** xref:alerting.adoc[Alerting Configuration]

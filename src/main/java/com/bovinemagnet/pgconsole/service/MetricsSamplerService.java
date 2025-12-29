@@ -56,7 +56,8 @@ public class MetricsSamplerService {
     @Scheduled(every = "${pg-console.history.interval-seconds:60}s",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void sampleMetrics() {
-        if (!config.history().enabled()) {
+        // Skip if schema is disabled (read-only mode) or history is disabled
+        if (!config.schema().enabled() || !config.history().enabled()) {
             return;
         }
 
@@ -96,7 +97,8 @@ public class MetricsSamplerService {
     @Scheduled(cron = "0 0 3 * * ?",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void cleanupOldData() {
-        if (!config.history().enabled()) {
+        // Skip if schema is disabled (read-only mode) or history is disabled
+        if (!config.schema().enabled() || !config.history().enabled()) {
             return;
         }
 

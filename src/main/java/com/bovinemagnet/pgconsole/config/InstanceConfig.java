@@ -10,7 +10,8 @@ import java.util.Optional;
 /**
  * Configuration mapping for pg-console application.
  * <p>
- * Includes instance configuration, history sampling, and security settings.
+ * Includes instance configuration, history sampling, security settings,
+ * and schema-free mode configuration.
  * <p>
  * Configuration example:
  * <pre>
@@ -19,6 +20,8 @@ import java.util.Optional;
  * pg-console.history.enabled=true
  * pg-console.history.interval-seconds=60
  * pg-console.security.enabled=false
+ * pg-console.schema.enabled=true
+ * pg-console.schema.in-memory-minutes=30
  * </pre>
  *
  * @author Paul Snow
@@ -65,6 +68,13 @@ public interface InstanceConfig {
      * @return alerting configuration
      */
     AlertingConfig alerting();
+
+    /**
+     * Schema configuration for read-only mode support.
+     *
+     * @return schema configuration
+     */
+    SchemaConfig schema();
 
     /**
      * Properties for a specific instance.
@@ -117,6 +127,43 @@ public interface InstanceConfig {
         @WithName("top-queries")
         @WithDefault("50")
         int topQueries();
+    }
+
+    /**
+     * Schema configuration for read-only mode support.
+     * <p>
+     * When schema is disabled, the pgconsole schema is not created and the
+     * application operates in read-only mode with in-memory trends only.
+     */
+    interface SchemaConfig {
+        /**
+         * Enable or disable pgconsole schema creation and persistence.
+         * <p>
+         * When false:
+         * <ul>
+         *   <li>No pgconsole schema is created (Flyway migrations skipped)</li>
+         *   <li>History sampling is disabled</li>
+         *   <li>Audit logging, bookmarks, and alerting history are disabled</li>
+         *   <li>In-memory trends are used for sparklines</li>
+         * </ul>
+         *
+         * @return true if schema features are enabled (default)
+         */
+        @WithDefault("true")
+        boolean enabled();
+
+        /**
+         * In-memory trend retention in minutes.
+         * <p>
+         * Only used when schema is disabled. Metrics are stored in memory
+         * for this duration to provide short-term sparkline trends.
+         * Data is lost on application restart.
+         *
+         * @return retention minutes (default 30)
+         */
+        @WithName("in-memory-minutes")
+        @WithDefault("30")
+        int inMemoryMinutes();
     }
 
     /**

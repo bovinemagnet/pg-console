@@ -264,6 +264,8 @@ public class DashboardResource {
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
                     .data("securityEnabled", config.security().enabled())
+                    .data("schemaEnabled", config.schema().enabled())
+                    .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                     .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -302,6 +304,8 @@ public class DashboardResource {
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled())
+                         .data("schemaEnabled", config.schema().enabled())
+                         .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                          .data("toggles", featureToggleService.getAllToggles());
 
         // Add grouped data if viewing grouped
@@ -333,6 +337,8 @@ public class DashboardResource {
                       .data("instances", dataSourceManager.getInstanceInfoList())
                       .data("currentInstance", instance)
                       .data("securityEnabled", config.security().enabled())
+                      .data("schemaEnabled", config.schema().enabled())
+                      .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                       .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -356,6 +362,8 @@ public class DashboardResource {
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
                     .data("securityEnabled", config.security().enabled())
+                    .data("schemaEnabled", config.schema().enabled())
+                    .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                     .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -404,6 +412,8 @@ public class DashboardResource {
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
                     .data("securityEnabled", config.security().enabled())
+                    .data("schemaEnabled", config.schema().enabled())
+                    .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                     .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -429,6 +439,8 @@ public class DashboardResource {
                     .data("instances", dataSourceManager.getInstanceInfoList())
                     .data("currentInstance", instance)
                     .data("securityEnabled", config.security().enabled())
+                    .data("schemaEnabled", config.schema().enabled())
+                    .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                     .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -454,6 +466,8 @@ public class DashboardResource {
                         .data("instances", dataSourceManager.getInstanceInfoList())
                         .data("currentInstance", instance)
                         .data("securityEnabled", config.security().enabled())
+                        .data("schemaEnabled", config.schema().enabled())
+                        .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                         .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -479,6 +493,8 @@ public class DashboardResource {
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
                           .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                           .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -512,6 +528,8 @@ public class DashboardResource {
                                .data("instances", dataSourceManager.getInstanceInfoList())
                                .data("currentInstance", instance)
                                .data("securityEnabled", config.security().enabled())
+                               .data("schemaEnabled", config.schema().enabled())
+                               .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -537,6 +555,8 @@ public class DashboardResource {
                                .data("instances", dataSourceManager.getInstanceInfoList())
                                .data("currentInstance", instance)
                                .data("securityEnabled", config.security().enabled())
+                               .data("schemaEnabled", config.schema().enabled())
+                               .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -565,6 +585,8 @@ public class DashboardResource {
                                    .data("instances", dataSourceManager.getInstanceInfoList())
                                    .data("currentInstance", instance)
                                    .data("securityEnabled", config.security().enabled())
+                                   .data("schemaEnabled", config.schema().enabled())
+                                   .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                    .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -596,6 +618,8 @@ public class DashboardResource {
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
                           .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                           .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -623,6 +647,8 @@ public class DashboardResource {
                              .data("instances", dataSourceManager.getInstanceInfoList())
                              .data("currentInstance", instance)
                              .data("securityEnabled", config.security().enabled())
+                             .data("schemaEnabled", config.schema().enabled())
+                             .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                              .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -648,6 +674,8 @@ public class DashboardResource {
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
                        .data("securityEnabled", config.security().enabled())
+                       .data("schemaEnabled", config.schema().enabled())
+                       .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                        .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -677,6 +705,8 @@ public class DashboardResource {
                         .data("instances", dataSourceManager.getInstanceInfoList())
                         .data("currentInstance", instance)
                         .data("securityEnabled", config.security().enabled())
+                        .data("schemaEnabled", config.schema().enabled())
+                        .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                         .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -706,6 +736,8 @@ public class DashboardResource {
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled())
+                         .data("schemaEnabled", config.schema().enabled())
+                         .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                          .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -739,6 +771,8 @@ public class DashboardResource {
                                  .data("instances", dataSourceManager.getInstanceInfoList())
                                  .data("currentInstance", instance)
                                  .data("securityEnabled", config.security().enabled())
+                                 .data("schemaEnabled", config.schema().enabled())
+                                 .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                  .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -768,6 +802,8 @@ public class DashboardResource {
                   .data("instances", dataSourceManager.getInstanceInfoList())
                   .data("currentInstance", instance)
                   .data("securityEnabled", config.security().enabled())
+                  .data("schemaEnabled", config.schema().enabled())
+                  .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                   .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -799,6 +835,8 @@ public class DashboardResource {
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
                           .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                           .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -826,6 +864,8 @@ public class DashboardResource {
                          .data("instances", dataSourceManager.getInstanceInfoList())
                          .data("currentInstance", instance)
                          .data("securityEnabled", config.security().enabled())
+                         .data("schemaEnabled", config.schema().enabled())
+                         .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                          .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -863,6 +903,8 @@ public class DashboardResource {
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
                        .data("securityEnabled", config.security().enabled())
+                       .data("schemaEnabled", config.schema().enabled())
+                       .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                        .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -892,6 +934,8 @@ public class DashboardResource {
                             .data("instances", dataSourceManager.getInstanceInfoList())
                             .data("currentInstance", instance)
                             .data("securityEnabled", config.security().enabled())
+                            .data("schemaEnabled", config.schema().enabled())
+                            .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -927,6 +971,8 @@ public class DashboardResource {
                                   .data("instances", dataSourceManager.getInstanceInfoList())
                                   .data("currentInstance", instance)
                                   .data("securityEnabled", config.security().enabled())
+                                  .data("schemaEnabled", config.schema().enabled())
+                                  .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                   .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -956,6 +1002,8 @@ public class DashboardResource {
                              .data("instances", dataSourceManager.getInstanceInfoList())
                              .data("currentInstance", instance)
                              .data("securityEnabled", config.security().enabled())
+                             .data("schemaEnabled", config.schema().enabled())
+                             .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                              .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -981,6 +1029,8 @@ public class DashboardResource {
                                  .data("instances", dataSourceManager.getInstanceInfoList())
                                  .data("currentInstance", instance)
                                  .data("securityEnabled", config.security().enabled())
+                                 .data("schemaEnabled", config.schema().enabled())
+                                 .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                  .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -1026,6 +1076,8 @@ public class DashboardResource {
                                       .data("instances", dataSourceManager.getInstanceInfoList())
                                       .data("currentInstance", instance)
                                       .data("securityEnabled", config.security().enabled())
+                                      .data("schemaEnabled", config.schema().enabled())
+                                      .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                                       .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -1058,6 +1110,8 @@ public class DashboardResource {
                           .data("instances", dataSourceManager.getInstanceInfoList())
                           .data("currentInstance", instance)
                           .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                           .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -1081,6 +1135,8 @@ public class DashboardResource {
                        .data("instances", dataSourceManager.getInstanceInfoList())
                        .data("currentInstance", instance)
                        .data("securityEnabled", config.security().enabled())
+                       .data("schemaEnabled", config.schema().enabled())
+                       .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                        .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -1106,6 +1162,8 @@ public class DashboardResource {
                             .data("instances", dataSourceManager.getInstanceInfoList())
                             .data("currentInstance", instance)
                             .data("securityEnabled", config.security().enabled())
+                            .data("schemaEnabled", config.schema().enabled())
+                            .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                             .data("toggles", featureToggleService.getAllToggles());
     }
 
