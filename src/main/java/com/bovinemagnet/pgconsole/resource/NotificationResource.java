@@ -115,6 +115,7 @@ public class NotificationResource {
             .data("recentHistory", dispatcher.getRecentHistory(10))
             .data("title", "Notifications")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -131,6 +132,7 @@ public class NotificationResource {
             .data("channelTypes", NotificationChannel.ChannelType.values())
             .data("title", "Notification Channels")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -150,6 +152,7 @@ public class NotificationResource {
             .data("stats", dispatcher.getStats(24))
             .data("title", "Notification History")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -167,6 +170,7 @@ public class NotificationResource {
             .data("stats", alertService.getAlertStats())
             .data("title", "Alerts")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -183,6 +187,7 @@ public class NotificationResource {
             .data("activeSilences", alertService.getActiveSilences())
             .data("title", "Alert Silences")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -200,6 +205,7 @@ public class NotificationResource {
             .data("upcomingWindows", alertService.getUpcomingMaintenanceWindows())
             .data("title", "Maintenance Windows")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -216,6 +222,7 @@ public class NotificationResource {
             .data("channels", channelRepository.findEnabled())
             .data("title", "Escalation Policies")
             .data("securityEnabled", config.security().enabled())
+            .data("schemaEnabled", config.schema().enabled())
             .data("toggles", featureToggleService.getAllToggles());
     }
 

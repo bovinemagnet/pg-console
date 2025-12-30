@@ -391,6 +391,513 @@ public class DashboardResource {
         return sparklineService.generateSparkline(valueList, 100, 30);
     }
 
+    // --- Drill-Down Tooltip Fragments (Phase 21) ---
+
+    /**
+     * Returns a drill-down fragment showing top databases by active connections.
+     * <p>
+     * Displays a list of the top 5 databases ranked by current connection count,
+     * with connection numbers and a brief explanation of the metric.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the connections drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/connections")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownConnections(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var stats = postgresService.getOverviewStats(instance);
+        var dbMetrics = postgresService.getAllDatabaseMetrics(instance);
+
+        // Sort by numBackends (active connections) descending
+        var topDatabases = dbMetrics.stream()
+                .sorted((a, b) -> Long.compare(b.getNumBackends(), a.getNumBackends()))
+                .limit(5)
+                .toList();
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-plug\"></i> Connections by Database</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (topDatabases.isEmpty()) {
+            html.append("<div class=\"drilldown-item\"><span class=\"text-muted\">No database connections</span></div>");
+        } else {
+            for (var db : topDatabases) {
+                String valueClass = db.getNumBackends() > 10 ? "drilldown-value-warning" : "";
+                html.append("<div class=\"drilldown-item\">");
+                html.append("<span class=\"drilldown-item-label\"><code>").append(escapeHtml(db.getDatname())).append("</code></span>");
+                html.append("<span class=\"drilldown-item-value ").append(valueClass).append("\">").append(db.getNumBackends()).append("</span>");
+                html.append("</div>");
+            }
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Active backend connections per database. High counts may indicate connection pool saturation.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment showing longest running active queries.
+     * <p>
+     * Displays the top 5 currently running queries ranked by execution duration,
+     * with truncated query text and duration values.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the active queries drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/active-queries")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownActiveQueries(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var activities = postgresService.getCurrentActivity(instance);
+
+        // Filter to active queries and sort by query start time (oldest first = longest running)
+        var activeQueries = activities.stream()
+                .filter(a -> "active".equals(a.getState()))
+                .filter(a -> a.getQueryStart() != null)
+                .sorted((a, b) -> a.getQueryStart().compareTo(b.getQueryStart()))
+                .limit(5)
+                .toList();
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-lightning\"></i> Longest Running Queries</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (activeQueries.isEmpty()) {
+            html.append("<div class=\"drilldown-item\"><span class=\"text-muted\">No active queries</span></div>");
+        } else {
+            for (var query : activeQueries) {
+                long durationSeconds = java.time.Duration.between(query.getQueryStart(), java.time.LocalDateTime.now()).getSeconds();
+                String duration = formatDuration(durationSeconds);
+                String queryText = query.getQuery() != null ?
+                    (query.getQuery().length() > 40 ? query.getQuery().substring(0, 40) + "..." : query.getQuery()) : "N/A";
+                String valueClass = durationSeconds > 60 ? "drilldown-value-danger" :
+                                   (durationSeconds > 10 ? "drilldown-value-warning" : "");
+
+                html.append("<div class=\"drilldown-item\">");
+                html.append("<span class=\"drilldown-item-label\" title=\"").append(escapeHtml(query.getQuery())).append("\"><code>").append(escapeHtml(queryText)).append("</code></span>");
+                html.append("<span class=\"drilldown-item-value ").append(valueClass).append("\">").append(duration).append("</span>");
+                html.append("</div>");
+            }
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Currently executing queries sorted by runtime. Long-running queries may need optimisation.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Formats a duration in seconds to a human-readable string.
+     *
+     * @param seconds the duration in seconds
+     * @return formatted duration string (e.g., "5s", "2m 30s", "1h 5m")
+     */
+    private String formatDuration(long seconds) {
+        if (seconds < 60) {
+            return seconds + "s";
+        } else if (seconds < 3600) {
+            long mins = seconds / 60;
+            long secs = seconds % 60;
+            return secs > 0 ? mins + "m " + secs + "s" : mins + "m";
+        } else {
+            long hours = seconds / 3600;
+            long mins = (seconds % 3600) / 60;
+            return mins > 0 ? hours + "h " + mins + "m" : hours + "h";
+        }
+    }
+
+    /**
+     * Returns a drill-down fragment showing current blocking relationships.
+     * <p>
+     * Displays blocked queries with their blockers, showing the blocking tree
+     * structure and lock wait durations.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the blocked queries drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/blocked-queries")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownBlockedQueries(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var blockingTree = postgresService.getBlockingTree(instance);
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-lock\"></i> Blocking Relationships</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (blockingTree.isEmpty()) {
+            html.append("<div class=\"drilldown-item\"><span class=\"text-success\"><i class=\"bi bi-check-circle\"></i> No blocking detected</span></div>");
+        } else {
+            for (var block : blockingTree.stream().limit(5).toList()) {
+                html.append("<div class=\"drilldown-item\">");
+                html.append("<span class=\"drilldown-item-label\">");
+                html.append("<span class=\"text-danger\">PID ").append(block.getBlockedPid()).append("</span>");
+                html.append(" <i class=\"bi bi-arrow-left\"></i> ");
+                html.append("<span class=\"text-warning\">PID ").append(block.getBlockerPid()).append("</span>");
+                html.append("</span>");
+                html.append("<span class=\"drilldown-item-value drilldown-value-danger\">").append(block.getBlockedDuration() != null ? block.getBlockedDuration() : "N/A").append("</span>");
+                html.append("</div>");
+            }
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Shows which processes are blocked waiting for locks held by other processes.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment explaining cache hit ratio with trend.
+     * <p>
+     * Shows the current cache hit ratio, a mini sparkline trend, and an
+     * explanation of what the metric means and target values.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the cache hit ratio drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/cache-hit")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownCacheHit(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var stats = postgresService.getOverviewStats(instance);
+        String sparkline = sparklineService.getCacheHitRatioSparkline(instance, 1, 180, 30);
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-speedometer2\"></i> Cache Hit Ratio Details</div>");
+
+        if (!sparkline.isEmpty()) {
+            html.append("<div class=\"drilldown-sparkline\">").append(sparkline).append("</div>");
+        }
+
+        html.append("<div class=\"drilldown-body\">");
+
+        // Current value
+        String valueClass = stats.getCacheHitRatio() < 90 ? "drilldown-value-warning" :
+                           (stats.getCacheHitRatio() >= 99 ? "drilldown-value-success" : "");
+        html.append("<div class=\"drilldown-item\">");
+        html.append("<span class=\"drilldown-item-label\">Current Ratio</span>");
+        html.append("<span class=\"drilldown-item-value ").append(valueClass).append("\">").append(stats.getCacheHitRatioFormatted()).append("</span>");
+        html.append("</div>");
+
+        // Target
+        html.append("<div class=\"drilldown-item\">");
+        html.append("<span class=\"drilldown-item-label\">Target</span>");
+        html.append("<span class=\"drilldown-item-value drilldown-value-success\">&gt;99%</span>");
+        html.append("</div>");
+
+        // Status
+        String status = stats.getCacheHitRatio() >= 99 ? "Excellent" :
+                       (stats.getCacheHitRatio() >= 95 ? "Good" :
+                       (stats.getCacheHitRatio() >= 90 ? "Acceptable" : "Needs Attention"));
+        String statusClass = stats.getCacheHitRatio() >= 95 ? "drilldown-value-success" :
+                            (stats.getCacheHitRatio() >= 90 ? "drilldown-value-warning" : "drilldown-value-danger");
+        html.append("<div class=\"drilldown-item\">");
+        html.append("<span class=\"drilldown-item-label\">Status</span>");
+        html.append("<span class=\"drilldown-item-value ").append(statusClass).append("\">").append(status).append("</span>");
+        html.append("</div>");
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Percentage of data reads served from shared buffers vs disk. Low ratios indicate insufficient memory or buffer pool sizing.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment showing table operation breakdown.
+     * <p>
+     * Displays insert, update, delete, and scan statistics for a specific table,
+     * helping identify workload patterns and optimisation opportunities.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param tableName the fully-qualified table name (schema.table)
+     * @return HTML fragment for the table operations drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/table")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownTable(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("table") String tableName) {
+        var tables = postgresService.getTableStats(instance);
+
+        // Find the specific table by constructing full name from schema.table
+        var tableOpt = tables.stream()
+                .filter(t -> (t.getSchemaName() + "." + t.getTableName()).equals(tableName))
+                .findFirst();
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-table\"></i> Table Operations</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (tableOpt.isEmpty()) {
+            // Show basic info even if not found
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Table</span>");
+            html.append("<span class=\"drilldown-item-value\"><code>").append(escapeHtml(tableName)).append("</code></span>");
+            html.append("</div>");
+        } else {
+            var table = tableOpt.get();
+
+            // Live tuples
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Live Rows</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(formatNumber(table.getnLiveTup())).append("</span>");
+            html.append("</div>");
+
+            // Dead tuples
+            String deadClass = table.getnDeadTup() > 10000 ? "drilldown-value-warning" : "";
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Dead Rows</span>");
+            html.append("<span class=\"drilldown-item-value ").append(deadClass).append("\">").append(formatNumber(table.getnDeadTup())).append("</span>");
+            html.append("</div>");
+
+            // Bloat ratio
+            String bloatClass = table.getBloatRatio() > 20 ? "drilldown-value-danger" : (table.getBloatRatio() > 10 ? "drilldown-value-warning" : "");
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Bloat</span>");
+            html.append("<span class=\"drilldown-item-value ").append(bloatClass).append("\">").append(String.format("%.1f%%", table.getBloatRatio())).append("</span>");
+            html.append("</div>");
+
+            // Seq scans vs Index scans
+            long totalScans = table.getSeqScan() + table.getIdxScan();
+            String scanRatio = totalScans > 0 ?
+                String.format("%.0f%% idx", (table.getIdxScan() * 100.0 / totalScans)) : "N/A";
+            String scanClass = totalScans > 0 && (table.getIdxScan() * 100.0 / totalScans) < 50 ? "drilldown-value-warning" : "drilldown-value-success";
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Scan Ratio</span>");
+            html.append("<span class=\"drilldown-item-value ").append(scanClass).append("\">").append(scanRatio).append("</span>");
+            html.append("</div>");
+
+            // Sequential scans count
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Seq Scans</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(formatNumber(table.getSeqScan())).append("</span>");
+            html.append("</div>");
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Table statistics including row counts and scan patterns. High bloat suggests vacuum needed.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment showing index details.
+     * <p>
+     * Displays size and table information for a specific index.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @param indexName the index name
+     * @param tableName the table name the index belongs to
+     * @return HTML fragment for the index details drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/index")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownIndex(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("index") String indexName,
+            @QueryParam("table") String tableName) {
+        var stats = postgresService.getOverviewStats(instance);
+
+        // Find the specific index from top indexes
+        var indexOpt = stats.getTopIndexesBySize().stream()
+                .filter(i -> i.getIndexName().equals(indexName))
+                .findFirst();
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-diagram-3\"></i> Index Details</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (indexOpt.isEmpty()) {
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Index</span>");
+            html.append("<span class=\"drilldown-item-value\"><code>").append(escapeHtml(indexName)).append("</code></span>");
+            html.append("</div>");
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Table</span>");
+            html.append("<span class=\"drilldown-item-value\"><code>").append(escapeHtml(tableName)).append("</code></span>");
+            html.append("</div>");
+        } else {
+            var idx = indexOpt.get();
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Index</span>");
+            html.append("<span class=\"drilldown-item-value\"><code>").append(escapeHtml(idx.getIndexName())).append("</code></span>");
+            html.append("</div>");
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Table</span>");
+            html.append("<span class=\"drilldown-item-value\"><code>").append(escapeHtml(idx.getTableName())).append("</code></span>");
+            html.append("</div>");
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Size</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(idx.getSize()).append("</span>");
+            html.append("</div>");
+
+            // Size in bytes for more detail
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Size (bytes)</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(formatNumber(idx.getSizeBytes())).append("</span>");
+            html.append("</div>");
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Index size information. Large indexes may benefit from REINDEX to reclaim space.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment showing the longest running query details.
+     * <p>
+     * Displays information about the single longest running query including
+     * PID, user, duration, and truncated query text.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the longest query drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/longest-query")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownLongestQuery(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var activities = postgresService.getCurrentActivity(instance);
+
+        // Find the longest running active query (oldest query start = longest running)
+        var longestOpt = activities.stream()
+                .filter(a -> "active".equals(a.getState()))
+                .filter(a -> a.getQueryStart() != null)
+                .min((a, b) -> a.getQueryStart().compareTo(b.getQueryStart()));
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-hourglass-split\"></i> Longest Running Query</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (longestOpt.isEmpty()) {
+            html.append("<div class=\"drilldown-item\"><span class=\"text-muted\">No active queries</span></div>");
+        } else {
+            var longest = longestOpt.get();
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">PID</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(longest.getPid()).append("</span>");
+            html.append("</div>");
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">User</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(escapeHtml(longest.getUser())).append("</span>");
+            html.append("</div>");
+
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Application</span>");
+            html.append("<span class=\"drilldown-item-value\">").append(escapeHtml(longest.getApplicationName() != null ? longest.getApplicationName() : "N/A")).append("</span>");
+            html.append("</div>");
+
+            long durationSeconds = longest.getQueryStart() != null ?
+                java.time.Duration.between(longest.getQueryStart(), java.time.LocalDateTime.now()).getSeconds() : 0;
+            String durationClass = durationSeconds > 60 ? "drilldown-value-danger" :
+                                  (durationSeconds > 10 ? "drilldown-value-warning" : "");
+            html.append("<div class=\"drilldown-item\">");
+            html.append("<span class=\"drilldown-item-label\">Duration</span>");
+            html.append("<span class=\"drilldown-item-value ").append(durationClass).append("\">").append(formatDuration(durationSeconds)).append("</span>");
+            html.append("</div>");
+
+            if (longest.getQuery() != null) {
+                String truncatedQuery = longest.getQuery().length() > 100 ?
+                    longest.getQuery().substring(0, 100) + "..." : longest.getQuery();
+                html.append("<div class=\"drilldown-item\" style=\"flex-direction: column; align-items: flex-start;\">");
+                html.append("<span class=\"drilldown-item-label\">Query</span>");
+                html.append("<code style=\"font-size: 0.75rem; word-break: break-all;\">").append(escapeHtml(truncatedQuery)).append("</code>");
+                html.append("</div>");
+            }
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("The currently longest-running query. Long queries may indicate missing indexes or inefficient SQL.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns a drill-down fragment showing database size breakdown.
+     * <p>
+     * Displays the top 5 databases by size with their individual sizes
+     * and percentage of total storage.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML fragment for the database size drill-down tooltip
+     */
+    @GET
+    @Path("/fragments/drilldown/database-size")
+    @Produces(MediaType.TEXT_HTML)
+    public String drilldownDatabaseSize(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var dbMetrics = postgresService.getAllDatabaseMetrics(instance);
+
+        // Sort by size descending and take top 5
+        var topDatabases = dbMetrics.stream()
+                .sorted((a, b) -> Long.compare(b.getDatabaseSizeBytes(), a.getDatabaseSizeBytes()))
+                .limit(5)
+                .toList();
+
+        long totalSize = dbMetrics.stream().mapToLong(DatabaseMetrics::getDatabaseSizeBytes).sum();
+
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"drilldown-header\"><i class=\"bi bi-hdd\"></i> Database Size Breakdown</div>");
+        html.append("<div class=\"drilldown-body\">");
+
+        if (topDatabases.isEmpty()) {
+            html.append("<div class=\"drilldown-item\"><span class=\"text-muted\">No databases found</span></div>");
+        } else {
+            for (var db : topDatabases) {
+                double percentage = totalSize > 0 ? (db.getDatabaseSizeBytes() * 100.0 / totalSize) : 0;
+                html.append("<div class=\"drilldown-item\">");
+                html.append("<span class=\"drilldown-item-label\"><code>").append(escapeHtml(db.getDatname())).append("</code></span>");
+                html.append("<span class=\"drilldown-item-value\">").append(db.getDatabaseSize()).append(" <small class=\"text-muted\">(").append(String.format("%.1f%%", percentage)).append(")</small></span>");
+                html.append("</div>");
+            }
+        }
+
+        html.append("</div>");
+        html.append("<div class=\"drilldown-explanation\"><i class=\"bi bi-info-circle\"></i> ");
+        html.append("Storage usage by database. Monitor growth trends to plan capacity.");
+        html.append("</div>");
+
+        return html.toString();
+    }
+
+    /**
+     * Formats a number with thousand separators for display.
+     *
+     * @param number the number to format
+     * @return formatted string with thousand separators
+     */
+    private String formatNumber(long number) {
+        return String.format("%,d", number);
+    }
+
     /**
      * Renders the about page showing database version and application information.
      * <p>

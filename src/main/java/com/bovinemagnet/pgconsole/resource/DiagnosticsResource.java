@@ -157,6 +157,7 @@ public class DiagnosticsResource {
                 .data("instances", postgresService.getInstanceList())
                 .data("risks", risks)
                 .data("staleThresholdHours", queueStaleHours)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -188,6 +189,7 @@ public class DiagnosticsResource {
                 .data("instances", postgresService.getInstanceList())
                 .data("bloats", bloats)
                 .data("warnPercent", toastBloatWarnPercent)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -218,6 +220,7 @@ public class DiagnosticsResource {
                 .data("instance", instanceName)
                 .data("instances", postgresService.getInstanceList())
                 .data("redundancies", redundancies)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -248,6 +251,7 @@ public class DiagnosticsResource {
                 .data("instance", instanceName)
                 .data("instances", postgresService.getInstanceList())
                 .data("freshness", freshness)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -278,6 +282,7 @@ public class DiagnosticsResource {
                 .data("instance", instanceName)
                 .data("instances", postgresService.getInstanceList())
                 .data("ratios", ratios)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -309,6 +314,7 @@ public class DiagnosticsResource {
                 .data("instances", postgresService.getInstanceList())
                 .data("efficiencies", efficiencies)
                 .data("warnPercent", hotEfficiencyWarnPercent)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -339,6 +345,7 @@ public class DiagnosticsResource {
                 .data("instance", instanceName)
                 .data("instances", postgresService.getInstanceList())
                 .data("correlations", correlations)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -377,6 +384,7 @@ public class DiagnosticsResource {
                 .data("transactionsChart", transactionsChart)
                 .data("tuplesChart", tuplesChart)
                 .data("cacheChart", cacheChart)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 
@@ -409,6 +417,7 @@ public class DiagnosticsResource {
                 .data("xids", xids)
                 .data("warnPercent", xidWarnPercent)
                 .data("criticalPercent", xidCriticalPercent)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }
 }

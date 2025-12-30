@@ -629,10 +629,11 @@ Product Specification: Postgres Insight Dashboard
   - Percentage to wraparound with visual indicators
   - Per-database XID age tracking
   - Emergency vacuum recommendations
-- [ ] **Tooltip Drill-downs** (deferred to future phase)
-  - Hover tooltips with top-N details
+- [x] **Tooltip Drill-downs**
+  - Hover tooltips with top-N details on dashboard widgets
   - Context-sensitive metric explanations
-  - Quick action links
+  - htmx-powered lazy loading for optimal performance
+  - Drill-downs for: Connections, Active Queries, Blocked Queries, Cache Hit Ratio, Longest Query, Database Size, Tables, Indexes
 
 ### Phase 22 — Schema-Free Mode (Read-Only Operation) ✅ COMPLETE
 - [x] **Schema Toggle Configuration**
@@ -2018,7 +2019,7 @@ Charts support 3s/5s/10s/30s refresh with pause/resume controls - DONE
 
 XID wraparound shows percentage to threshold per database - DONE
 
-Tooltips show top-5 details on hover without page navigation - Deferred
+Tooltips show top-5 details on hover without page navigation - DONE
 
 Configuration Properties:
 

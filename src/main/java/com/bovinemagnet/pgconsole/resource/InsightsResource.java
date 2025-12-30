@@ -99,6 +99,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -128,6 +129,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -167,6 +169,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -217,6 +220,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -243,6 +247,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -270,6 +275,7 @@ public class InsightsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 

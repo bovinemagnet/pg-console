@@ -14,8 +14,12 @@
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card h-100">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Connections</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/connections?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-plug me-1"></i>Connections</h6>
                 <h2 class="mb-0">{stats.connectionsUsed} / {stats.connectionsMax}</h2>
                 <div class="progress mt-2" style="height: 6px;">
                     <div class="progress-bar {#if stats.connectionPercentage > 80}bg-danger{#else if stats.connectionPercentage > 60}bg-warning{#else}bg-success{/if}"
@@ -24,23 +28,37 @@
                 </div>
                 <small class="text-muted">{stats.connectionPercentage}% used</small>
                 <div class="mt-2" title="Last 1 hour">{connectionsSparkline.raw}</div>
+                <div class="drilldown-content drilldown-left">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card h-100">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Active Queries</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/active-queries?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-lightning me-1"></i>Active Queries</h6>
                 <h2 class="mb-0 {#if stats.activeQueries > 10}text-warning{/if}">{stats.activeQueries}</h2>
                 <div class="mt-2" title="Last 1 hour">{activeQueriesSparkline.raw}</div>
                 <a href="/activity?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary mt-2">View Activity</a>
+                <div class="drilldown-content">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card h-100 {#if stats.blockedQueries > 0}border-danger{/if}">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Blocked Queries</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/blocked-queries?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-lock me-1"></i>Blocked Queries</h6>
                 <h2 class="mb-0 {#if stats.blockedQueries > 0}text-danger{/if}">{stats.blockedQueries}</h2>
                 <div class="mt-2" title="Last 1 hour">{blockedQueriesSparkline.raw}</div>
                 {#if stats.blockedQueries > 0}
@@ -48,14 +66,24 @@
                 {#else}
                 <small class="text-success">No blocking</small>
                 {/if}
+                <div class="drilldown-content">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card h-100">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Longest Query</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/longest-query?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-hourglass-split me-1"></i>Longest Query</h6>
                 <h4 class="mb-0">{stats.longestQueryDuration}</h4>
+                <div class="drilldown-content drilldown-right">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -65,26 +93,40 @@
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card h-100">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Cache Hit Ratio</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/cache-hit?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-speedometer2 me-1"></i>Cache Hit Ratio</h6>
                 <h2 class="mb-0 {#if stats.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{stats.cacheHitRatioFormatted}</h2>
                 <small class="text-muted">Target: &gt;99%</small>
                 <div class="mt-2" title="Last 1 hour">{cacheHitSparkline.raw}</div>
+                <div class="drilldown-content drilldown-left">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card h-100">
-            <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Database Size</h6>
+            <div class="card-body text-center drilldown-trigger"
+                 hx-get="/fragments/drilldown/database-size?instance={currentInstance ?: 'default'}"
+                 hx-trigger="mouseenter once"
+                 hx-target="find .drilldown-content"
+                 hx-swap="innerHTML">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-hdd me-1"></i>Database Size</h6>
                 <h2 class="mb-0">{stats.databaseSize}</h2>
+                <div class="drilldown-content">
+                    <div class="drilldown-loading">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card h-100">
             <div class="card-body text-center">
-                <h6 class="card-subtitle mb-2 text-muted">Quick Links</h6>
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-link-45deg me-1"></i>Quick Links</h6>
                 <div class="btn-group-vertical w-100" role="group">
                     <a href="/slow-queries?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm">Slow Queries</a>
                     <a href="/tables?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm">Table Stats</a>
@@ -99,7 +141,7 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Top Tables by Size</h5>
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>Top Tables by Size</h5>
             </div>
             <div class="card-body p-0">
                 {#if stats.topTablesBySize.isEmpty}
@@ -114,9 +156,17 @@
                     </thead>
                     <tbody>
                         {#for table in stats.topTablesBySize}
-                        <tr>
+                        <tr class="drilldown-trigger"
+                            hx-get="/fragments/drilldown/table?instance={currentInstance ?: 'default'}&table={table.fullName}"
+                            hx-trigger="mouseenter once"
+                            hx-target="find .drilldown-content"
+                            hx-swap="innerHTML"
+                            style="position: relative;">
                             <td><code>{table.fullName}</code></td>
                             <td class="text-end">{table.size}</td>
+                            <div class="drilldown-content" style="left: 100%; top: 0; transform: none;">
+                                <div class="drilldown-loading">Loading...</div>
+                            </div>
                         </tr>
                         {/for}
                     </tbody>
@@ -131,7 +181,7 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Top Indexes by Size</h5>
+                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Top Indexes by Size</h5>
             </div>
             <div class="card-body p-0">
                 {#if stats.topIndexesBySize.isEmpty}
@@ -147,10 +197,18 @@
                     </thead>
                     <tbody>
                         {#for index in stats.topIndexesBySize}
-                        <tr>
+                        <tr class="drilldown-trigger"
+                            hx-get="/fragments/drilldown/index?instance={currentInstance ?: 'default'}&index={index.indexName}&table={index.tableName}"
+                            hx-trigger="mouseenter once"
+                            hx-target="find .drilldown-content"
+                            hx-swap="innerHTML"
+                            style="position: relative;">
                             <td><code>{index.indexName}</code></td>
                             <td><small class="text-muted">{index.tableName}</small></td>
                             <td class="text-end">{index.size}</td>
+                            <div class="drilldown-content drilldown-right" style="top: 0; transform: none;">
+                                <div class="drilldown-loading">Loading...</div>
+                            </div>
                         </tr>
                         {/for}
                     </tbody>

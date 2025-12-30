@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.resource;
 
+import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.*;
 import com.bovinemagnet.pgconsole.service.*;
 import io.quarkus.qute.Template;
@@ -59,6 +60,9 @@ public class SchemaComparisonResource {
     @Inject
     FeatureToggleService featureToggleService;
 
+    @Inject
+    InstanceConfig config;
+
     /**
      * Main schema comparison page.
      */
@@ -76,6 +80,7 @@ public class SchemaComparisonResource {
                 .data("profiles", profiles)
                 .data("currentInstance", instance)
                 .data("filterPresets", ComparisonFilter.FilterPreset.values())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -177,6 +182,7 @@ public class SchemaComparisonResource {
                 .data("result", result)
                 .data("drift", drift)
                 .data("wrapOptions", MigrationScript.WrapOption.values())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -196,7 +202,8 @@ public class SchemaComparisonResource {
                     .data("schemas", List.of())
                     .data("profiles", profileService.findAll())
                     .data("filterPresets", ComparisonFilter.FilterPreset.values())
-                    .data("toggles", featureToggleService.getAllToggles());
+                    .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", featureToggleService.getAllToggles());
         }
 
         ComparisonProfile profile = profileOpt.get();
@@ -220,6 +227,7 @@ public class SchemaComparisonResource {
                 .data("profile", profile)
                 .data("drift", drift)
                 .data("wrapOptions", MigrationScript.WrapOption.values())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -257,6 +265,7 @@ public class SchemaComparisonResource {
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("selectedWrapOption", wrap)
                 .data("includeDrops", includeDrops)
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -306,6 +315,7 @@ public class SchemaComparisonResource {
         return schemaComparisonProfiles
                 .data("profiles", profileService.findAll())
                 .data("instances", dataSourceManager.getAvailableInstances())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -330,7 +340,8 @@ public class SchemaComparisonResource {
                     .data("error", "A profile with this name already exists")
                     .data("profiles", profileService.findAll())
                     .data("instances", dataSourceManager.getAvailableInstances())
-                    .data("toggles", featureToggleService.getAllToggles());
+                    .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", featureToggleService.getAllToggles());
         }
 
         ComparisonProfile profile = ComparisonProfile.builder()
@@ -350,6 +361,7 @@ public class SchemaComparisonResource {
                 .data("success", "Profile saved successfully")
                 .data("profiles", profileService.findAll())
                 .data("instances", dataSourceManager.getAvailableInstances())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -399,13 +411,15 @@ public class SchemaComparisonResource {
                     .data("error", "Failed to import profile - invalid JSON")
                     .data("profiles", profileService.findAll())
                     .data("instances", dataSourceManager.getAvailableInstances())
-                    .data("toggles", featureToggleService.getAllToggles());
+                    .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", featureToggleService.getAllToggles());
         }
 
         return schemaComparisonProfiles
                 .data("success", "Profile imported successfully")
                 .data("profiles", profileService.findAll())
                 .data("instances", dataSourceManager.getAvailableInstances())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -422,6 +436,7 @@ public class SchemaComparisonResource {
                 .data("history", historyService.getHistory(limit))
                 .data("totalCount", historyService.count())
                 .data("instances", dataSourceManager.getAvailableInstances())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
@@ -440,7 +455,8 @@ public class SchemaComparisonResource {
                     .data("history", historyService.getHistory(50))
                     .data("totalCount", historyService.count())
                     .data("instances", dataSourceManager.getAvailableInstances())
-                    .data("toggles", featureToggleService.getAllToggles());
+                    .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", featureToggleService.getAllToggles());
         }
 
         return schemaComparisonHistory
@@ -448,6 +464,7 @@ public class SchemaComparisonResource {
                 .data("history", historyService.getHistory(50))
                 .data("totalCount", historyService.count())
                 .data("instances", dataSourceManager.getAvailableInstances())
+                .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles());
     }
 
