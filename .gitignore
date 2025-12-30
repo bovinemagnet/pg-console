@@ -43,3 +43,5 @@ build/
 build/**
 bin/*
 target/**
+# Ignore a local java languave server.
+.jdtls/**
