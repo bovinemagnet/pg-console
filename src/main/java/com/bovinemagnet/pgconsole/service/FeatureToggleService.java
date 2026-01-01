@@ -1,6 +1,7 @@
 package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.config.DashboardConfig;
+import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.NotFoundException;
@@ -29,6 +30,32 @@ public class FeatureToggleService {
 
     @Inject
     DashboardConfig dashboardConfig;
+
+    @Inject
+    InstanceConfig instanceConfig;
+
+    // ========================================
+    // Schema Mode Checks
+    // ========================================
+
+    /**
+     * Checks if schema mode is enabled.
+     * When disabled, the application runs in read-only mode without persistent storage.
+     *
+     * @return true if schema is enabled, false for read-only mode
+     */
+    public boolean isSchemaEnabled() {
+        return instanceConfig.schema().enabled();
+    }
+
+    /**
+     * Gets the number of minutes to retain in-memory metrics.
+     *
+     * @return minutes to retain in-memory metrics
+     */
+    public int getInMemoryMinutes() {
+        return instanceConfig.schema().inMemoryMinutes();
+    }
 
     // ========================================
     // Section-level checks
@@ -306,6 +333,24 @@ public class FeatureToggleService {
         return isEnterpriseSectionEnabled() && dashboardConfig.enterprise().auditLogEnabled();
     }
 
+    /**
+     * Checks if the Schema Documentation page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isSchemaDocsEnabled() {
+        return isEnterpriseSectionEnabled() && dashboardConfig.enterprise().schemaDocsEnabled();
+    }
+
+    /**
+     * Checks if the Custom Dashboards page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isCustomDashboardsEnabled() {
+        return isEnterpriseSectionEnabled() && dashboardConfig.enterprise().customDashboardsEnabled();
+    }
+
     // ========================================
     // Security Section Pages
     // ========================================
@@ -558,6 +603,8 @@ public class FeatureToggleService {
             case "schema-comparison" -> isSchemaComparisonEnabled();
             case "bookmarks" -> isBookmarksEnabled();
             case "audit-log" -> isAuditLogEnabled();
+            case "schema-docs" -> isSchemaDocsEnabled();
+            case "custom-dashboards" -> isCustomDashboardsEnabled();
             // Security
             case "security" -> isSecurityOverviewEnabled();
             case "security-roles" -> isRolesEnabled();
@@ -634,6 +681,8 @@ public class FeatureToggleService {
         toggles.put("schemaComparison", isSchemaComparisonEnabled());
         toggles.put("bookmarks", isBookmarksEnabled());
         toggles.put("auditLog", isAuditLogEnabled());
+        toggles.put("schemaDocs", isSchemaDocsEnabled());
+        toggles.put("customDashboards", isCustomDashboardsEnabled());
 
         // Security pages
         toggles.put("securityOverview", isSecurityOverviewEnabled());

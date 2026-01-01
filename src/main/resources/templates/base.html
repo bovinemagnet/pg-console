@@ -1440,6 +1440,18 @@
                         <span class="nav-link-text">Audit Log</span>
                     </a>
                     {/if}
+                    {#if toggles.schemaDocs}
+                    <a class="nav-link" href="/schema-docs?instance={currentInstance ?: 'default'}" data-title="Schema Docs">
+                        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                        <span class="nav-link-text">Schema Docs</span>
+                    </a>
+                    {/if}
+                    {#if toggles.customDashboards}
+                    <a class="nav-link" href="/dashboards/custom?instance={currentInstance ?: 'default'}" data-title="Custom Dashboards">
+                        <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Custom Dashboards</span>
+                    </a>
+                    {/if}
                 </div>
             </div>
             {/if}
@@ -1902,6 +1914,86 @@
         })();
 
         // ============================================
+        // Global Keyboard Shortcuts
+        // ============================================
+        (function() {
+            const shortcuts = {
+                'g': { path: '/', label: 'Dashboard' },
+                'a': { path: '/activity', label: 'Activity' },
+                'q': { path: '/slow-queries', label: 'Slow Queries' },
+                'l': { path: '/locks', label: 'Locks' },
+                't': { path: '/tables', label: 'Tables' },
+                'd': { path: '/databases', label: 'Databases' },
+                'i': { path: '/index-advisor', label: 'Index Advisor' },
+                'r': { path: '/replication', label: 'Replication' },
+                'w': { path: '/wait-events', label: 'Wait Events' },
+                'c': { path: '/dashboards/custom', label: 'Custom Dashboards' },
+                'b': { path: '/about', label: 'About' },
+                '/': { action: 'focus-search', label: 'Focus Search' },
+                '?': { action: 'help', label: 'Keyboard Help' },
+                'Escape': { action: 'close-modal', label: 'Close Modal' }
+            };
+
+            // Check if shortcuts are enabled (default: true)
+            const shortcutsEnabled = localStorage.getItem('pg-console-keyboard-shortcuts') !== 'false';
+
+            document.addEventListener('keydown', function(e) {
+                if (!shortcutsEnabled) return;
+
+                // Ignore if typing in form fields
+                const activeTag = document.activeElement.tagName;
+                const isEditable = document.activeElement.isContentEditable;
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || isEditable) {
+                    // Allow Escape to blur input
+                    if (e.key === 'Escape') {
+                        document.activeElement.blur();
+                    }
+                    return;
+                }
+
+                // Ignore if modifier keys pressed (except for ?)
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+                const shortcut = shortcuts[e.key];
+                if (!shortcut) return;
+
+                e.preventDefault();
+
+                if (shortcut.action === 'help') {
+                    const modalEl = document.getElementById('keyboardHelpModal');
+                    if (modalEl) {
+                        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.toggle();
+                    }
+                } else if (shortcut.action === 'close-modal') {
+                    // Close any open Bootstrap modal
+                    const openModal = document.querySelector('.modal.show');
+                    if (openModal) {
+                        const modal = bootstrap.Modal.getInstance(openModal);
+                        if (modal) modal.hide();
+                    }
+                } else if (shortcut.action === 'focus-search') {
+                    // Focus the search input if present
+                    const searchInput = document.querySelector('input[type="search"], input[name="search"], #search');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                } else if (shortcut.path) {
+                    // Navigate, preserving instance query param
+                    const params = new URLSearchParams(window.location.search);
+                    const instanceParam = params.get('instance');
+                    let url = shortcut.path;
+                    if (instanceParam) {
+                        url += '?instance=' + encodeURIComponent(instanceParam);
+                    }
+                    window.location.href = url;
+                    announce('Navigating to ' + shortcut.label);
+                }
+            });
+        })();
+
+        // ============================================
         // Register Service Worker (PWA)
         // ============================================
         if ('serviceWorker' in navigator) {
@@ -1916,5 +2008,65 @@
             });
         }
     </script>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div class="modal fade" id="keyboardHelpModal" tabindex="-1" aria-labelledby="keyboardHelpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="keyboardHelpModalLabel">
+                        <i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">Navigation</h6>
+                            <table class="table table-sm table-borderless mb-3">
+                                <tbody>
+                                    <tr><td><kbd>g</kbd></td><td>Dashboard (Home)</td></tr>
+                                    <tr><td><kbd>a</kbd></td><td>Activity</td></tr>
+                                    <tr><td><kbd>q</kbd></td><td>Slow Queries</td></tr>
+                                    <tr><td><kbd>l</kbd></td><td>Locks</td></tr>
+                                    <tr><td><kbd>t</kbd></td><td>Tables</td></tr>
+                                    <tr><td><kbd>d</kbd></td><td>Databases</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">More Pages</h6>
+                            <table class="table table-sm table-borderless mb-3">
+                                <tbody>
+                                    <tr><td><kbd>i</kbd></td><td>Index Advisor</td></tr>
+                                    <tr><td><kbd>r</kbd></td><td>Replication</td></tr>
+                                    <tr><td><kbd>w</kbd></td><td>Wait Events</td></tr>
+                                    <tr><td><kbd>c</kbd></td><td>Custom Dashboards</td></tr>
+                                    <tr><td><kbd>b</kbd></td><td>About</td></tr>
+                                </tbody>
+                            </table>
+                            <h6 class="text-muted mb-2">Actions</h6>
+                            <table class="table table-sm table-borderless">
+                                <tbody>
+                                    <tr><td><kbd>/</kbd></td><td>Focus Search</td></tr>
+                                    <tr><td><kbd>?</kbd></td><td>Show This Help</td></tr>
+                                    <tr><td><kbd>Esc</kbd></td><td>Close Modal</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <hr>
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Shortcuts are disabled when typing in form fields.
+                        Instance selection is preserved when navigating.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

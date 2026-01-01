@@ -1,0 +1,219 @@
+{#include base}
+{#title}Schema Documentation{/title}
+
+<div id="refreshable-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                <i class="bi bi-file-earmark-text me-2"></i>Schema Documentation
+            </h1>
+            <p class="text-muted mb-0">Generate comprehensive data dictionary from database schema</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-gear me-2"></i>Generation Options
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form action="/schema-docs/generate" method="get" target="_blank">
+                        <input type="hidden" name="instance" value="{instance}">
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="schema" class="form-label">Schema</label>
+                                <select name="schema" id="schema" class="form-select">
+                                    {#for s in schemas}
+                                    <option value="{s}" {#if s == 'public'}selected{/if}>{s}</option>
+                                    {/for}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="format" class="form-label">Output Format</label>
+                                <select name="format" id="format" class="form-select">
+                                    <option value="HTML" selected>HTML (styled, printable)</option>
+                                    <option value="MARKDOWN">Markdown (for Git/docs)</option>
+                                    <option value="ASCIIDOC">AsciiDoc (for Antora)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h6 class="mb-3">Include Objects</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeTables" id="includeTables" value="true" checked>
+                                    <label class="form-check-label" for="includeTables">
+                                        <i class="bi bi-table me-1"></i>Tables
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeViews" id="includeViews" value="true" checked>
+                                    <label class="form-check-label" for="includeViews">
+                                        <i class="bi bi-eye me-1"></i>Views
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeFunctions" id="includeFunctions" value="true" checked>
+                                    <label class="form-check-label" for="includeFunctions">
+                                        <i class="bi bi-code-slash me-1"></i>Functions
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeSequences" id="includeSequences" value="true" checked>
+                                    <label class="form-check-label" for="includeSequences">
+                                        <i class="bi bi-sort-numeric-up me-1"></i>Sequences
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeTypes" id="includeTypes" value="true" checked>
+                                    <label class="form-check-label" for="includeTypes">
+                                        <i class="bi bi-braces me-1"></i>Custom Types
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeExtensions" id="includeExtensions" value="true" checked>
+                                    <label class="form-check-label" for="includeExtensions">
+                                        <i class="bi bi-plug me-1"></i>Extensions
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h6 class="mb-3">Include Details</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeIndexes" id="includeIndexes" value="true" checked>
+                                    <label class="form-check-label" for="includeIndexes">
+                                        <i class="bi bi-lightning me-1"></i>Indexes
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeConstraints" id="includeConstraints" value="true" checked>
+                                    <label class="form-check-label" for="includeConstraints">
+                                        <i class="bi bi-link-45deg me-1"></i>Constraints
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeTriggers" id="includeTriggers" value="true" checked>
+                                    <label class="form-check-label" for="includeTriggers">
+                                        <i class="bi bi-play-circle me-1"></i>Triggers
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="includeComments" id="includeComments" value="true" checked>
+                                    <label class="form-check-label" for="includeComments">
+                                        <i class="bi bi-chat-text me-1"></i>Comments
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-eye me-1"></i>Preview
+                            </button>
+                            <button type="submit" name="download" value="true" class="btn btn-success">
+                                <i class="bi bi-download me-1"></i>Download
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>About
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        Generate comprehensive schema documentation for your PostgreSQL database.
+                        The documentation includes:
+                    </p>
+                    <ul class="mb-3">
+                        <li>Tables with columns, types, and defaults</li>
+                        <li>Primary keys, foreign keys, and constraints</li>
+                        <li>Indexes with columns and types</li>
+                        <li>Views with SQL definitions</li>
+                        <li>Functions with signatures and properties</li>
+                        <li>Custom types (ENUMs, composites, domains)</li>
+                        <li>Sequences with parameters</li>
+                        <li>Comments from pg_description</li>
+                    </ul>
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        <strong>Tip:</strong> Use AsciiDoc format for integration with Antora documentation sites.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-file-earmark-code me-2"></i>Output Formats
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="mb-1"><i class="bi bi-filetype-html me-1"></i>HTML</h6>
+                        <p class="text-muted small mb-0">
+                            Styled, self-contained HTML with table of contents.
+                            Perfect for printing or sharing as a standalone file.
+                        </p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="mb-1"><i class="bi bi-markdown me-1"></i>Markdown</h6>
+                        <p class="text-muted small mb-0">
+                            GitHub-flavoured Markdown for version control,
+                            README files, and wiki pages.
+                        </p>
+                    </div>
+                    <div>
+                        <h6 class="mb-1"><i class="bi bi-file-text me-1"></i>AsciiDoc</h6>
+                        <p class="text-muted small mb-0">
+                            AsciiDoc format with TOC and syntax highlighting.
+                            Ideal for Antora documentation sites.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{/include}

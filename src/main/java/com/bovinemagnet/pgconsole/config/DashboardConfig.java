@@ -371,6 +371,24 @@ public interface DashboardConfig {
         @WithName("audit-log")
         @WithDefault("true")
         boolean auditLogEnabled();
+
+        /**
+         * Enable or disable the Schema Documentation page (/schema-docs).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("schema-docs")
+        @WithDefault("true")
+        boolean schemaDocsEnabled();
+
+        /**
+         * Enable or disable the Custom Dashboards page (/dashboards/custom).
+         *
+         * @return true if page is enabled
+         */
+        @WithName("custom-dashboards")
+        @WithDefault("true")
+        boolean customDashboardsEnabled();
     }
 
     // ========================================

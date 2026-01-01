@@ -121,10 +121,11 @@ Product Specification: Postgres Insight Dashboard
   - HTML report generation with top queries and recommendations
   - Configurable report recipients per instance
   - Quarkus Mailer integration
-- [ ] **Custom Dashboards** (deferred to future phase)
-  - User-defined metric panels
-  - Custom SQL widget support (read-only queries)
-  - Dashboard templates (OLTP, OLAP, mixed workload)
+- [x] **Custom Dashboards** (implemented in Phase 23)
+  - User-defined metric panels at `/dashboards/custom`
+  - 13 built-in widget types (connections, cache ratio, queries, sparklines, etc.)
+  - Custom SQL widget support (read-only SELECT queries only)
+  - Dashboard templates deferred to future phase
 
 ### Phase 8 — Change Data Control & Schema Management ✅ COMPLETE
 - [x] **Logical Replication Management**
@@ -174,7 +175,7 @@ Product Specification: Postgres Insight Dashboard
   - Grouped navigation sections (Monitoring, Analysis, Infrastructure, Data Control, Enterprise, System)
   - Persistent expand/collapse preference in localStorage
   - Mobile bottom navigation bar with "More" button to access full sidebar
-  - [ ] Keyboard shortcuts for navigation (Ctrl+1, Ctrl+2, etc.) - deferred
+  - [x] Keyboard shortcuts for navigation (g, a, q, l, etc.) - DONE (Phase 23)
 - [x] **Mobile-First Responsive Layout**
   - Bottom navigation bar on mobile devices
   - Touch-friendly table interactions (tap to expand rows)
@@ -535,12 +536,12 @@ Product Specification: Postgres Insight Dashboard
   - Sequence diagrams for key workflows
   - Flowcharts for decision processes
   - Diagrams externalised to examples directory
-- [ ] **Schema Documentation** (deferred)
-  - Automated data dictionary generation
-  - Table and column descriptions
+- [x] **Schema Documentation** (implemented in Phase 23)
+  - Automated data dictionary generation at `/schema-docs`
+  - Table and column descriptions from pg_description
   - Foreign key relationship documentation
-  - Index documentation with usage statistics
-  - Export as AsciiDoc tables
+  - Index, view, function, sequence, and type documentation
+  - Export as HTML, Markdown, or AsciiDoc formats
 - [x] **API Documentation**
   - OpenAPI/Swagger specification generation
   - REST endpoint documentation
@@ -660,6 +661,32 @@ Product Specification: Postgres Insight Dashboard
 - [x] **Sparkline Fallback**
   - Sparklines use in-memory data when schema disabled
   - Query-level sparklines show empty (no in-memory storage for query metrics)
+
+### Phase 23 — UI Enhancements & Custom Dashboards ✅ COMPLETE
+- [x] **Keyboard Shortcuts**
+  - Global navigation shortcuts: `g` (Dashboard), `a` (Activity), `q` (Slow Queries), `l` (Locks), `t` (Tables), `d` (Databases), `i` (Index Advisor), `r` (Replication), `w` (Wait Events), `c` (Custom Dashboards), `b` (About)
+  - Action shortcuts: `/` (Focus Search), `?` (Keyboard Help), `Escape` (Close Modal)
+  - Help modal showing all available shortcuts
+  - Shortcuts disabled when typing in form fields
+  - Instance query parameter preserved on navigation
+  - Screen reader announcements for navigation
+  - Configurable via localStorage (default: enabled)
+- [x] **Schema Documentation Generator**
+  - New page `/schema-docs` for generating data dictionary documentation
+  - Multiple output formats: HTML (styled, printable), Markdown (GitHub-flavoured), AsciiDoc (Antora-compatible)
+  - Configurable includes: tables, views, functions, sequences, types, indexes, constraints, triggers, comments, extensions
+  - Preview and download functionality
+  - Feature toggle: `PG_CONSOLE_DASH_ENTERPRISE_SCHEMA_DOCS` (default: true)
+- [x] **Custom Dashboards**
+  - User-defined dashboard layouts at `/dashboards/custom`
+  - Database schema: `pgconsole.custom_dashboard`, `pgconsole.custom_widget` tables (V8 migration)
+  - Available widget types: Connections, Cache Hit Ratio, Active Queries, Blocked Queries, Database Size, Longest Query, Top Tables, Top Indexes, Connection Trend (Sparkline), Query Trend (Sparkline), Transaction Rate, Tuple Statistics, Custom SQL
+  - Dashboard features: name, description, tags, default flag, shared flag
+  - Widget configuration: type, title, position, width (Bootstrap grid 1-12), height
+  - Create/Edit/Delete functionality via HTMX forms
+  - Per-instance storage (requires schema mode)
+  - Feature toggle: `PG_CONSOLE_DASH_ENTERPRISE_CUSTOM_DASHBOARDS` (default: true)
+  - Keyboard shortcut: `c` for quick access
 
 ---
 
@@ -1306,7 +1333,7 @@ Cross-instance comparison views - DONE
 
 Scheduled email reports - DONE
 
-Custom dashboard builder - Deferred to future phase
+Custom dashboard builder - DONE (Phase 23)
 
 Acceptance Criteria:
 
@@ -1844,7 +1871,7 @@ AsciiDoc content for user, admin, and developer guides - DONE
 
 Mermaid diagrams for architecture, ERD, and workflows - DONE
 
-Automated schema documentation (data dictionary) - Deferred
+Automated schema documentation (data dictionary) - DONE (Phase 23)
 
 OpenAPI/Swagger API specification - DONE
 
@@ -1856,13 +1883,13 @@ Documentation modules: user-guide, admin-guide, api-reference, developer-guide -
 
 Mermaid diagrams render in documentation and externalised to examples/ - DONE
 
-Schema documentation auto-generated from database metadata - Deferred
+Schema documentation auto-generated from database metadata - DONE (Phase 23)
 
 OpenAPI spec available at /q/openapi endpoint - DONE
 
 Known Limitations:
 
-Automated schema documentation (data dictionary) deferred to future phase
+Automated schema documentation (data dictionary) - implemented in Phase 23
 
 Documentation Structure:
 
@@ -1997,7 +2024,7 @@ Interactive Live Charts with adjustable refresh and pause/resume - DONE
 
 Enhanced XID Wraparound Monitoring with visual indicators - DONE
 
-Tooltip Drill-downs for quick access to details - Deferred to future phase
+Tooltip Drill-downs for quick access to details - DONE
 
 Acceptance Criteria:
 

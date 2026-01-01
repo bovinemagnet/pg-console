@@ -552,6 +552,260 @@ pg-console uses htmx for dynamic interactions:
 * Auto-refresh and sorting use htmx when available
 * All features accessible via full page loads if JavaScript is disabled
 
+=== Keyboard Shortcuts
+
+pg-console provides keyboard shortcuts for power users to navigate quickly between dashboards.
+
+==== Available Shortcuts
+
+[cols="1,3"]
+|===
+|Key |Action
+
+|kbd:[g]
+|Go to Overview Dashboard
+
+|kbd:[a]
+|Go to Activity Dashboard
+
+|kbd:[q]
+|Go to Slow Queries Dashboard
+
+|kbd:[l]
+|Go to Locks Dashboard
+
+|kbd:[t]
+|Go to Tables Dashboard
+
+|kbd:[d]
+|Go to Databases Dashboard
+
+|kbd:[i]
+|Go to Index Advisor
+
+|kbd:[r]
+|Go to Replication Dashboard
+
+|kbd:[s]
+|Go to Security Dashboard
+
+|kbd:[?]
+|Show keyboard shortcuts help modal
+|===
+
+==== Usage Notes
+
+* Shortcuts are disabled when typing in form fields (input, textarea, select)
+* Modifier keys (Ctrl, Alt, Meta) are ignored to prevent conflicts with browser shortcuts
+* The current instance query parameter is preserved when navigating
+* Screen reader users receive navigation announcements for accessibility
+
+[TIP]
+====
+Press kbd:[?] at any time to display a help modal showing all available keyboard shortcuts.
+====
+
+[[custom-dashboards]]
+== Custom Dashboards
+
+Custom dashboards allow you to create personalised views with selected widgets tailored to your monitoring needs.
+
+[NOTE]
+====
+Custom dashboards require xref:admin-guide:schema-free-mode.adoc[schema mode] to be enabled for persistence. In schema-free mode, dashboards exist only in memory for the current session.
+====
+
+=== Creating a Custom Dashboard
+
+. Navigate to *Enterprise* > *Custom Dashboards* in the sidebar
+. Click *New Dashboard*
+. Enter a name and optional description
+. Select widgets to include from the available widget types
+. Click *Save*
+
+=== Available Widget Types
+
+[cols="1,1,3"]
+|===
+|Widget |Icon |Description
+
+|Connections
+|bi-plug
+|Current connection count with percentage of max
+
+|Cache Hit Ratio
+|bi-speedometer
+|Buffer cache hit ratio percentage
+
+|Active Queries
+|bi-play-circle
+|Count of currently executing queries
+
+|Blocked Queries
+|bi-exclamation-triangle
+|Count of queries waiting on locks
+
+|Database Size
+|bi-hdd
+|Total database size in human-readable format
+
+|Longest Query
+|bi-clock-history
+|Duration of the longest running query
+
+|Top Tables
+|bi-table
+|Top 5 tables by size
+
+|Top Indexes
+|bi-lightning
+|Top 5 indexes by size
+
+|Connection Trend
+|bi-graph-up
+|Sparkline showing connection count over time
+
+|Query Trend
+|bi-graph-up-arrow
+|Sparkline showing active queries over time
+
+|Transaction Rate
+|bi-arrow-repeat
+|Commits and rollbacks per second
+
+|Tuple Statistics
+|bi-list-ol
+|Insert, update, delete, and fetch counts
+
+|Custom Query
+|bi-code-square
+|User-defined read-only SQL query
+|===
+
+=== Custom SQL Widgets
+
+Custom SQL widgets allow you to display results from your own queries:
+
+. Add a "Custom Query" widget to your dashboard
+. Edit the widget configuration
+. Enter a SELECT query
+
+[IMPORTANT]
+====
+Only SELECT statements are permitted. Queries containing INSERT, UPDATE, DELETE, DROP, or other data-modifying statements will be rejected.
+====
+
+=== Managing Dashboards
+
+==== Editing
+
+. Click the *Edit* button on a dashboard
+. Modify the name, description, or widgets
+. Reorder widgets using drag-and-drop
+. Click *Save*
+
+==== Sharing
+
+Dashboards can be marked as *Shared* to make them visible to other users:
+
+. Edit the dashboard
+. Enable the *Shared* checkbox
+. Save the dashboard
+
+==== Default Dashboard
+
+Mark a dashboard as *Default* to have it load automatically when accessing the custom dashboards section.
+
+==== Deleting
+
+. Navigate to the dashboard list
+. Click the *Delete* button on the dashboard to remove
+. Confirm deletion
+
+[WARNING]
+====
+Deleted dashboards cannot be recovered. Ensure you have exported any important configurations before deleting.
+====
+
+[[schema-documentation]]
+== Schema Documentation
+
+The Schema Documentation feature generates comprehensive data dictionaries from your PostgreSQL database schema.
+
+=== Accessing Schema Documentation
+
+Navigate to *Enterprise* > *Schema Docs* in the sidebar.
+
+=== Generating Documentation
+
+. Select the target *Schema* from the dropdown
+. Choose the output *Format*:
+   - *HTML* - Styled, interactive documentation with table of contents
+   - *Markdown* - GitHub-flavoured Markdown for version control
+   - *AsciiDoc* - For Antora integration
+. Configure included elements:
+   - Tables and columns
+   - Views and definitions
+   - Functions and signatures
+   - Sequences
+   - Custom types (ENUM, COMPOSITE)
+   - Indexes
+   - Constraints (PK, FK, UNIQUE, CHECK)
+   - Triggers
+   - Comments from `pg_description`
+   - Extensions
+. Click *Generate* to preview
+. Click *Download* to save the documentation
+
+=== Documentation Contents
+
+Generated documentation includes:
+
+==== Tables
+
+* Table name and schema
+* Column definitions with data types
+* Default values
+* NULL constraints
+* Column comments from database
+
+==== Relationships
+
+* Primary key definitions
+* Foreign key relationships with referenced tables
+* Unique constraints
+
+==== Indexes
+
+* Index name and type (btree, gin, gist, hash, brin)
+* Indexed columns
+* Index definition
+
+==== Views
+
+* View name
+* Column list
+* View definition (SQL)
+
+==== Functions
+
+* Function name and signature
+* Return type
+* Language (SQL, PL/pgSQL, etc.)
+* Function body (when available)
+
+==== Types
+
+* Custom ENUM types with values
+* COMPOSITE type attributes
+
+=== Use Cases
+
+* *Onboarding*: Generate documentation for new team members
+* *Compliance*: Maintain up-to-date data dictionaries for audits
+* *Version Control*: Export Markdown/AsciiDoc for Git repositories
+* *API Documentation*: Reference database schema in API docs
+
 == Next Steps
 
 * Review xref:troubleshooting.adoc[common issues] and solutions

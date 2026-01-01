@@ -1,0 +1,125 @@
+{#include base}
+{#title}Custom Dashboards{/title}
+
+<div id="refreshable-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                <i class="bi bi-grid-1x2 me-2"></i>Custom Dashboards
+            </h1>
+            <p class="text-muted mb-0">Create and manage personalised dashboard layouts</p>
+        </div>
+        <div>
+            {#if schemaEnabled}
+            <a href="/dashboards/custom/new?instance={instance}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>New Dashboard
+            </a>
+            {#else}
+            <button class="btn btn-secondary" disabled title="Requires schema mode">
+                <i class="bi bi-plus-lg me-1"></i>New Dashboard
+            </button>
+            {/if}
+        </div>
+    </div>
+
+    {#if !schemaEnabled}
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Schema-free mode:</strong> Custom dashboards require schema mode to be enabled for persistence.
+        Dashboards are not available in read-only mode.
+    </div>
+    {/if}
+
+    {#if dashboards.isEmpty}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-grid-1x2 display-4 text-muted mb-3"></i>
+            <h4 class="text-muted">No Custom Dashboards</h4>
+            <p class="text-muted mb-4">
+                Create your first custom dashboard to monitor the metrics that matter most to you.
+            </p>
+            {#if schemaEnabled}
+            <a href="/dashboards/custom/new?instance={instance}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>Create Dashboard
+            </a>
+            {/if}
+        </div>
+    </div>
+    {#else}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {#for dashboard in dashboards}
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <a href="/dashboards/custom/{dashboard.id}?instance={instance}" class="text-decoration-none">
+                            {dashboard.name}
+                        </a>
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        {#if dashboard.default}
+                        <span class="badge bg-primary me-1" title="Default dashboard">
+                            <i class="bi bi-star-fill"></i>
+                        </span>
+                        {/if}
+                        {#if dashboard.shared}
+                        <span class="badge bg-success me-1" title="Shared dashboard">
+                            <i class="bi bi-people-fill"></i>
+                        </span>
+                        {/if}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {#if dashboard.description}
+                    <p class="card-text text-muted">{dashboard.description}</p>
+                    {#else}
+                    <p class="card-text text-muted fst-italic">No description</p>
+                    {/if}
+
+                    <div class="d-flex align-items-center text-muted small mb-2">
+                        <i class="bi bi-grid me-1"></i>
+                        {dashboard.widgets.size} widget{#if dashboard.widgets.size != 1}s{/if}
+                    </div>
+
+                    {#if !dashboard.tags.isEmpty}
+                    <div class="mt-2">
+                        {#for tag in dashboard.tags}
+                        <span class="badge bg-secondary me-1">{tag}</span>
+                        {/for}
+                    </div>
+                    {/if}
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        {#if dashboard.createdBy}
+                        Created by {dashboard.createdBy}
+                        {#else}
+                        Created {dashboard.createdAt}
+                        {/if}
+                    </small>
+                    <div class="btn-group btn-group-sm">
+                        <a href="/dashboards/custom/{dashboard.id}?instance={instance}"
+                           class="btn btn-outline-primary" title="View">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="/dashboards/custom/{dashboard.id}/edit?instance={instance}"
+                           class="btn btn-outline-secondary" title="Edit">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" title="Delete"
+                                hx-delete="/dashboards/custom/{dashboard.id}?instance={instance}"
+                                hx-confirm="Are you sure you want to delete '{dashboard.name}'?"
+                                hx-target="closest .col"
+                                hx-swap="outerHTML">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {/for}
+    </div>
+    {/if}
+</div>
+
+{/include}
