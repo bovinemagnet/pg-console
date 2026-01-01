@@ -1,0 +1,136 @@
+{#include base}
+{#title}Notification Channels{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-broadcast me-2"></i>Notification Channels
+        </h1>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createChannelModal">
+            <i class="bi bi-plus-lg me-1"></i>Add Channel
+        </button>
+    </div>
+
+    <!-- Channels Grid -->
+    <div class="row g-3">
+        {#for channel in channels}
+        <div class="col-md-4">
+            <div class="card h-100 {channel.enabled ? '' : 'opacity-50'}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="bi {#switch channel.channelType.name}{#case 'SLACK'}bi-slack{#case 'TEAMS'}bi-microsoft-teams{#case 'DISCORD'}bi-discord{#case 'PAGERDUTY'}bi-telephone{#case 'EMAIL'}bi-envelope{/switch} me-2"></i>
+                        {channel.name}
+                    </span>
+                    <span class="badge bg-{channel.enabled ? 'success' : 'secondary'}">{channel.enabled ? 'Enabled' : 'Disabled'}</span>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        <span class="badge bg-primary">{channel.channelType}</span>
+                        {#if channel.testMode}
+                        <span class="badge bg-warning">Test Mode</span>
+                        {/if}
+                    </p>
+                    {#if channel.severityFilter != null && !channel.severityFilter.isEmpty}
+                    <p class="small text-muted mb-1">
+                        <strong>Severity:</strong> {channel.severityFilter}
+                    </p>
+                    {/if}
+                    {#if channel.alertTypeFilter != null && !channel.alertTypeFilter.isEmpty}
+                    <p class="small text-muted mb-1">
+                        <strong>Types:</strong> {channel.alertTypeFilter}
+                    </p>
+                    {/if}
+                    {#if channel.lastUsedAt != null}
+                    <p class="small text-muted mb-0">
+                        <strong>Last used:</strong> {channel.lastUsedAtFormatted}
+                    </p>
+                    {/if}
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            hx-post="/notifications/api/channels/{channel.id}/test"
+                            hx-swap="none"
+                            hx-indicator="#spinner-{channel.id}">
+                        <span id="spinner-{channel.id}" class="htmx-indicator spinner-border spinner-border-sm"></span>
+                        <i class="bi bi-send me-1"></i>Test
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            hx-delete="/notifications/api/channels/{channel.id}"
+                            hx-confirm="Delete channel '{channel.name}'?">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {#else}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-broadcast display-1 text-muted"></i>
+                    <p class="lead mt-3">No notification channels configured</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createChannelModal">
+                        <i class="bi bi-plus-lg me-1"></i>Add Your First Channel
+                    </button>
+                </div>
+            </div>
+        </div>
+        {/for}
+    </div>
+
+    <!-- Back Navigation -->
+    <div class="mt-4">
+        <a href="/notifications" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Create Channel Modal -->
+<div class="modal fade" id="createChannelModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Notification Channel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="/notifications/api/channels" hx-ext="json-enc">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Channel Name</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Channel Type</label>
+                        <select class="form-select" name="channelType" required>
+                            {#for type in channelTypes}
+                            <option value="{type}">{type}</option>
+                            {/for}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Webhook URL / Configuration</label>
+                        <textarea class="form-control" name="config" rows="3" placeholder="Channel-specific configuration..."></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="enabled" id="channelEnabled" checked>
+                        <label class="form-check-label" for="channelEnabled">Enabled</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="testMode" id="channelTestMode">
+                        <label class="form-check-label" for="channelTestMode">Test Mode (dry run)</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Channel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{/content}
+{/include}

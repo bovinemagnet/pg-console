@@ -1,0 +1,252 @@
+{#include base}
+{#title}Table Partitioning - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/partitions?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Table Partitioning</h1>
+        <p class="text-muted">Partitioned tables, partition sizes, and health status</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Partitioned Tables</span>
+                <h2 class="mb-0">{summary.partitionedTableCount}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Total Partitions</span>
+                <h2 class="mb-0">{summary.totalPartitionCount}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Total Size</span>
+                <h2 class="mb-0">{summary.totalSizeFormatted}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.imbalancedTableCount > 0}bg-warning text-dark{#else}bg-success{/if} mb-2">Health</span>
+                <h4 class="mb-0">
+                    {#if summary.imbalancedTableCount > 0}
+                    {summary.imbalancedTableCount} imbalanced
+                    {#else}
+                    All balanced
+                    {/if}
+                </h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Partitioned Tables Overview -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Partitioned Tables</h5>
+                <span class="badge bg-primary">{partitionedTables.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if partitionedTables.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No partitioned tables found</p>
+                    <small>Consider using partitioning for large tables with time-series or category-based data</small>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th>Strategy</th>
+                                <th class="text-end">Partitions</th>
+                                <th class="text-end">Total Size</th>
+                                <th class="text-end">Total Rows</th>
+                                <th>Partition Key</th>
+                                <th>Health</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for table in partitionedTables}
+                            <tr>
+                                <td><strong>{table.fullName}</strong></td>
+                                <td><span class="badge {table.strategyCssClass}">{table.strategy}</span></td>
+                                <td class="text-end">{table.partitionCount}</td>
+                                <td class="text-end">{table.totalSizeFormatted}</td>
+                                <td class="text-end">{table.totalRowsFormatted}</td>
+                                <td><code class="small">{table.partitionKey}</code></td>
+                                <td>
+                                    {#if table.isImbalanced}
+                                    <span class="badge bg-warning text-dark">Imbalanced</span>
+                                    {#else if table.hasEmptyPartitions}
+                                    <span class="badge bg-info">Empty partitions</span>
+                                    {#else}
+                                    <span class="badge bg-success">Healthy</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Partition Details -->
+{#for table in partitionedTables}
+{#if !table.partitions.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{table.fullName} Partitions</h5>
+                <div>
+                    <span class="badge bg-secondary me-2">{table.strategy}</span>
+                    <span class="badge bg-info">{table.partitions.size} partitions</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Partition</th>
+                                <th>Boundary</th>
+                                <th class="text-end">Size</th>
+                                <th class="text-end">Rows</th>
+                                <th>Size Distribution</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for partition in table.partitions}
+                            <tr class="{#if partition.isOverweight}table-warning{#else if partition.isEmpty}table-secondary{/if}">
+                                <td><strong>{partition.name}</strong></td>
+                                <td><code class="small">{partition.boundaryDisplay}</code></td>
+                                <td class="text-end">{partition.sizeFormatted}</td>
+                                <td class="text-end">{partition.rowCountFormatted}</td>
+                                <td>
+                                    <div class="progress" style="height: 8px; width: 120px;">
+                                        <div class="progress-bar {#if partition.isOverweight}bg-warning{#else}bg-primary{/if}"
+                                             style="width: {partition.sizePercentage}%"></div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {#if partition.isOverweight}
+                                    <span class="badge bg-warning text-dark">Overweight</span>
+                                    {#else if partition.isEmpty}
+                                    <span class="badge bg-secondary">Empty</span>
+                                    {#else}
+                                    <span class="badge bg-success">OK</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+{/for}
+
+<!-- Orphan Partitions -->
+{#if !orphanPartitions.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Orphan Partitions</h5>
+                <span class="badge bg-light text-danger">{orphanPartitions.size}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Partition</th>
+                                <th>Expected Parent</th>
+                                <th class="text-end">Size</th>
+                                <th>Issue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for orphan in orphanPartitions}
+                            <tr class="table-danger">
+                                <td><strong>{orphan.partitionName}</strong></td>
+                                <td><code>{orphan.expectedParent}</code></td>
+                                <td class="text-end">{orphan.sizeFormatted}</td>
+                                <td><small class="text-muted">{orphan.issue}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer small text-muted">
+                Orphan partitions may indicate incomplete DDL operations or migration issues.
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Help Text -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Table Partitioning</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Partition Strategies</h6>
+                        <p class="text-muted small">
+                            <strong>RANGE</strong>: For time-series data (dates, timestamps).<br>
+                            <strong>LIST</strong>: For categorical data (status, region).<br>
+                            <strong>HASH</strong>: For even data distribution.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Partition Balance</h6>
+                        <p class="text-muted small">
+                            Imbalanced partitions (>3x average) can reduce query performance.
+                            Consider splitting large partitions or adjusting boundaries.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Maintenance</h6>
+                        <p class="text-muted small">
+                            Create future partitions proactively for RANGE strategies.
+                            Drop or detach old partitions to manage storage.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

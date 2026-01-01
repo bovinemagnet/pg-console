@@ -1,95 +1,2072 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="PostgreSQL Console - Database monitoring and performance insights">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{title ?: 'PostgreSQL Console'}</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+    <!-- Stylesheets -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- htmx -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Early theme/sidebar/view mode application to prevent flicker -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('pg-console-theme') || 'dark';
+            document.documentElement.setAttribute('data-bs-theme', savedTheme);
+
+            if (localStorage.getItem('pg-console-sidebar-collapsed') === 'true') {
+                document.documentElement.classList.add('sidebar-collapsed');
+            }
+            if (localStorage.getItem('pg-console-compact-view') === 'true') {
+                document.documentElement.classList.add('compact-view');
+            }
+            if (localStorage.getItem('pg-console-high-contrast') === 'true') {
+                document.documentElement.classList.add('high-contrast');
+            }
+        })();
+    </script>
+
     <style>
-        body {
-            padding-top: 60px;
+        /* ============================================
+           CSS Custom Properties
+           ============================================ */
+        :root {
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 70px;
+            --topbar-height: 50px;
+            --transition-speed: 0.3s;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+            --shadow-medium: 0 8px 30px rgba(0, 0, 0, 0.15);
+            --shadow-strong: 0 12px 40px rgba(0, 0, 0, 0.2);
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
         }
+
+        [data-bs-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(0, 0, 0, 0.1);
+        }
+
+        /* ============================================
+           High Contrast Mode
+           ============================================ */
+        .high-contrast {
+            --bs-body-color: #ffffff;
+            --bs-body-bg: #000000;
+            --bs-border-color: #ffffff;
+        }
+
+        .high-contrast [data-bs-theme="light"] {
+            --bs-body-color: #000000;
+            --bs-body-bg: #ffffff;
+            --bs-border-color: #000000;
+        }
+
+        .high-contrast .card,
+        .high-contrast .sidebar,
+        .high-contrast .topbar {
+            border-width: 2px !important;
+        }
+
+        /* ============================================
+           Compact View Mode
+           ============================================ */
+        .compact-view {
+            --topbar-height: 42px;
+        }
+
+        .compact-view .main-content {
+            padding: 1rem;
+        }
+
+        .compact-view .card {
+            margin-bottom: 0.75rem;
+        }
+
+        .compact-view .card-body {
+            padding: 0.75rem;
+        }
+
+        .compact-view table {
+            font-size: 0.8em;
+        }
+
+        .compact-view .nav-link {
+            padding: 0.35rem 0.75rem;
+        }
+
+        .compact-view h1 { font-size: 1.5rem; }
+        .compact-view h2 { font-size: 1.25rem; }
+        .compact-view h3 { font-size: 1.1rem; }
+
+        /* ============================================
+           Base Styles & Animations
+           ============================================ */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            padding: 0;
+            margin: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Smooth transitions for interactive elements */
+        a, button, .btn, .nav-link, .card {
+            transition: all 0.2s ease;
+        }
+
+        /* Focus indicators for accessibility */
+        :focus-visible {
+            outline: 3px solid var(--bs-primary);
+            outline-offset: 2px;
+        }
+
+        .btn:focus-visible,
+        .nav-link:focus-visible {
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.5);
+        }
+
+        /* Skip to main content link */
+        .skip-link {
+            position: absolute;
+            top: -100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bs-primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            z-index: 9999;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .skip-link:focus {
+            top: 1rem;
+        }
+
+        /* ============================================
+           Glassmorphism Cards
+           ============================================ */
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-medium);
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        /* ============================================
+           Loading Skeleton
+           ============================================ */
+        .skeleton {
+            background: linear-gradient(90deg,
+                var(--bs-tertiary-bg) 25%,
+                var(--bs-secondary-bg) 50%,
+                var(--bs-tertiary-bg) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        .skeleton-text {
+            height: 1em;
+            margin-bottom: 0.5em;
+        }
+
+        .skeleton-text:last-child {
+            width: 70%;
+        }
+
+        .skeleton-card {
+            height: 120px;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ============================================
+           Pull to Refresh Indicator
+           ============================================ */
+        .pull-indicator {
+            position: fixed;
+            top: var(--topbar-height);
+            left: 50%;
+            transform: translateX(-50%) translateY(-100%);
+            background: var(--bs-primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            z-index: 1040;
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pull-indicator.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .pull-indicator.refreshing i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ============================================
+           Top Bar
+           ============================================ */
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--topbar-height);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            z-index: 1030;
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            transition: left var(--transition-speed) ease;
+        }
+
+        .topbar-brand {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .topbar-brand:hover {
+            color: var(--bs-primary);
+        }
+
+        .topbar-brand i {
+            font-size: 1.3rem;
+        }
+
+        .topbar-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .topbar-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--bs-border-color);
+            background: transparent;
+            color: var(--bs-body-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .topbar-btn:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-primary);
+            transform: scale(1.05);
+        }
+
+        .topbar-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ============================================
+           Sidebar
+           ============================================ */
+        .sidebar {
+            position: fixed;
+            top: var(--topbar-height);
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-right: 1px solid var(--glass-border);
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 1020;
+            transition: width var(--transition-speed) ease, transform var(--transition-speed) ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Custom scrollbar for sidebar */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--bs-secondary-bg);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: var(--bs-tertiary-color);
+        }
+
+        .sidebar-collapsed .sidebar {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 0.75rem;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1025;
+            transition: transform var(--transition-speed) ease, background 0.2s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--bs-tertiary-bg);
+        }
+
+        .sidebar-collapsed .sidebar-toggle {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-toggle i {
+            font-size: 0.75rem;
+        }
+
+        /* Navigation */
+        .sidebar-nav {
+            padding: 0.5rem;
+            flex: 1;
+        }
+
+        .nav-section {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--bs-secondary-color);
+            padding: 0.75rem 0.75rem 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            transition: opacity var(--transition-speed) ease, height var(--transition-speed) ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            border-radius: var(--radius-sm);
+        }
+
+        .nav-section-title:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-body-color);
+        }
+
+        .nav-section-title .section-chevron {
+            font-size: 0.65rem;
+            transition: transform 0.2s ease;
+            opacity: 0.7;
+        }
+
+        .nav-section.collapsed .nav-section-title .section-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .nav-section-items {
+            overflow: hidden;
+            transition: max-height 0.25s ease-out, opacity 0.2s ease;
+            max-height: 500px;
+            opacity: 1;
+        }
+
+        .nav-section.collapsed .nav-section-items {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .sidebar-collapsed .nav-section-title {
+            opacity: 0;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-collapsed .nav-section-items {
+            max-height: none;
+            opacity: 1;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            white-space: nowrap;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-primary);
+            transform: translateX(2px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, var(--bs-primary), #0a58ca);
+            color: white;
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+        }
+
+        .nav-link i {
+            font-size: 1.1rem;
+            width: 1.5rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-link-text {
+            overflow: hidden;
+            transition: opacity var(--transition-speed) ease, width var(--transition-speed) ease;
+        }
+
+        .sidebar-collapsed .nav-link-text {
+            opacity: 0;
+            width: 0;
+        }
+
+        /* Tooltips for collapsed sidebar */
+        .sidebar-collapsed .nav-link {
+            justify-content: center;
+        }
+
+        .sidebar-collapsed .nav-link::after {
+            content: attr(data-title);
+            position: absolute;
+            left: calc(var(--sidebar-collapsed-width) + 5px);
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
+            z-index: 1050;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .sidebar-collapsed .nav-link:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* ============================================
+           Main Content
+           ============================================ */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--topbar-height);
+            padding: 1.5rem;
+            min-height: calc(100vh - var(--topbar-height));
+            transition: margin-left var(--transition-speed) ease;
+        }
+
+        .sidebar-collapsed .main-content {
+            margin-left: var(--sidebar-collapsed-width);
+        }
+
+        /* ============================================
+           Mobile Bottom Navigation
+           ============================================ */
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid var(--glass-border);
+            z-index: 1030;
+            padding: 0.5rem;
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0));
+        }
+
+        .mobile-nav-items {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .mobile-nav-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem;
+            color: var(--bs-body-color);
+            text-decoration: none;
+            font-size: 0.7rem;
+            border-radius: var(--radius-md);
+            transition: all 0.15s ease;
+            border: none;
+            background: transparent;
+        }
+
+        .mobile-nav-link:hover,
+        .mobile-nav-link.active {
+            color: var(--bs-primary);
+            background: var(--bs-tertiary-bg);
+        }
+
+        .mobile-nav-link i {
+            font-size: 1.25rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        /* ============================================
+           Responsive Tables (Cards on Mobile)
+           ============================================ */
+        @media (max-width: 767.98px) {
+            .table-responsive-cards thead {
+                display: none;
+            }
+
+            .table-responsive-cards tbody tr {
+                display: block;
+                margin-bottom: 1rem;
+                background: var(--glass-bg);
+                border: 1px solid var(--glass-border);
+                border-radius: var(--radius-md);
+                padding: 0.75rem;
+            }
+
+            .table-responsive-cards tbody td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem 0;
+                border: none;
+                border-bottom: 1px solid var(--glass-border);
+            }
+
+            .table-responsive-cards tbody td:last-child {
+                border-bottom: none;
+            }
+
+            .table-responsive-cards tbody td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                font-size: 0.85em;
+                color: var(--bs-secondary-color);
+            }
+        }
+
+        /* ============================================
+           Responsive Breakpoints
+           ============================================ */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: var(--sidebar-width) !important;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .sidebar-collapsed .sidebar {
+                width: var(--sidebar-width) !important;
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+            }
+
+            .mobile-nav {
+                display: block;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .sidebar-toggle {
+                display: none;
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(2px);
+                z-index: 1015;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+
+            .sidebar.show ~ .sidebar-overlay {
+                display: block;
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .topbar-brand span {
+                font-size: 0.95rem;
+            }
+
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+        }
+
+        /* ============================================
+           Existing Utility Styles
+           ============================================ */
         .sparkline {
             vertical-align: middle;
         }
+
         .query-preview {
             font-family: monospace;
             font-size: 0.9em;
             cursor: help;
         }
+
         .query-full {
             display: none;
             position: absolute;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: var(--radius-md);
             padding: 10px;
             max-width: 600px;
             z-index: 1000;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-medium);
             white-space: pre-wrap;
             font-family: monospace;
             font-size: 0.85em;
+            color: var(--bs-body-color);
         }
+
         .query-preview:hover .query-full {
             display: block;
         }
+
         .sortable {
             cursor: pointer;
             user-select: none;
         }
+
         .sortable:hover {
-            background-color: #f8f9fa;
+            background-color: var(--bs-tertiary-bg);
         }
+
         .sort-indicator {
             font-size: 0.7em;
             margin-left: 4px;
         }
+
         .metric-card {
             margin-bottom: 20px;
         }
+
         .blocking {
             color: #dc3545;
             font-weight: bold;
         }
+
         table {
             font-size: 0.9em;
+        }
+
+        .refresh-indicator {
+            font-size: 0.75em;
+            opacity: 0.8;
+        }
+
+        .refresh-paused {
+            color: var(--bs-warning);
+        }
+
+        /* ============================================
+           Micro-animations
+           ============================================ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Badge animations */
+        .badge {
+            transition: transform 0.2s ease;
+        }
+
+        .badge:hover {
+            transform: scale(1.05);
+        }
+
+        /* Button hover effects */
+        .btn {
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* ============================================
+           Screen Reader Only
+           ============================================ */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Live region for screen reader announcements */
+        .sr-announcer {
+            position: absolute;
+            left: -10000px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
+        /* ============================================
+           Drill-Down Tooltips (Phase 21)
+           ============================================ */
+        .drilldown-trigger {
+            position: relative;
+            cursor: help;
+        }
+
+        .drilldown-trigger:hover {
+            background: var(--glass-bg);
+            border-radius: var(--radius-sm);
+        }
+
+        .drilldown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 280px;
+            max-width: 400px;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: var(--radius-md);
+            padding: 0;
+            z-index: 1050;
+            box-shadow: var(--shadow-medium);
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .drilldown-content::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-bottom-color: var(--bs-border-color);
+        }
+
+        .drilldown-content::after {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: var(--bs-body-bg);
+        }
+
+        .drilldown-trigger:hover .drilldown-content,
+        .drilldown-content.htmx-settling,
+        .drilldown-content.show {
+            display: block;
+            opacity: 1;
+        }
+
+        .drilldown-header {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--bs-border-color);
+            background: var(--glass-bg);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .drilldown-body {
+            padding: 0.5rem 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .drilldown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.85rem;
+            transition: background 0.1s ease;
+        }
+
+        .drilldown-item:hover {
+            background: var(--glass-bg);
+        }
+
+        .drilldown-item-label {
+            color: var(--bs-body-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .drilldown-item-value {
+            font-weight: 500;
+            white-space: nowrap;
+            margin-left: 1rem;
+        }
+
+        .drilldown-footer {
+            padding: 0.5rem 0.75rem;
+            border-top: 1px solid var(--bs-border-color);
+            background: var(--glass-bg);
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            font-size: 0.75rem;
+            color: var(--bs-secondary-color);
+        }
+
+        .drilldown-explanation {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            color: var(--bs-secondary-color);
+            border-top: 1px solid var(--bs-border-color);
+            background: var(--glass-bg);
+        }
+
+        .drilldown-explanation i {
+            margin-right: 0.25rem;
+        }
+
+        /* Positioning variants */
+        .drilldown-content.drilldown-left {
+            left: 0;
+            transform: none;
+        }
+
+        .drilldown-content.drilldown-left::before,
+        .drilldown-content.drilldown-left::after {
+            left: 20px;
+            transform: none;
+        }
+
+        .drilldown-content.drilldown-right {
+            left: auto;
+            right: 0;
+            transform: none;
+        }
+
+        .drilldown-content.drilldown-right::before,
+        .drilldown-content.drilldown-right::after {
+            left: auto;
+            right: 20px;
+            transform: none;
+        }
+
+        /* Value colours */
+        .drilldown-value-success { color: var(--bs-success); }
+        .drilldown-value-warning { color: var(--bs-warning); }
+        .drilldown-value-danger { color: var(--bs-danger); }
+        .drilldown-value-info { color: var(--bs-info); }
+
+        /* Loading state */
+        .drilldown-loading {
+            padding: 1rem;
+            text-align: center;
+            color: var(--bs-secondary-color);
+        }
+
+        .drilldown-loading::after {
+            content: '';
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Sparkline in drilldown */
+        .drilldown-sparkline {
+            padding: 0.5rem 0.75rem;
+            text-align: center;
+            border-bottom: 1px solid var(--bs-border-color);
+        }
+
+        .drilldown-sparkline svg {
+            max-width: 100%;
+            height: auto;
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">🐘 PostgreSQL Console</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Dashboard</a>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Screen reader announcements -->
+    <div id="sr-announcer" class="sr-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Pull to refresh indicator -->
+    <div id="pullIndicator" class="pull-indicator" role="status" aria-live="polite">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refreshing...</span>
+    </div>
+
+    <!-- Read-Only Mode Banner (shown when schema is disabled) -->
+    {#if schemaEnabled == false}
+    <div id="readOnlyBanner" class="alert alert-warning alert-dismissible fade show position-fixed w-100 mb-0 rounded-0"
+         role="alert" style="top: 0; z-index: 1040; border-left: 4px solid #ffc107;">
+        <div class="container-fluid d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-eye-fill me-2 fs-5" aria-hidden="true"></i>
+                <span>
+                    <strong>Read-Only Mode</strong> —
+                    Running without pgconsole schema. History, bookmarks, and audit logging unavailable.
+                    <span class="d-none d-md-inline">In-memory trends retained for {inMemoryMinutes ?: 30} minutes.</span>
+                </span>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"
+                    onclick="localStorage.setItem('pg-console-readonly-banner-dismissed', 'true')"></button>
+        </div>
+    </div>
+    <script>
+        // Hide banner if user previously dismissed it
+        (function() {
+            if (localStorage.getItem('pg-console-readonly-banner-dismissed') === 'true') {
+                var banner = document.getElementById('readOnlyBanner');
+                if (banner) banner.style.display = 'none';
+            }
+        })();
+    </script>
+    {/if}
+
+    <!-- Top Bar -->
+    <header class="topbar" role="banner">
+        <button class="topbar-btn mobile-menu-btn me-2" id="mobileMenuBtn"
+                aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar">
+            <i class="bi bi-list fs-5" aria-hidden="true"></i>
+        </button>
+        <a class="topbar-brand" href="/?instance={currentInstance ?: 'default'}" aria-label="PostgreSQL Console home">
+            <i class="bi bi-database text-primary" aria-hidden="true"></i>
+            <span class="d-none d-sm-inline">PostgreSQL Console</span>
+            <span class="d-sm-none">PG Console</span>
+        </a>
+        <div class="topbar-controls">
+            {#if instances != null && instances.size > 1}
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-label="Select database instance">
+                    <i class="bi bi-hdd-stack me-1" aria-hidden="true"></i>
+                    <span class="d-none d-md-inline">{#for inst in instances}{#if inst.name == currentInstance}{inst.displayName}{/if}{/for}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {#for inst in instances}
+                    <li>
+                        <a class="dropdown-item {#if inst.name == currentInstance}active{/if}" href="?instance={inst.name}">
+                            {inst.displayName}
+                            {#if inst.connected}
+                            <span class="badge bg-success ms-2" aria-label="Connected">●</span>
+                            {#else}
+                            <span class="badge bg-danger ms-2" aria-label="Disconnected">●</span>
+                            {/if}
+                        </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/slow-queries">Slow Queries</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/activity">Activity</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/tables">Tables</a>
-                    </li>
+                    {/for}
                 </ul>
             </div>
+            {/if}
+
+            <!-- View Mode Toggle -->
+            <button class="topbar-btn" id="viewModeToggle" title="Toggle compact view" aria-label="Toggle compact view">
+                <i class="bi bi-arrows-collapse" aria-hidden="true"></i>
+            </button>
+
+            <!-- Auto-refresh Dropdown -->
+            <div class="dropdown">
+                <button class="topbar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false" aria-label="Auto-refresh settings">
+                    <span id="refreshIcon"><i class="bi bi-pause-fill" aria-hidden="true"></i></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><h6 class="dropdown-header">Auto-refresh</h6></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="0">Off</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="5">5 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="10">10 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="30">30 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" data-refresh="60">60 seconds</a></li>
+                </ul>
+            </div>
+
+            <!-- High Contrast Toggle -->
+            <button class="topbar-btn d-none d-md-flex" id="contrastToggle" title="Toggle high contrast"
+                    aria-label="Toggle high contrast mode">
+                <i class="bi bi-circle-half" aria-hidden="true"></i>
+            </button>
+
+            <!-- Theme Toggle -->
+            <button class="topbar-btn" id="themeToggle" title="Toggle dark/light theme"
+                    aria-label="Toggle dark or light theme">
+                <span id="themeIcon"><i class="bi bi-moon-fill" aria-hidden="true"></i></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar"
+             role="button" tabindex="0" aria-label="Toggle sidebar">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Primary">
+            <!-- Monitoring Section -->
+            {#if toggles.monitoringSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-monitoring" data-section="monitoring">
+                <div class="nav-section-title" id="nav-monitoring">
+                    <span>Monitoring</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.dashboard}
+                    <a class="nav-link" href="/?instance={currentInstance ?: 'default'}" data-title="Dashboard">
+                        <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Dashboard</span>
+                    </a>
+                    {/if}
+                    {#if toggles.activity}
+                    <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
+                        <i class="bi bi-activity" aria-hidden="true"></i>
+                        <span class="nav-link-text">Activity</span>
+                    </a>
+                    {/if}
+                    {#if toggles.slowQueries}
+                    <a class="nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" data-title="Slow Queries">
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                        <span class="nav-link-text">Slow Queries</span>
+                    </a>
+                    {/if}
+                    {#if toggles.locks}
+                    <a class="nav-link" href="/locks?instance={currentInstance ?: 'default'}" data-title="Locks">
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        <span class="nav-link-text">Locks</span>
+                    </a>
+                    {/if}
+                    {#if toggles.waitEvents}
+                    <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <span class="nav-link-text">Wait Events</span>
+                    </a>
+                    {/if}
+                    {#if toggles.tables}
+                    <a class="nav-link" href="/tables?instance={currentInstance ?: 'default'}" data-title="Tables">
+                        <i class="bi bi-table" aria-hidden="true"></i>
+                        <span class="nav-link-text">Tables</span>
+                    </a>
+                    {/if}
+                    {#if toggles.databases}
+                    <a class="nav-link" href="/databases?instance={currentInstance ?: 'default'}" data-title="Databases">
+                        <i class="bi bi-database" aria-hidden="true"></i>
+                        <span class="nav-link-text">Databases</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Analysis Section -->
+            {#if toggles.analysisSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-analysis" data-section="analysis">
+                <div class="nav-section-title" id="nav-analysis">
+                    <span>Analysis</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.indexAdvisor}
+                    <a class="nav-link" href="/index-advisor?instance={currentInstance ?: 'default'}" data-title="Index Advisor">
+                        <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                        <span class="nav-link-text">Index Advisor</span>
+                    </a>
+                    {/if}
+                    {#if toggles.queryRegressions}
+                    <a class="nav-link" href="/query-regressions?instance={currentInstance ?: 'default'}" data-title="Regressions">
+                        <i class="bi bi-graph-down-arrow" aria-hidden="true"></i>
+                        <span class="nav-link-text">Regressions</span>
+                    </a>
+                    {/if}
+                    {#if toggles.tableMaintenance}
+                    <a class="nav-link" href="/table-maintenance?instance={currentInstance ?: 'default'}" data-title="Maintenance">
+                        <i class="bi bi-wrench" aria-hidden="true"></i>
+                        <span class="nav-link-text">Maintenance</span>
+                    </a>
+                    {/if}
+                    {#if toggles.baselines}
+                    <a class="nav-link" href="/statements-management?instance={currentInstance ?: 'default'}" data-title="Baselines">
+                        <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+                        <span class="nav-link-text">Baselines</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Insights Section -->
+            {#if toggles.insightsSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-insights" data-section="insights">
+                <div class="nav-section-title" id="nav-insights">
+                    <span>Insights</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.insights}
+                    <a class="nav-link" href="/insights?instance={currentInstance ?: 'default'}" data-title="Insights">
+                        <i class="bi bi-stars" aria-hidden="true"></i>
+                        <span class="nav-link-text">Dashboard</span>
+                    </a>
+                    {/if}
+                    {#if toggles.anomalies}
+                    <a class="nav-link" href="/insights/anomalies?instance={currentInstance ?: 'default'}" data-title="Anomalies">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <span class="nav-link-text">Anomalies</span>
+                    </a>
+                    {/if}
+                    {#if toggles.forecasts}
+                    <a class="nav-link" href="/insights/forecasts?instance={currentInstance ?: 'default'}" data-title="Forecasts">
+                        <i class="bi bi-graph-up" aria-hidden="true"></i>
+                        <span class="nav-link-text">Forecasts</span>
+                    </a>
+                    {/if}
+                    {#if toggles.insightsRecommendations}
+                    <a class="nav-link" href="/insights/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                        <i class="bi bi-lightbulb-fill" aria-hidden="true"></i>
+                        <span class="nav-link-text">Recommendations</span>
+                    </a>
+                    {/if}
+                    {#if toggles.runbooks}
+                    <a class="nav-link" href="/insights/runbooks?instance={currentInstance ?: 'default'}" data-title="Runbooks">
+                        <i class="bi bi-journal-code" aria-hidden="true"></i>
+                        <span class="nav-link-text">Runbooks</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Diagnostics Section (Phase 21) -->
+            {#if toggles.diagnosticsSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-diagnostics" data-section="diagnostics">
+                <div class="nav-section-title" id="nav-diagnostics">
+                    <span>Diagnostics</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.pipelineRisk}
+                    <a class="nav-link" href="/diagnostics/pipeline-risk?instance={currentInstance ?: 'default'}" data-title="Pipeline Risk">
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                        <span class="nav-link-text">Pipeline Risk</span>
+                    </a>
+                    {/if}
+                    {#if toggles.toastBloat}
+                    <a class="nav-link" href="/diagnostics/toast-bloat?instance={currentInstance ?: 'default'}" data-title="TOAST Bloat">
+                        <i class="bi bi-box-seam" aria-hidden="true"></i>
+                        <span class="nav-link-text">TOAST Bloat</span>
+                    </a>
+                    {/if}
+                    {#if toggles.indexRedundancy}
+                    <a class="nav-link" href="/diagnostics/index-redundancy?instance={currentInstance ?: 'default'}" data-title="Index Redundancy">
+                        <i class="bi bi-layers" aria-hidden="true"></i>
+                        <span class="nav-link-text">Index Redundancy</span>
+                    </a>
+                    {/if}
+                    {#if toggles.statisticalFreshness}
+                    <a class="nav-link" href="/diagnostics/statistical-freshness?instance={currentInstance ?: 'default'}" data-title="Statistics Freshness">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <span class="nav-link-text">Stats Freshness</span>
+                    </a>
+                    {/if}
+                    {#if toggles.writeReadRatio}
+                    <a class="nav-link" href="/diagnostics/write-read-ratio?instance={currentInstance ?: 'default'}" data-title="Write/Read Ratio">
+                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                        <span class="nav-link-text">Write/Read Ratio</span>
+                    </a>
+                    {/if}
+                    {#if toggles.hotEfficiency}
+                    <a class="nav-link" href="/diagnostics/hot-efficiency?instance={currentInstance ?: 'default'}" data-title="HOT Efficiency">
+                        <i class="bi bi-fire" aria-hidden="true"></i>
+                        <span class="nav-link-text">HOT Efficiency</span>
+                    </a>
+                    {/if}
+                    {#if toggles.correlation}
+                    <a class="nav-link" href="/diagnostics/correlation?instance={currentInstance ?: 'default'}" data-title="Correlation">
+                        <i class="bi bi-sort-numeric-down" aria-hidden="true"></i>
+                        <span class="nav-link-text">Correlation</span>
+                    </a>
+                    {/if}
+                    {#if toggles.liveCharts}
+                    <a class="nav-link" href="/diagnostics/live-charts?instance={currentInstance ?: 'default'}" data-title="Live Charts">
+                        <i class="bi bi-graph-up" aria-hidden="true"></i>
+                        <span class="nav-link-text">Live Charts</span>
+                    </a>
+                    {/if}
+                    {#if toggles.xidWraparound}
+                    <a class="nav-link" href="/diagnostics/xid-wraparound?instance={currentInstance ?: 'default'}" data-title="XID Wraparound">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <span class="nav-link-text">XID Wraparound</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Infrastructure Section -->
+            {#if toggles.infrastructureSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-infra" data-section="infrastructure">
+                <div class="nav-section-title" id="nav-infra">
+                    <span>Infrastructure</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.replication}
+                    <a class="nav-link" href="/replication?instance={currentInstance ?: 'default'}" data-title="Replication">
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                        <span class="nav-link-text">Replication</span>
+                    </a>
+                    {/if}
+                    {#if toggles.infrastructure}
+                    <a class="nav-link" href="/infrastructure?instance={currentInstance ?: 'default'}" data-title="Infrastructure">
+                        <i class="bi bi-server" aria-hidden="true"></i>
+                        <span class="nav-link-text">Infrastructure</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Data Control Section -->
+            {#if toggles.dataControlSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-data" data-section="data-control">
+                <div class="nav-section-title" id="nav-data">
+                    <span>Data Control</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.logicalReplication}
+                    <a class="nav-link" href="/logical-replication?instance={currentInstance ?: 'default'}" data-title="Logical Replication">
+                        <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                        <span class="nav-link-text">Logical Replication</span>
+                    </a>
+                    {/if}
+                    {#if toggles.cdc}
+                    <a class="nav-link" href="/cdc?instance={currentInstance ?: 'default'}" data-title="Change Data Capture">
+                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                        <span class="nav-link-text">Change Data Capture</span>
+                    </a>
+                    {/if}
+                    {#if toggles.dataLineage}
+                    <a class="nav-link" href="/data-lineage?instance={currentInstance ?: 'default'}" data-title="Data Lineage">
+                        <i class="bi bi-bezier2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Data Lineage</span>
+                    </a>
+                    {/if}
+                    {#if toggles.partitions}
+                    <a class="nav-link" href="/partitions?instance={currentInstance ?: 'default'}" data-title="Partitions">
+                        <i class="bi bi-grid-3x3" aria-hidden="true"></i>
+                        <span class="nav-link-text">Partitions</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Enterprise Section -->
+            {#if toggles.enterpriseSection}
+            <div class="nav-section" role="group" aria-labelledby="nav-enterprise" data-section="enterprise">
+                <div class="nav-section-title" id="nav-enterprise">
+                    <span>Enterprise</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.comparison}
+                    <a class="nav-link" href="/comparison?instance={currentInstance ?: 'default'}" data-title="Instance Comparison">
+                        <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+                        <span class="nav-link-text">Comparison</span>
+                    </a>
+                    {/if}
+                    {#if toggles.schemaComparison}
+                    <a class="nav-link" href="/schema-comparison?instance={currentInstance ?: 'default'}" data-title="Schema Comparison">
+                        <i class="bi bi-file-diff" aria-hidden="true"></i>
+                        <span class="nav-link-text">Schema Diff</span>
+                    </a>
+                    {/if}
+                    {#if toggles.bookmarks}
+                    <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
+                        <i class="bi bi-bookmark-star" aria-hidden="true"></i>
+                        <span class="nav-link-text">Bookmarks</span>
+                    </a>
+                    {/if}
+                    {#if toggles.auditLog}
+                    <a class="nav-link" href="/audit-log?instance={currentInstance ?: 'default'}" data-title="Audit Log">
+                        <i class="bi bi-journal-text" aria-hidden="true"></i>
+                        <span class="nav-link-text">Audit Log</span>
+                    </a>
+                    {/if}
+                    {#if toggles.schemaDocs}
+                    <a class="nav-link" href="/schema-docs?instance={currentInstance ?: 'default'}" data-title="Schema Docs">
+                        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                        <span class="nav-link-text">Schema Docs</span>
+                    </a>
+                    {/if}
+                    {#if toggles.customDashboards}
+                    <a class="nav-link" href="/dashboards/custom?instance={currentInstance ?: 'default'}" data-title="Custom Dashboards">
+                        <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Custom Dashboards</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Security Section -->
+            {#if toggles.securitySection}
+            <div class="nav-section" role="group" aria-labelledby="nav-security" data-section="security">
+                <div class="nav-section-title" id="nav-security">
+                    <span>Security</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    {#if toggles.securityOverview}
+                    <a class="nav-link" href="/security?instance={currentInstance ?: 'default'}" data-title="Security Overview">
+                        <i class="bi bi-shield-check" aria-hidden="true"></i>
+                        <span class="nav-link-text">Overview</span>
+                    </a>
+                    {/if}
+                    {#if toggles.roles}
+                    <a class="nav-link" href="/security/roles?instance={currentInstance ?: 'default'}" data-title="Roles & Permissions">
+                        <i class="bi bi-people" aria-hidden="true"></i>
+                        <span class="nav-link-text">Roles</span>
+                    </a>
+                    {/if}
+                    {#if toggles.securityConnections}
+                    <a class="nav-link" href="/security/connections?instance={currentInstance ?: 'default'}" data-title="Connection Security">
+                        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                        <span class="nav-link-text">Connections</span>
+                    </a>
+                    {/if}
+                    {#if toggles.access}
+                    <a class="nav-link" href="/security/access?instance={currentInstance ?: 'default'}" data-title="Data Access">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                        <span class="nav-link-text">Access</span>
+                    </a>
+                    {/if}
+                    {#if toggles.compliance}
+                    <a class="nav-link" href="/security/compliance?instance={currentInstance ?: 'default'}" data-title="Compliance">
+                        <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                        <span class="nav-link-text">Compliance</span>
+                    </a>
+                    {/if}
+                    {#if toggles.securityRecommendations}
+                    <a class="nav-link" href="/security/recommendations?instance={currentInstance ?: 'default'}" data-title="Recommendations">
+                        <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                        <span class="nav-link-text">Recommendations</span>
+                    </a>
+                    {/if}
+                </div>
+            </div>
+            {/if}
+
+            <!-- System Section -->
+            <div class="nav-section" role="group" aria-labelledby="nav-system" data-section="system">
+                <div class="nav-section-title" id="nav-system">
+                    <span>System</span>
+                    <i class="bi bi-chevron-down section-chevron" aria-hidden="true"></i>
+                </div>
+                <div class="nav-section-items">
+                    <a class="nav-link" href="/notifications?instance={currentInstance ?: 'default'}" data-title="Notifications">
+                        <i class="bi bi-bell" aria-hidden="true"></i>
+                        <span class="nav-link-text">Notifications</span>
+                    </a>
+                    <a class="nav-link" href="/about?instance={currentInstance ?: 'default'}" data-title="About">
+                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                        <span class="nav-link-text">About</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav" role="navigation" aria-label="Quick navigation">
+        <div class="mobile-nav-items">
+            {#if toggles.dashboard}
+            <a class="mobile-nav-link" href="/?instance={currentInstance ?: 'default'}" aria-label="Dashboard">
+                <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                <span>Dashboard</span>
+            </a>
+            {/if}
+            {#if toggles.activity}
+            <a class="mobile-nav-link" href="/activity?instance={currentInstance ?: 'default'}" aria-label="Activity">
+                <i class="bi bi-activity" aria-hidden="true"></i>
+                <span>Activity</span>
+            </a>
+            {/if}
+            {#if toggles.slowQueries}
+            <a class="mobile-nav-link" href="/slow-queries?instance={currentInstance ?: 'default'}" aria-label="Slow Queries">
+                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                <span>Queries</span>
+            </a>
+            {/if}
+            {#if toggles.locks}
+            <a class="mobile-nav-link" href="/locks?instance={currentInstance ?: 'default'}" aria-label="Locks">
+                <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                <span>Locks</span>
+            </a>
+            {/if}
+            <button class="mobile-nav-link" id="mobileMoreBtn" aria-label="More navigation options">
+                <i class="bi bi-three-dots" aria-hidden="true"></i>
+                <span>More</span>
+            </button>
         </div>
     </nav>
 
-    <div class="container-fluid">
+    <!-- Main Content -->
+    <main class="main-content" id="main-content" role="main" tabindex="-1">
         {#insert}
             This is the default content
         {/insert}
-    </div>
+    </main>
 
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // ============================================
+        // Screen Reader Announcements
+        // ============================================
+        function announce(message) {
+            const announcer = document.getElementById('sr-announcer');
+            if (announcer) {
+                announcer.textContent = message;
+                setTimeout(() => { announcer.textContent = ''; }, 1000);
+            }
+        }
+
+        // ============================================
+        // Sidebar Toggle
+        // ============================================
+        (function() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMoreBtn = document.getElementById('mobileMoreBtn');
+
+            function toggleSidebarCollapse() {
+                const isCollapsed = document.documentElement.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('pg-console-sidebar-collapsed', isCollapsed);
+                announce(isCollapsed ? 'Sidebar collapsed' : 'Sidebar expanded');
+            }
+
+            function toggleMobileSidebar() {
+                const isShowing = sidebar.classList.toggle('show');
+                mobileMenuBtn.setAttribute('aria-expanded', isShowing);
+                announce(isShowing ? 'Navigation menu opened' : 'Navigation menu closed');
+            }
+
+            function closeMobileSidebar() {
+                sidebar.classList.remove('show');
+                mobileMenuBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            sidebarToggle.addEventListener('click', toggleSidebarCollapse);
+            sidebarToggle.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleSidebarCollapse();
+                }
+            });
+
+            mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            mobileMoreBtn.addEventListener('click', toggleMobileSidebar);
+            sidebarOverlay.addEventListener('click', closeMobileSidebar);
+
+            // Close sidebar on navigation (mobile)
+            sidebar.querySelectorAll('.nav-link').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    if (window.innerWidth < 992) {
+                        closeMobileSidebar();
+                    }
+                });
+            });
+
+            // Highlight active nav link
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(function(link) {
+                const href = link.getAttribute('href');
+                if (href) {
+                    const linkPath = href.split('?')[0];
+                    if (linkPath === currentPath || (currentPath === '/' && linkPath === '/')) {
+                        link.classList.add('active');
+                        link.setAttribute('aria-current', 'page');
+                    }
+                }
+            });
+
+            // Escape key closes mobile sidebar
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && sidebar.classList.contains('show')) {
+                    closeMobileSidebar();
+                }
+            });
+        })();
+
+        // ============================================
+        // Collapsible Navigation Sections
+        // ============================================
+        (function() {
+            const STORAGE_KEY = 'pg-console-nav-collapsed';
+
+            // Load collapsed state from localStorage
+            function getCollapsedSections() {
+                try {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    return stored ? JSON.parse(stored) : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            // Save collapsed state to localStorage
+            function saveCollapsedSections(sections) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+                } catch (e) {
+                    // Ignore storage errors
+                }
+            }
+
+            // Toggle section collapsed state
+            function toggleSection(sectionElement) {
+                const sectionName = sectionElement.getAttribute('data-section');
+                if (!sectionName) return;
+
+                const isCollapsed = sectionElement.classList.toggle('collapsed');
+                const collapsedSections = getCollapsedSections();
+
+                if (isCollapsed) {
+                    if (!collapsedSections.includes(sectionName)) {
+                        collapsedSections.push(sectionName);
+                    }
+                    announce(sectionName + ' section collapsed');
+                } else {
+                    const index = collapsedSections.indexOf(sectionName);
+                    if (index > -1) {
+                        collapsedSections.splice(index, 1);
+                    }
+                    announce(sectionName + ' section expanded');
+                }
+
+                saveCollapsedSections(collapsedSections);
+            }
+
+            // Initialise collapsed sections from localStorage
+            const collapsedSections = getCollapsedSections();
+            document.querySelectorAll('.nav-section[data-section]').forEach(function(section) {
+                const sectionName = section.getAttribute('data-section');
+                if (collapsedSections.includes(sectionName)) {
+                    section.classList.add('collapsed');
+                }
+
+                // Add click handler to section title
+                const title = section.querySelector('.nav-section-title');
+                if (title) {
+                    title.addEventListener('click', function(e) {
+                        // Don't toggle if sidebar is collapsed (icons only mode)
+                        if (document.documentElement.classList.contains('sidebar-collapsed')) {
+                            return;
+                        }
+                        e.preventDefault();
+                        toggleSection(section);
+                    });
+
+                    // Keyboard accessibility
+                    title.setAttribute('tabindex', '0');
+                    title.setAttribute('role', 'button');
+                    title.setAttribute('aria-expanded', !section.classList.contains('collapsed'));
+                    title.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            if (!document.documentElement.classList.contains('sidebar-collapsed')) {
+                                e.preventDefault();
+                                toggleSection(section);
+                                title.setAttribute('aria-expanded', !section.classList.contains('collapsed'));
+                            }
+                        }
+                    });
+                }
+            });
+        })();
+
+        // ============================================
+        // View Mode Toggle (Compact/Comfortable)
+        // ============================================
+        (function() {
+            const viewModeToggle = document.getElementById('viewModeToggle');
+            const icon = viewModeToggle.querySelector('i');
+
+            function updateIcon() {
+                const isCompact = document.documentElement.classList.contains('compact-view');
+                icon.className = isCompact ? 'bi bi-arrows-expand' : 'bi bi-arrows-collapse';
+            }
+
+            updateIcon();
+
+            viewModeToggle.addEventListener('click', function() {
+                const isCompact = document.documentElement.classList.toggle('compact-view');
+                localStorage.setItem('pg-console-compact-view', isCompact);
+                updateIcon();
+                announce(isCompact ? 'Compact view enabled' : 'Comfortable view enabled');
+            });
+        })();
+
+        // ============================================
+        // High Contrast Toggle
+        // ============================================
+        (function() {
+            const contrastToggle = document.getElementById('contrastToggle');
+            if (!contrastToggle) return;
+
+            contrastToggle.addEventListener('click', function() {
+                const isHighContrast = document.documentElement.classList.toggle('high-contrast');
+                localStorage.setItem('pg-console-high-contrast', isHighContrast);
+                announce(isHighContrast ? 'High contrast mode enabled' : 'High contrast mode disabled');
+            });
+        })();
+
+        // ============================================
+        // Theme Toggle
+        // ============================================
+        (function() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+
+            function updateThemeIcon() {
+                const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+                themeIcon.innerHTML = currentTheme === 'dark'
+                    ? '<i class="bi bi-sun-fill" aria-hidden="true"></i>'
+                    : '<i class="bi bi-moon-fill" aria-hidden="true"></i>';
+            }
+
+            updateThemeIcon();
+
+            themeToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem('pg-console-theme', newTheme);
+                updateThemeIcon();
+                announce(newTheme === 'dark' ? 'Dark theme enabled' : 'Light theme enabled');
+            });
+        })();
+
+        // ============================================
+        // Auto-refresh Control
+        // ============================================
+        (function() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            const refreshItems = document.querySelectorAll('[data-refresh]');
+            let countdownTimer = null;
+            let countdown = 0;
+
+            function getRefreshableContent() {
+                return document.getElementById('refreshable-content');
+            }
+
+            function updateRefreshUI(seconds) {
+                if (seconds === 0) {
+                    refreshIcon.innerHTML = '<i class="bi bi-pause-fill" aria-hidden="true"></i>';
+                } else {
+                    refreshIcon.innerHTML = '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i>';
+                }
+            }
+
+            function startCountdown(seconds) {
+                countdown = seconds;
+                if (countdownTimer) clearInterval(countdownTimer);
+                countdownTimer = setInterval(function() {
+                    countdown--;
+                    if (countdown <= 0) {
+                        countdown = seconds;
+                        const content = getRefreshableContent();
+                        if (content) {
+                            htmx.trigger(content, 'refresh');
+                            announce('Dashboard refreshed');
+                        }
+                    }
+                }, 1000);
+            }
+
+            function setRefreshRate(seconds) {
+                localStorage.setItem('pg-console-refresh', seconds);
+                updateRefreshUI(seconds);
+
+                if (countdownTimer) {
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                }
+
+                if (seconds > 0) {
+                    startCountdown(seconds);
+                    announce('Auto-refresh set to ' + seconds + ' seconds');
+                } else {
+                    announce('Auto-refresh disabled');
+                }
+            }
+
+            // Initialise from localStorage
+            const savedRefresh = parseInt(localStorage.getItem('pg-console-refresh') || '0', 10);
+            setRefreshRate(savedRefresh);
+
+            // Handle dropdown clicks
+            refreshItems.forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const seconds = parseInt(this.getAttribute('data-refresh'), 10);
+                    setRefreshRate(seconds);
+                });
+            });
+        })();
+
+        // ============================================
+        // Pull to Refresh (Mobile)
+        // ============================================
+        (function() {
+            if (window.innerWidth >= 992) return;
+
+            const pullIndicator = document.getElementById('pullIndicator');
+            const mainContent = document.getElementById('main-content');
+            let startY = 0;
+            let pulling = false;
+
+            mainContent.addEventListener('touchstart', function(e) {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            mainContent.addEventListener('touchmove', function(e) {
+                if (!pulling) return;
+                const currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+
+                if (diff > 60 && window.scrollY === 0) {
+                    pullIndicator.classList.add('visible');
+                }
+            }, { passive: true });
+
+            mainContent.addEventListener('touchend', function() {
+                if (pullIndicator.classList.contains('visible')) {
+                    pullIndicator.classList.add('refreshing');
+                    const content = document.getElementById('refreshable-content');
+                    if (content) {
+                        htmx.trigger(content, 'refresh');
+                    }
+                    setTimeout(function() {
+                        pullIndicator.classList.remove('visible', 'refreshing');
+                        announce('Page refreshed');
+                    }, 1000);
+                }
+                pulling = false;
+            });
+        })();
+
+        // ============================================
+        // Global Keyboard Shortcuts
+        // ============================================
+        (function() {
+            const shortcuts = {
+                'g': { path: '/', label: 'Dashboard' },
+                'a': { path: '/activity', label: 'Activity' },
+                'q': { path: '/slow-queries', label: 'Slow Queries' },
+                'l': { path: '/locks', label: 'Locks' },
+                't': { path: '/tables', label: 'Tables' },
+                'd': { path: '/databases', label: 'Databases' },
+                'i': { path: '/index-advisor', label: 'Index Advisor' },
+                'r': { path: '/replication', label: 'Replication' },
+                'w': { path: '/wait-events', label: 'Wait Events' },
+                'c': { path: '/dashboards/custom', label: 'Custom Dashboards' },
+                'b': { path: '/about', label: 'About' },
+                '/': { action: 'focus-search', label: 'Focus Search' },
+                '?': { action: 'help', label: 'Keyboard Help' },
+                'Escape': { action: 'close-modal', label: 'Close Modal' }
+            };
+
+            // Check if shortcuts are enabled (default: true)
+            const shortcutsEnabled = localStorage.getItem('pg-console-keyboard-shortcuts') !== 'false';
+
+            document.addEventListener('keydown', function(e) {
+                if (!shortcutsEnabled) return;
+
+                // Ignore if typing in form fields
+                const activeTag = document.activeElement.tagName;
+                const isEditable = document.activeElement.isContentEditable;
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || isEditable) {
+                    // Allow Escape to blur input
+                    if (e.key === 'Escape') {
+                        document.activeElement.blur();
+                    }
+                    return;
+                }
+
+                // Ignore if modifier keys pressed (except for ?)
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+                const shortcut = shortcuts[e.key];
+                if (!shortcut) return;
+
+                e.preventDefault();
+
+                if (shortcut.action === 'help') {
+                    const modalEl = document.getElementById('keyboardHelpModal');
+                    if (modalEl) {
+                        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.toggle();
+                    }
+                } else if (shortcut.action === 'close-modal') {
+                    // Close any open Bootstrap modal
+                    const openModal = document.querySelector('.modal.show');
+                    if (openModal) {
+                        const modal = bootstrap.Modal.getInstance(openModal);
+                        if (modal) modal.hide();
+                    }
+                } else if (shortcut.action === 'focus-search') {
+                    // Focus the search input if present
+                    const searchInput = document.querySelector('input[type="search"], input[name="search"], #search');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                } else if (shortcut.path) {
+                    // Navigate, preserving instance query param
+                    const params = new URLSearchParams(window.location.search);
+                    const instanceParam = params.get('instance');
+                    let url = shortcut.path;
+                    if (instanceParam) {
+                        url += '?instance=' + encodeURIComponent(instanceParam);
+                    }
+                    window.location.href = url;
+                    announce('Navigating to ' + shortcut.label);
+                }
+            });
+        })();
+
+        // ============================================
+        // Register Service Worker (PWA)
+        // ============================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div class="modal fade" id="keyboardHelpModal" tabindex="-1" aria-labelledby="keyboardHelpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="keyboardHelpModalLabel">
+                        <i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">Navigation</h6>
+                            <table class="table table-sm table-borderless mb-3">
+                                <tbody>
+                                    <tr><td><kbd>g</kbd></td><td>Dashboard (Home)</td></tr>
+                                    <tr><td><kbd>a</kbd></td><td>Activity</td></tr>
+                                    <tr><td><kbd>q</kbd></td><td>Slow Queries</td></tr>
+                                    <tr><td><kbd>l</kbd></td><td>Locks</td></tr>
+                                    <tr><td><kbd>t</kbd></td><td>Tables</td></tr>
+                                    <tr><td><kbd>d</kbd></td><td>Databases</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">More Pages</h6>
+                            <table class="table table-sm table-borderless mb-3">
+                                <tbody>
+                                    <tr><td><kbd>i</kbd></td><td>Index Advisor</td></tr>
+                                    <tr><td><kbd>r</kbd></td><td>Replication</td></tr>
+                                    <tr><td><kbd>w</kbd></td><td>Wait Events</td></tr>
+                                    <tr><td><kbd>c</kbd></td><td>Custom Dashboards</td></tr>
+                                    <tr><td><kbd>b</kbd></td><td>About</td></tr>
+                                </tbody>
+                            </table>
+                            <h6 class="text-muted mb-2">Actions</h6>
+                            <table class="table table-sm table-borderless">
+                                <tbody>
+                                    <tr><td><kbd>/</kbd></td><td>Focus Search</td></tr>
+                                    <tr><td><kbd>?</kbd></td><td>Show This Help</td></tr>
+                                    <tr><td><kbd>Esc</kbd></td><td>Close Modal</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <hr>
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Shortcuts are disabled when typing in form fields.
+                        Instance selection is preserved when navigating.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

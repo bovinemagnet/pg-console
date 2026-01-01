@@ -1,0 +1,245 @@
+{#include base}
+{#title}Runbook Execution - PostgreSQL Console{/title}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">
+            <i class="bi bi-journal-code text-success me-2" aria-hidden="true"></i>
+            {execution.runbook.name}
+        </h1>
+        <p class="text-muted mb-0">{execution.runbook.description}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/insights/runbooks?instance={instance}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            Back to Runbooks
+        </a>
+        {#if execution.status.name == 'IN_PROGRESS'}
+        <button class="btn btn-outline-danger"
+                hx-post="/insights/runbooks/execution/{execution.id}/cancel?instance={instance}"
+                hx-swap="none"
+                hx-confirm="Are you sure you want to cancel this runbook execution?"
+                hx-on::after-request="location.reload()">
+            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+            Cancel
+        </button>
+        {/if}
+    </div>
+</div>
+
+<!-- Progress Overview -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-3 text-center border-end">
+                <h6 class="text-muted mb-2">Status</h6>
+                <span class="badge fs-6 {#if execution.status.name == 'COMPLETED'}bg-success{#else if execution.status.name == 'FAILED'}bg-danger{#else if execution.status.name == 'CANCELLED'}bg-secondary{#else}bg-warning text-dark{/if}">
+                    {execution.status}
+                </span>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted mb-2">Progress</h6>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar {#if execution.status.name == 'COMPLETED'}bg-success{#else if execution.status.name == 'FAILED'}bg-danger{#else}bg-primary{/if}"
+                         role="progressbar"
+                         style="width: {execution.progressPercent}%"
+                         aria-valuenow="{execution.progressPercent}" aria-valuemin="0" aria-valuemax="100">
+                        Step {execution.currentStep} of {execution.runbook.steps.size}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center border-start">
+                <h6 class="text-muted mb-2">Duration</h6>
+                <h4 class="mb-0">
+                    {#if execution.completedAt}
+                    {execution.durationMinutes} min
+                    {#else}
+                    In Progress
+                    {/if}
+                </h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Runbook Steps -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list-ol me-2" aria-hidden="true"></i>
+        Execution Steps
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {#for step in execution.runbook.steps}
+            {#let stepNumber = step_index + 1}
+            {#let stepResult = execution.getStepResult(stepNumber)}
+            <div class="list-group-item {#if stepNumber == execution.currentStep && execution.status.name == 'IN_PROGRESS'}bg-primary bg-opacity-10{/if}">
+                <div class="d-flex">
+                    <!-- Step Number/Status Icon -->
+                    <div class="flex-shrink-0 me-3">
+                        {#if stepResult != null && stepResult.status.name == 'COMPLETED'}
+                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center"
+                             style="width: 32px; height: 32px;">
+                            <i class="bi bi-check" aria-hidden="true"></i>
+                        </div>
+                        {#else if stepResult != null && stepResult.status.name == 'SKIPPED'}
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center"
+                             style="width: 32px; height: 32px;">
+                            <i class="bi bi-skip-forward" aria-hidden="true"></i>
+                        </div>
+                        {#else if stepResult != null && stepResult.status.name == 'FAILED'}
+                        <div class="rounded-circle bg-danger text-white d-flex align-items-center justify-content-center"
+                             style="width: 32px; height: 32px;">
+                            <i class="bi bi-x" aria-hidden="true"></i>
+                        </div>
+                        {#else if stepNumber == execution.currentStep && execution.status.name == 'IN_PROGRESS'}
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                             style="width: 32px; height: 32px;">
+                            <span>{stepNumber}</span>
+                        </div>
+                        {#else}
+                        <div class="rounded-circle bg-secondary bg-opacity-25 text-muted d-flex align-items-center justify-content-center"
+                             style="width: 32px; height: 32px;">
+                            <span>{stepNumber}</span>
+                        </div>
+                        {/if}
+                    </div>
+
+                    <!-- Step Content -->
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">{step.title}</h6>
+                                <p class="text-muted mb-2">{step.description}</p>
+
+                                {#if step.actionType.name == 'NAVIGATE'}
+                                <a href="{step.actionValue}?instance={instance}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                                    Open Page
+                                </a>
+                                {#else if step.actionType.name == 'QUERY' || step.actionType.name == 'SQL_TEMPLATE'}
+                                <pre class="bg-dark text-light p-2 rounded mb-2"><code>{step.actionValue}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim())">
+                                    <i class="bi bi-clipboard me-1" aria-hidden="true"></i>
+                                    Copy SQL
+                                </button>
+                                {#else if step.actionType.name == 'DOCUMENTATION'}
+                                <a href="{step.actionValue}" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener">
+                                    <i class="bi bi-book me-1" aria-hidden="true"></i>
+                                    View Documentation
+                                </a>
+                                {/if}
+
+                                {#if step.expectedOutcome}
+                                <div class="mt-2 alert alert-info py-1 px-2 small mb-0">
+                                    <strong>Expected outcome:</strong> {step.expectedOutcome}
+                                </div>
+                                {/if}
+                            </div>
+
+                            <span class="badge bg-light text-dark">{step.actionType}</span>
+                        </div>
+
+                        <!-- Step Result (if completed) -->
+                        {#if stepResult != null}
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small class="text-muted">Completed at:</small>
+                                    <br>
+                                    <small>{stepResult.completedAt}</small>
+                                </div>
+                                {#if stepResult.output}
+                                <div class="col-md-6">
+                                    <small class="text-muted">Output:</small>
+                                    <br>
+                                    <small>{stepResult.output}</small>
+                                </div>
+                                {/if}
+                            </div>
+                        </div>
+                        {/if}
+
+                        <!-- Action Buttons for Current Step -->
+                        {#if stepNumber == execution.currentStep && execution.status.name == 'IN_PROGRESS'}
+                        <div class="mt-3 pt-3 border-top">
+                            <form hx-post="/insights/runbooks/execution/{execution.id}/advance?instance={instance}"
+                                  hx-swap="none"
+                                  hx-on::after-request="location.reload()">
+                                <div class="mb-3">
+                                    <label class="form-label">Step Output (optional)</label>
+                                    <textarea class="form-control" name="output" rows="2"
+                                              placeholder="Record any notes or output from this step..."></textarea>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                                        Complete Step
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary"
+                                            hx-post="/insights/runbooks/execution/{execution.id}/skip?instance={instance}"
+                                            hx-swap="none"
+                                            hx-on::after-request="location.reload()">
+                                        <i class="bi bi-skip-forward me-1" aria-hidden="true"></i>
+                                        Skip Step
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        {/if}
+                    </div>
+                </div>
+            </div>
+            {/let}
+            {/let}
+            {/for}
+        </div>
+    </div>
+</div>
+
+<!-- Execution Details -->
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+        Execution Details
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Started</dt>
+                    <dd class="col-sm-8">{execution.startedAt}</dd>
+
+                    <dt class="col-sm-4">Started By</dt>
+                    <dd class="col-sm-8">{execution.startedBy}</dd>
+
+                    <dt class="col-sm-4">Triggered By</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-secondary">{execution.triggeredBy}</span>
+                    </dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    {#if execution.completedAt}
+                    <dt class="col-sm-4">Completed</dt>
+                    <dd class="col-sm-8">{execution.completedAt}</dd>
+                    {/if}
+
+                    <dt class="col-sm-4">Category</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-secondary">{execution.runbook.category}</span>
+                    </dd>
+
+                    {#if execution.notes}
+                    <dt class="col-sm-4">Notes</dt>
+                    <dd class="col-sm-8">{execution.notes}</dd>
+                    {/if}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{/include}

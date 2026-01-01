@@ -1,0 +1,411 @@
+= Architecture
+Paul Snow
+0.0.0
+:description: Technical architecture of pg-console including stack, design decisions, and request flow
+:keywords: architecture, design, Quarkus, htmx, Qute
+
+This page describes the technical architecture of pg-console, including the technology stack, package structure, key design decisions, and how requests flow through the application layers.
+
+== Technology Stack
+
+pg-console is built on a modern Java stack optimised for developer productivity and runtime efficiency.
+
+=== Core Framework
+
+Quarkus 3.16.3::
+Provides the foundation for the application with supersonic startup time and low memory footprint. Includes built-in support for REST endpoints, dependency injection, scheduled tasks, and GraalVM native compilation.
+
+Java 21::
+Uses the latest LTS version of Java, taking advantage of modern language features including records, pattern matching, text blocks, and virtual threads.
+
+=== Web Layer
+
+Qute Templating Engine::
+Server-side HTML templating integrated with Quarkus. Provides type-safe templates with fast rendering and minimal overhead.
+
+htmx::
+Adds dynamic interactions without requiring a JavaScript build pipeline. Enables partial page updates, AJAX requests, and real-time polling using HTML attributes.
+
+Bootstrap 5::
+Responsive CSS framework loaded from CDN. Provides consistent styling, dark mode support via `data-bs-theme`, and mobile-first responsive design.
+
+=== Data Access
+
+Plain JDBC::
+Direct SQL queries to PostgreSQL system views and custom schemas. Avoids ORM complexity and provides full control over query execution and performance.
+
+HikariCP::
+High-performance JDBC connection pooling (bundled with Quarkus). Manages database connections efficiently with configurable pool sizes.
+
+Flyway::
+Database migration management for creating and versioning the `pgconsole` schema. Automatically runs migrations on application startup.
+
+== Package Structure
+
+The application follows a layered architecture with clear separation of concerns:
+
+[source,text]
+----
+com.bovinemagnet.pgconsole/
+├── model/        # Data Transfer Objects (DTOs)
+├── repository/   # Data Access Layer
+├── resource/     # REST Endpoints (JAX-RS)
+└── service/      # Business Logic
+----
+
+=== Model Layer (`model/`)
+
+Contains immutable data transfer objects (DTOs) that represent domain concepts:
+
+* `Activity` - Current database session and query information
+* `SlowQuery` - Query performance metrics from `pg_stat_statements`
+* `TableStats` - Table-level statistics including size and bloat
+* `LockInfo` - Lock contention and blocking information
+* `BlockingTree` - Hierarchical view of blocking sessions
+* `OverviewStats` - Dashboard summary statistics
+* `DatabaseInfo` - Per-database metrics and metadata
+* `DatabaseMetrics` - Detailed database performance metrics
+* `OverviewHistory` - Historical overview statistics
+* `QueryHistory` - Historical query performance data
+* `AlertHistory` - Historical alert information
+
+Most models are implemented as Java records for immutability and concise syntax.
+
+=== Repository Layer (`repository/`)
+
+Encapsulates all data access logic with a focus on testability and separation of concerns:
+
+`HistoryRepository`::
+Manages storage and retrieval of historical metrics from the `pgconsole` schema. Provides methods for inserting samples, querying time-series data, and purging old records.
+
+NOTE: Direct system view queries are currently handled in the service layer but may be refactored into repository classes in the future.
+
+=== Service Layer (`service/`)
+
+Contains business logic and orchestrates data access:
+
+`PostgresService`::
+Core service for querying PostgreSQL system views (`pg_stat_statements`, `pg_stat_activity`, `pg_locks`, `pg_stat_database`, etc.). Implements allowlist-based sorting to prevent SQL injection.
+
+`SparklineService`::
+Generates SVG sparkline charts from historical time-series data. Produces compact inline graphics for embedding in HTML.
+
+`MetricsSamplerService`::
+Scheduled background service that periodically samples metrics and stores them in the `pgconsole` schema. Includes retention cleanup to automatically purge old data.
+
+=== Resource Layer (`resource/`)
+
+JAX-RS REST endpoints that serve HTML pages and API responses:
+
+`DashboardResource`::
+Primary resource handling all dashboard routes. Returns Qute templates for server-side rendering or JSON fragments for htmx partial updates.
+
+==== Dashboard Routes
+
+The following routes are exposed:
+
+[cols="1,3"]
+|===
+|Route |Description
+
+|`/`
+|Overview dashboard with live widgets (connections, cache hit ratio, top queries)
+
+|`/slow-queries`
+|Query performance analysis from `pg_stat_statements`
+
+|`/slow-queries/{queryId}`
+|Detailed statistics for a specific query
+
+|`/activity`
+|Current database connections and active queries
+
+|`/locks`
+|Lock contention, blocking tree, and idle-in-transaction detection
+
+|`/tables`
+|Table statistics, sizes, and bloat indicators
+
+|`/databases`
+|Per-database metrics comparison
+
+|`/databases/{dbName}`
+|Detailed metrics for a single database
+
+|`/about`
+|Application version and PostgreSQL server information
+
+|`/api/sparkline`
+|SVG sparkline generation endpoint
+|===
+
+== Key Design Decisions
+
+pg-console makes deliberate architectural choices to keep the codebase simple, secure, and maintainable.
+
+=== Server-Side Rendering
+
+*Decision:* All pages are fully rendered on the server using Qute templates.
+
+*Rationale:*
+
+* Works without JavaScript - accessible and resilient
+* No client-side build pipeline required
+* Simpler debugging and development workflow
+* Better SEO and initial page load performance
+* Progressive enhancement via htmx adds interactivity where valuable
+
+*Trade-offs:*
+
+* More server load for rendering (mitigated by Quarkus performance)
+* Requires full page or fragment reload for updates (mitigated by htmx)
+
+=== Plain JDBC over ORM
+
+*Decision:* Use direct JDBC queries instead of JPA/Hibernate.
+
+*Rationale:*
+
+* PostgreSQL system views are read-only and don't map well to ORM models
+* Fine-grained control over query execution and performance
+* Smaller dependency footprint and faster startup time
+* Easier to optimise queries and understand execution plans
+* No impedance mismatch between SQL and object models
+
+*Trade-offs:*
+
+* More boilerplate for mapping result sets to objects
+* Manual SQL query construction (mitigated by careful abstraction)
+
+=== SVG Sparklines
+
+*Decision:* Generate sparklines as inline SVG on the server.
+
+*Rationale:*
+
+* No JavaScript charting library required
+* Fast rendering with minimal overhead
+* Works in all browsers without compatibility concerns
+* Easy to customise styling via CSS
+* Lightweight payloads (< 1KB per sparkline)
+
+*Trade-offs:*
+
+* Less interactive than JavaScript charts (no tooltips, zoom, etc.)
+* Server must generate graphics (negligible performance impact)
+
+=== Allowlist-Based Sorting
+
+*Decision:* Validate all sort column parameters against an allowlist before building SQL queries.
+
+*Rationale:*
+
+* Prevents SQL injection attacks via malicious sort parameters
+* Ensures only valid columns can be used for ordering
+* Simple to implement and audit
+* Performance-neutral
+
+*Implementation:*
+
+[source,java]
+----
+private static final Set<String> ALLOWED_SORT_COLUMNS = Set.of(
+    "query", "calls", "total_time", "mean_time", "rows"
+);
+
+if (!ALLOWED_SORT_COLUMNS.contains(sortBy)) {
+    sortBy = "total_time"; // Safe default
+}
+----
+
+=== Auto-Refresh
+
+*Decision:* Implement client-side polling using htmx and localStorage.
+
+*Rationale:*
+
+* Provides live dashboard updates without WebSockets
+* User controls refresh rate (Off/5s/10s/30s/60s)
+* Preference persists across sessions via localStorage
+* Works with standard HTTP/REST semantics
+* No server-side state required
+
+*Trade-offs:*
+
+* Periodic full page/fragment reloads (mitigated by htmx partial updates)
+* Some unnecessary requests when data hasn't changed
+
+=== Dark Mode
+
+*Decision:* Use Bootstrap's built-in dark mode with `data-bs-theme` attribute.
+
+*Rationale:*
+
+* Leverages Bootstrap's native dark mode support
+* No custom CSS required for dark theme
+* Preference persists via localStorage
+* Instant theme switching without page reload
+
+*Implementation:*
+
+[source,javascript]
+----
+// Set theme on document root
+document.documentElement.setAttribute('data-bs-theme', theme);
+localStorage.setItem('theme', theme);
+----
+
+== Request Flow
+
+Understanding how requests flow through the application layers helps when debugging or adding new features.
+
+=== Architecture Diagram
+
+The following diagram illustrates the component architecture and request flow:
+
+include::example$architecture.mmd[]
+
+=== Typical Request Flow
+
+. *HTTP Request* arrives at `DashboardResource`
+. *Resource* calls appropriate service method (e.g., `PostgresService.getSlowQueries()`)
+. *Service* executes SQL query via JDBC against PostgreSQL
+. *ResultSet* is mapped to model objects (e.g., `SlowQuery` records)
+. *Service* returns list of models to resource
+. *Resource* passes models to Qute template
+. *Template* renders HTML with data
+. *HTTP Response* returns complete HTML page or htmx fragment
+
+=== Auto-Refresh Flow (htmx)
+
+. *HTML page* includes htmx attributes: `hx-get="/activity" hx-trigger="every 10s"`
+. *Browser* automatically polls the endpoint every 10 seconds
+. *Server* returns HTML fragment (not full page)
+. *htmx* swaps the new HTML into the target element
+. *User* sees updated data without full page reload
+
+=== Sparkline Generation Flow
+
+. *Template* includes image tag: `<img src="/api/sparkline?metric=connections&hours=1">`
+. *Request* arrives at `/api/sparkline` endpoint
+. *SparklineService* queries historical data from `HistoryRepository`
+. *Service* calculates min/max values and generates SVG path
+. *SVG* is returned with `Content-Type: image/svg+xml`
+. *Browser* renders inline sparkline graphic
+
+=== Background Sampling Flow
+
+. *Quarkus Scheduler* triggers `MetricsSamplerService` every 60 seconds
+. *Service* queries current metrics via `PostgresService`
+. *Service* inserts samples into `pgconsole.overview_history` via `HistoryRepository`
+. *Daily cleanup job* purges records older than retention period
+. *Sparklines* and historical reports query this data
+
+== Template Organisation
+
+Qute templates are located in `src/main/resources/templates/` and follow a consistent structure.
+
+=== Base Template
+
+`base.html`::
+Shared layout template providing:
+
+* HTML document structure
+* Navigation bar with links to all dashboard pages
+* Dark mode toggle button
+* Auto-refresh dropdown (Off/5s/10s/30s/60s)
+* Bootstrap CSS and htmx script includes
+* Content placeholder for child templates
+
+Child templates extend `base.html` and override the content section.
+
+=== Page Templates
+
+Each dashboard page has a corresponding template:
+
+[cols="1,2"]
+|===
+|Template |Purpose
+
+|`index.html`
+|Overview dashboard with summary widgets and sparklines
+
+|`slowQueries.html`
+|Slow query analysis table with sortable columns
+
+|`queryDetail.html`
+|Detailed statistics for individual query with copy button
+
+|`activity.html`
+|Current sessions, active queries, and connection info
+
+|`locks.html`
+|Lock contention table, blocking tree, and idle transaction warnings
+
+|`tables.html`
+|Table statistics with size, bloat, and vacuum indicators
+
+|`databases.html`
+|Per-database comparison table showing all metrics
+
+|`databaseDetail.html`
+|Detailed view of single database with historical sparklines
+
+|`about.html`
+|Application version, PostgreSQL version, and system information
+|===
+
+=== Template Conventions
+
+All templates follow these conventions:
+
+* Extend `base.html` for consistent layout
+* Use Bootstrap classes for styling (`table`, `card`, `badge`, etc.)
+* Include htmx attributes for dynamic updates where appropriate
+* Provide fallback content when data is empty
+* Use semantic HTML5 elements (`<section>`, `<article>`, `<nav>`)
+* Include accessibility attributes (`aria-label`, `role`, etc.)
+
+=== Template Example
+
+Here's a simplified example showing the structure:
+
+[source,html]
+----
+{#include base}
+  {#title}Slow Queries{/title}
+
+  {#content}
+    <div class="container-fluid">
+      <h1>Slow Queries</h1>
+
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Query</th>
+            <th>Calls</th>
+            <th>Total Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#for query in queries}
+            <tr>
+              <td>{query.queryText}</td>
+              <td>{query.calls}</td>
+              <td>{query.totalTime} ms</td>
+            </tr>
+          {/for}
+        </tbody>
+      </table>
+    </div>
+  {/content}
+{/include}
+----
+
+== Next Steps
+
+Now that you understand the architecture, explore:
+
+* xref:database-schema.adoc[Database Schema] - Learn about the historical data storage
+* xref:testing.adoc[Testing] - Understand the test strategy and coverage
+* xref:admin-guide:configuration.adoc[Configuration] - See available configuration options

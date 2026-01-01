@@ -1,0 +1,136 @@
+{#include base}
+{#title}Wait Events - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/wait-events?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Wait Events</h1>
+        <p class="text-muted">Current session wait states from pg_stat_activity</p>
+    </div>
+</div>
+
+<!-- Summary Cards by Wait Event Type -->
+<div class="row mb-4">
+    {#for summary in typeSummaries}
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {summary.waitEventTypeCssClass} mb-2">{summary.waitEventTypeDisplay}</span>
+                <h2 class="mb-0">{summary.sessionCount}</h2>
+                <small class="text-muted">session{#if summary.sessionCount != 1}s{/if}</small>
+            </div>
+        </div>
+    </div>
+    {/for}
+</div>
+
+<!-- Detailed Wait Events Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detailed Wait Events</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if waitEvents.isEmpty()}
+                <div class="p-4 text-center text-success">
+                    <h4>No Wait Events</h4>
+                    <p class="mb-0">All sessions are currently active or idle without waiting</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Wait Event Type</th>
+                                <th>Wait Event</th>
+                                <th class="text-end">Sessions</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for event in waitEvents}
+                            <tr>
+                                <td>
+                                    <span class="badge {event.waitEventTypeCssClass}">
+                                        {event.waitEventTypeDisplay}
+                                    </span>
+                                </td>
+                                <td><code>{event.waitEvent ?: '(none)'}</code></td>
+                                <td class="text-end">
+                                    <strong>{event.sessionCount}</strong>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {#switch event.waitEventType}
+                                            {#case 'Lock'}Waiting for heavyweight lock: {event.waitEvent}
+                                            {#case 'LWLock'}Waiting for lightweight lock: {event.waitEvent}
+                                            {#case 'IO'}Waiting for I/O: {event.waitEvent}
+                                            {#case 'Activity'}Idle/waiting for activity
+                                            {#case 'Client'}Client communication: {event.waitEvent}
+                                            {#case 'IPC'}Inter-process: {event.waitEvent}
+                                            {#case 'Timeout'}Timeout: {event.waitEvent}
+                                            {#else}{event.waitEvent ?: 'Actively running'}
+                                        {/switch}
+                                    </small>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Wait Event Type Reference -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Wait Event Types Reference</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="mb-0">
+                            <dt><span class="badge bg-success">None (Active)</span></dt>
+                            <dd class="text-muted">Session is actively running a query</dd>
+
+                            <dt><span class="badge bg-light text-dark">Activity</span></dt>
+                            <dd class="text-muted">Session is idle, waiting for client activity</dd>
+
+                            <dt><span class="badge bg-info">IO</span></dt>
+                            <dd class="text-muted">Session is waiting for I/O (disk read/write)</dd>
+
+                            <dt><span class="badge bg-secondary">Client</span></dt>
+                            <dd class="text-muted">Session is waiting for client communication</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="mb-0">
+                            <dt><span class="badge bg-danger">Lock</span></dt>
+                            <dd class="text-muted">Session is waiting for a heavyweight lock</dd>
+
+                            <dt><span class="badge bg-warning text-dark">LWLock</span></dt>
+                            <dd class="text-muted">Session is waiting for a lightweight lock</dd>
+
+                            <dt><span class="badge bg-primary">IPC</span></dt>
+                            <dd class="text-muted">Session is waiting for inter-process communication</dd>
+
+                            <dt><span class="badge bg-primary">Timeout</span></dt>
+                            <dd class="text-muted">Session is waiting for a timeout</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

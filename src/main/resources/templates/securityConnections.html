@@ -1,0 +1,249 @@
+{#include base}
+{#title}Connection Security - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/security/connections?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/security?instance={currentInstance}">Security</a></li>
+                <li class="breadcrumb-item active">Connection Security</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-shield-lock me-2"></i>Connection Security</h1>
+        <p class="text-muted">SSL/TLS status, authentication methods, and pg_hba.conf analysis</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Connections</span>
+                <h2 class="mb-0">{summary.totalConnections}</h2>
+                <small class="text-muted">active sessions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.sslPercentage >= 90}bg-success{#else if summary.sslPercentage >= 50}bg-warning text-dark{#else}bg-danger{/if} mb-2">SSL Usage</span>
+                <h2 class="mb-0">{summary.sslPercentage.intValue()}%</h2>
+                <small class="text-muted">{summary.sslEnabled} of {summary.totalConnections} encrypted</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">External</span>
+                <h2 class="mb-0">{summary.externalConnections}</h2>
+                <small class="text-muted">non-local connections</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.insecureRules > 0}bg-danger{#else}bg-success{/if} mb-2">HBA Rules</span>
+                <h2 class="mb-0">{summary.hbaRuleCount}</h2>
+                <small class="text-muted">{summary.insecureRules} insecure</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Server Settings -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Server Settings</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        SSL Enabled
+                        <span class="badge {#if sslEnabled}bg-success{#else}bg-danger{/if}">{sslEnabled}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Password Encryption
+                        <span class="badge {#if passwordEncryption == 'scram-sha-256'}bg-success{#else}bg-warning text-dark{/if}">{passwordEncryption}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0"><i class="bi bi-key me-2"></i>Authentication Methods</h5>
+            </div>
+            <div class="card-body">
+                {#if authMethods.isEmpty()}
+                <p class="text-muted mb-0">No HBA rules available (requires PostgreSQL 10+)</p>
+                {#else}
+                <ul class="list-group list-group-flush">
+                    {#for method in authMethods.entrySet()}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {method.key}
+                        <span class="badge bg-secondary">{method.value}</span>
+                    </li>
+                    {/for}
+                </ul>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Connections -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-ethernet me-2"></i>Active Connections</h5>
+                <span class="badge bg-primary">{sslConnections.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if sslConnections.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h5>No Active Connections</h5>
+                    <p class="mb-0">No client connections are currently active</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>User</th>
+                                <th>Database</th>
+                                <th>Client Address</th>
+                                <th>Source</th>
+                                <th>SSL Status</th>
+                                <th>Encryption</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for conn in sslConnections}
+                            <tr>
+                                <td><strong>{conn.pid}</strong></td>
+                                <td>{conn.username}</td>
+                                <td><code>{conn.database}</code></td>
+                                <td>{conn.clientAddrDisplay}</td>
+                                <td><span class="badge {conn.connectionSourceCssClass}">{conn.connectionSource}</span></td>
+                                <td><span class="badge {conn.sslStatusCssClass}">{conn.sslStatusBadge}</span></td>
+                                <td>
+                                    {#if conn.ssl}
+                                    <span class="badge {conn.securityLevelCssClass}">{conn.securityLevelBadge}</span>
+                                    <small class="text-muted ms-1">{conn.encryptionDetails}</small>
+                                    {#else}
+                                    <span class="text-muted">-</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- HBA Rules -->
+{#if summary.hbaAvailable}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-code me-2"></i>pg_hba.conf Rules</h5>
+                <span class="badge bg-primary">{hbaRules.size}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Line</th>
+                                <th>Type</th>
+                                <th>Database</th>
+                                <th>User</th>
+                                <th>Address</th>
+                                <th>Auth Method</th>
+                                <th>Security</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for rule in hbaRules}
+                            <tr class="{#if rule.hasError}table-danger{#else if rule.insecure}table-warning{/if}">
+                                <td>{rule.lineNumber}</td>
+                                <td><code>{rule.type}</code></td>
+                                <td>{rule.databasesDisplay}</td>
+                                <td>{rule.usersDisplay}</td>
+                                <td><code>{rule.addressDisplay}</code></td>
+                                <td><span class="badge {rule.authMethodCssClass}">{rule.authMethod}</span></td>
+                                <td>
+                                    {#if rule.hasError}
+                                    <span class="badge bg-danger">Error</span>
+                                    {#else}
+                                    <span class="badge {rule.securityLevelCssClass}">{rule.securityLevel}</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Connection Warnings -->
+{#if !warnings.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm border-start border-4 border-warning">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Security Warnings</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">Severity</th>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Description</th>
+                                <th>Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for warning in warnings}
+                            <tr>
+                                <td><span class="badge {warning.severityCssClass}">{warning.severity.displayName}</span></td>
+                                <td>{warning.typeDisplay}</td>
+                                <td><code>{warning.subject}</code></td>
+                                <td>{warning.description}</td>
+                                <td class="text-muted">{warning.recommendation}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+{/include}

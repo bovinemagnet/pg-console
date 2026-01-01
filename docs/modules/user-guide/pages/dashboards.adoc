@@ -1,0 +1,813 @@
+= Using Dashboards
+Paul Snow
+0.0.0
+:description: Guide to using pg-console dashboards including overview, slow queries, activity, locks, tables, and database metrics
+:keywords: dashboard, monitoring, queries, locks, performance
+
+[abstract]
+This guide provides an overview of all available dashboards in pg-console, including the overview dashboard, slow queries, activity monitoring, lock analysis, table statistics, and per-database metrics.
+
+== Dashboard Navigation
+
+All dashboards are accessible from the navigation bar at the top of the page:
+
+* *Home* - Overview dashboard with key metrics
+* *Slow Queries* - Query performance analysis
+* *Activity* - Current database connections
+* *Locks* - Lock contention and blocking trees
+* *Tables* - Table and index statistics
+* *Databases* - Per-database metrics comparison
+* *About* - System and version information
+
+[[overview-dashboard]]
+== Overview Dashboard
+
+The overview dashboard (`/`) provides a real-time summary of your PostgreSQL instance health.
+
+=== Widgets
+
+==== Active Connections
+
+Displays the current number of active database connections.
+
+* *Metric*: Count from `pg_stat_activity` where state is 'active'
+* *Colour coding*:
+  - Green: Normal activity
+  - Yellow: Elevated connection count (approaching max_connections)
+  - Red: Critical connection count
+
+==== Active Queries
+
+Shows queries currently executing.
+
+* *Metric*: Count of non-idle connections in `pg_stat_activity`
+* Excludes idle connections and background processes
+
+==== Blocked Queries
+
+Highlights queries waiting on locks.
+
+* *Metric*: Count from `pg_stat_activity` where `wait_event_type = 'Lock'`
+* Red indicator when blocked queries detected
+* Click to view xref:#locks-dashboard[Locks dashboard]
+
+==== Cache Hit Ratio
+
+Database buffer cache effectiveness percentage.
+
+* *Formula*: `(cache hits / (cache hits + disk reads)) × 100`
+* *Source*: `pg_stat_database`
+* *Optimal range*: 95% or higher
+* Values below 90% may indicate insufficient `shared_buffers`
+
+==== Database Size
+
+Total size of all monitored databases.
+
+* *Metric*: Sum of `pg_database_size()` for all databases
+* Displayed in human-readable format (MB, GB, TB)
+
+==== Top Tables by Size
+
+Largest tables in the database.
+
+* *Columns*:
+  - Table name
+  - Schema
+  - Total size (table + indexes + TOAST)
+  - Row count estimate
+* Click table name to view detailed statistics
+
+==== Top Indexes by Size
+
+Largest indexes in the database.
+
+* *Columns*:
+  - Index name
+  - Table name
+  - Index size
+  - Index type (btree, gin, gist, etc.)
+
+=== Sparklines
+
+When xref:configuration.adoc#history-sampling[history sampling] is enabled, widgets display SVG sparklines showing trends over the configured retention period:
+
+* *Green line*: Metric within normal range
+* *Orange line*: Metric elevated
+* *Red line*: Metric critical
+
+Hover over sparklines to see approximate values at different time points.
+
+== Slow Queries Dashboard
+
+The slow queries dashboard (`/slow-queries`) analyses query performance using PostgreSQL's `pg_stat_statements` extension.
+
+=== Prerequisites
+
+This dashboard requires the xref:installation.adoc#pg-stat-statements[pg_stat_statements extension] to be enabled.
+
+=== Query List
+
+Displays all tracked queries sorted by total execution time (default).
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Query
+|Normalised query text (parameters replaced with placeholders)
+
+|Calls
+|Number of times the query has been executed
+
+|Total Time
+|Cumulative execution time across all calls
+
+|Mean Time
+|Average execution time per call
+
+|Min Time
+|Fastest execution time
+
+|Max Time
+|Slowest execution time
+
+|Rows
+|Average number of rows returned per call
+|===
+
+=== Sorting
+
+Click any column header to sort by that metric:
+
+* *Total Time*: Find queries consuming the most cumulative time
+* *Mean Time*: Identify individually slow queries
+* *Max Time*: Detect queries with occasional slowness
+* *Calls*: Find most frequently executed queries
+
+The sort order toggles between ascending and descending on repeated clicks.
+
+=== Query Details
+
+Click any query row to view detailed statistics on a dedicated page (`/slow-queries/{queryId}`).
+
+==== Detailed Metrics
+
+* *Execution Statistics*:
+  - Total calls
+  - Total execution time
+  - Mean, minimum, maximum execution time
+  - Standard deviation
+
+* *I/O Statistics*:
+  - Shared blocks hit (cache)
+  - Shared blocks read (disk)
+  - Shared blocks dirtied (writes)
+  - Shared blocks written
+
+* *Row Statistics*:
+  - Total rows returned
+  - Average rows per execution
+
+* *Buffer Statistics*:
+  - Local blocks hit/read/written
+  - Temp blocks read/written
+
+==== Copy Query
+
+The *Copy Query* button copies the full query text to your clipboard for analysis or execution in a SQL client.
+
+=== Resetting Statistics
+
+To reset `pg_stat_statements` data:
+
+[source,sql]
+----
+SELECT pg_stat_statements_reset();
+----
+
+[WARNING]
+====
+Resetting clears all historical query statistics. This operation cannot be undone.
+====
+
+== Activity Dashboard
+
+The activity dashboard (`/activity`) shows current database connections and executing queries in real-time.
+
+=== Connection List
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|PID
+|PostgreSQL backend process ID
+
+|Database
+|Connected database name
+
+|User
+|Database user name
+
+|Application
+|Client application name (from `application_name` parameter)
+
+|State
+|Connection state (active, idle, idle in transaction, etc.)
+
+|Query
+|Currently executing query (truncated)
+
+|Duration
+|How long the current query has been running
+
+|Wait Event
+|What the backend is waiting for (lock, I/O, etc.)
+|===
+
+=== Connection States
+
+* *active* - Currently executing a query
+* *idle* - Connected but not executing a query
+* *idle in transaction* - In a transaction but not executing a query
+* *idle in transaction (aborted)* - Transaction failed but not rolled back
+
+=== Identifying Problems
+
+==== Long-Running Queries
+
+Queries with high duration values may indicate:
+
+* Missing indexes
+* Table locks
+* Inefficient query plans
+* Large data scans
+
+==== Idle in Transaction
+
+Connections in "idle in transaction" state hold locks and prevent vacuum from reclaiming space. These often indicate:
+
+* Application connection pool issues
+* Forgotten transactions in application code
+* Client disconnections without proper cleanup
+
+[TIP]
+====
+Configure `idle_in_transaction_session_timeout` in PostgreSQL to automatically terminate long-idle transactions:
+
+[source,sql]
+----
+ALTER DATABASE myapp SET idle_in_transaction_session_timeout = '10min';
+----
+====
+
+=== Terminating Connections
+
+To terminate a problematic connection from PostgreSQL:
+
+[source,sql]
+----
+-- Graceful termination
+SELECT pg_cancel_backend(PID);
+
+-- Force termination (if cancel doesn't work)
+SELECT pg_terminate_backend(PID);
+----
+
+Replace `PID` with the process ID from the activity dashboard.
+
+[[locks-dashboard]]
+== Locks Dashboard
+
+The locks dashboard (`/locks`) visualises lock contention and blocking relationships.
+
+=== Lock Summary
+
+Overview of current locks grouped by type:
+
+* *AccessShareLock* - `SELECT` queries
+* *RowShareLock* - `SELECT FOR UPDATE/SHARE`
+* *RowExclusiveLock* - `INSERT`, `UPDATE`, `DELETE`
+* *ShareUpdateExclusiveLock* - `VACUUM`, `CREATE INDEX CONCURRENTLY`
+* *ShareLock* - `CREATE INDEX`
+* *ExclusiveLock* - Blocks most operations
+* *AccessExclusiveLock* - `DROP TABLE`, `TRUNCATE`, `ALTER TABLE`
+
+=== Blocking Tree
+
+The blocking tree visualises blocking relationships between queries:
+
+[source,text]
+----
+PID 1234 (GRANTED) - UPDATE accounts SET balance = 100
+  └─ PID 5678 (WAITING) - UPDATE accounts SET balance = 200
+       └─ PID 9012 (WAITING) - SELECT * FROM accounts FOR UPDATE
+----
+
+* *GRANTED* - Lock holder (blocking other queries)
+* *WAITING* - Waiting for lock to be released
+
+=== Resolving Deadlocks
+
+When multiple queries form a circular wait chain:
+
+. Identify the root blocker (top of the blocking tree)
+. Review the blocking query to determine if it's:
+  - A long-running transaction
+  - An idle transaction holding locks
+  - A legitimate operation that needs to complete
+. Consider terminating the blocker using `pg_cancel_backend()` or `pg_terminate_backend()`
+
+[IMPORTANT]
+====
+Terminating a query will roll back its transaction. Ensure this is acceptable before proceeding.
+====
+
+== Tables Dashboard
+
+The tables dashboard (`/tables`) provides statistics on table and index usage.
+
+=== Table Statistics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Table
+|Table name
+
+|Schema
+|Schema name
+
+|Rows
+|Estimated row count
+
+|Size
+|Total size (table + indexes + TOAST)
+
+|Seq Scans
+|Number of sequential scans
+
+|Index Scans
+|Number of index scans
+
+|Inserts
+|Number of rows inserted
+
+|Updates
+|Number of rows updated
+
+|Deletes
+|Number of rows deleted
+
+|Hot Updates
+|Number of HOT (Heap-Only Tuple) updates
+
+|Dead Rows
+|Estimated dead row count
+
+|Last Vacuum
+|Timestamp of last vacuum operation
+
+|Last Autovacuum
+|Timestamp of last autovacuum
+|===
+
+=== Identifying Issues
+
+==== High Dead Row Count
+
+Tables with many dead rows may need tuning:
+
+* Increase `autovacuum_work_mem`
+* Decrease `autovacuum_vacuum_threshold`
+* Run manual `VACUUM` during low-traffic periods
+
+==== Excessive Sequential Scans
+
+Tables with high `seq_scans` relative to `index_scans` may benefit from:
+
+* Adding indexes on frequently queried columns
+* Analysing queries using `EXPLAIN` to identify missing indexes
+
+==== Low HOT Update Ratio
+
+When `hot_updates` is much lower than `updates`, consider:
+
+* Reducing table bloat with `VACUUM FULL` (requires table lock)
+* Increasing `fillfactor` for the table to allow more HOT updates
+
+==== Table Bloat
+
+Bloat occurs when `dead_rows` accumulate faster than vacuum can remove them:
+
+. Check `last_autovacuum` timestamp
+. If vacuum hasn't run recently, check autovacuum settings
+. Consider manual `VACUUM` or `VACUUM FULL` (requires exclusive lock)
+
+=== Index Statistics
+
+View index-specific metrics by scrolling to the index section:
+
+* *Index scans*: Number of times the index was used
+* *Rows read*: Total rows fetched via the index
+* *Size*: Disk space consumed
+
+Unused indexes (zero scans) can be candidates for removal to reduce maintenance overhead.
+
+== Databases Dashboard
+
+The databases dashboard (`/databases`) compares metrics across all monitored databases.
+
+=== Database Metrics
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Database
+|Database name
+
+|Size
+|Total database size
+
+|Connections
+|Current connection count
+
+|Transactions
+|Total committed + rolled back transactions
+
+|Cache Hit Ratio
+|Buffer cache hit percentage
+
+|Blocks Read
+|Disk blocks read
+
+|Blocks Hit
+|Cache blocks hit
+
+|Tuples Returned
+|Rows returned by queries
+
+|Tuples Fetched
+|Rows fetched by queries
+
+|Tuples Inserted
+|Rows inserted
+
+|Tuples Updated
+|Rows updated
+
+|Tuples Deleted
+|Rows deleted
+
+|Conflicts
+|Query conflicts (streaming replication standbys)
+
+|Temp Files
+|Number of temporary files created
+
+|Temp Bytes
+|Temporary file size
+
+|Deadlocks
+|Number of deadlocks detected
+|===
+
+=== Database Detail View
+
+Click any database name to view a detailed dashboard (`/databases/{dbName}`) with:
+
+* Historical sparklines for key metrics (if history sampling enabled)
+* Top queries specific to that database
+* Per-table statistics
+* Connection breakdown by application
+
+=== Filtering Databases
+
+To limit which databases appear in this dashboard, use the xref:configuration.adoc#database-filtering[PG_CONSOLE_DATABASES] environment variable.
+
+== About Dashboard
+
+The about dashboard (`/about`) displays system and version information:
+
+* *Application Version*: pg-console release version
+* *PostgreSQL Version*: Connected server version and build details
+* *pg_stat_statements*: Extension version and status
+* *History Sampling*: Enabled/disabled status
+* *Connection URL*: JDBC URL (password redacted)
+
+Use this page to verify configuration and troubleshoot connection issues.
+
+== Dashboard Features
+
+=== Auto-Refresh
+
+All dashboards support automatic refresh to display real-time data.
+
+To enable auto-refresh:
+
+. Click the *Auto-Refresh* dropdown in the navigation bar
+. Select an interval:
+  - *Off* (default)
+  - *5 seconds*
+  - *10 seconds*
+  - *30 seconds*
+  - *60 seconds*
+
+The selection is persisted in browser `localStorage` and applies to all dashboards.
+
+[NOTE]
+====
+Aggressive auto-refresh intervals (5s, 10s) increase database query load. For production monitoring of high-traffic databases, use 30s or 60s intervals.
+====
+
+=== Dark Mode Toggle
+
+pg-console supports light and dark colour schemes.
+
+To toggle dark mode:
+
+. Click the *Dark Mode* button (moon icon) in the navigation bar
+. The preference is stored in browser `localStorage`
+
+The theme applies to all dashboards and persists across browser sessions.
+
+=== Column Sorting
+
+Dashboards with tabular data support sorting:
+
+. Click a column header to sort by that column
+. Click again to reverse sort order
+. An arrow indicator shows the current sort column and direction
+
+Sorting is implemented server-side with validated allowlists to prevent SQL injection.
+
+=== Progressive Enhancement
+
+pg-console uses htmx for dynamic interactions:
+
+* Works without JavaScript (graceful degradation)
+* Auto-refresh and sorting use htmx when available
+* All features accessible via full page loads if JavaScript is disabled
+
+=== Keyboard Shortcuts
+
+pg-console provides keyboard shortcuts for power users to navigate quickly between dashboards.
+
+==== Available Shortcuts
+
+[cols="1,3"]
+|===
+|Key |Action
+
+|kbd:[g]
+|Go to Overview Dashboard
+
+|kbd:[a]
+|Go to Activity Dashboard
+
+|kbd:[q]
+|Go to Slow Queries Dashboard
+
+|kbd:[l]
+|Go to Locks Dashboard
+
+|kbd:[t]
+|Go to Tables Dashboard
+
+|kbd:[d]
+|Go to Databases Dashboard
+
+|kbd:[i]
+|Go to Index Advisor
+
+|kbd:[r]
+|Go to Replication Dashboard
+
+|kbd:[s]
+|Go to Security Dashboard
+
+|kbd:[?]
+|Show keyboard shortcuts help modal
+|===
+
+==== Usage Notes
+
+* Shortcuts are disabled when typing in form fields (input, textarea, select)
+* Modifier keys (Ctrl, Alt, Meta) are ignored to prevent conflicts with browser shortcuts
+* The current instance query parameter is preserved when navigating
+* Screen reader users receive navigation announcements for accessibility
+
+[TIP]
+====
+Press kbd:[?] at any time to display a help modal showing all available keyboard shortcuts.
+====
+
+[[custom-dashboards]]
+== Custom Dashboards
+
+Custom dashboards allow you to create personalised views with selected widgets tailored to your monitoring needs.
+
+[NOTE]
+====
+Custom dashboards require xref:admin-guide:schema-free-mode.adoc[schema mode] to be enabled for persistence. In schema-free mode, dashboards exist only in memory for the current session.
+====
+
+=== Creating a Custom Dashboard
+
+. Navigate to *Enterprise* > *Custom Dashboards* in the sidebar
+. Click *New Dashboard*
+. Enter a name and optional description
+. Select widgets to include from the available widget types
+. Click *Save*
+
+=== Available Widget Types
+
+[cols="1,1,3"]
+|===
+|Widget |Icon |Description
+
+|Connections
+|bi-plug
+|Current connection count with percentage of max
+
+|Cache Hit Ratio
+|bi-speedometer
+|Buffer cache hit ratio percentage
+
+|Active Queries
+|bi-play-circle
+|Count of currently executing queries
+
+|Blocked Queries
+|bi-exclamation-triangle
+|Count of queries waiting on locks
+
+|Database Size
+|bi-hdd
+|Total database size in human-readable format
+
+|Longest Query
+|bi-clock-history
+|Duration of the longest running query
+
+|Top Tables
+|bi-table
+|Top 5 tables by size
+
+|Top Indexes
+|bi-lightning
+|Top 5 indexes by size
+
+|Connection Trend
+|bi-graph-up
+|Sparkline showing connection count over time
+
+|Query Trend
+|bi-graph-up-arrow
+|Sparkline showing active queries over time
+
+|Transaction Rate
+|bi-arrow-repeat
+|Commits and rollbacks per second
+
+|Tuple Statistics
+|bi-list-ol
+|Insert, update, delete, and fetch counts
+
+|Custom Query
+|bi-code-square
+|User-defined read-only SQL query
+|===
+
+=== Custom SQL Widgets
+
+Custom SQL widgets allow you to display results from your own queries:
+
+. Add a "Custom Query" widget to your dashboard
+. Edit the widget configuration
+. Enter a SELECT query
+
+[IMPORTANT]
+====
+Only SELECT statements are permitted. Queries containing INSERT, UPDATE, DELETE, DROP, or other data-modifying statements will be rejected.
+====
+
+=== Managing Dashboards
+
+==== Editing
+
+. Click the *Edit* button on a dashboard
+. Modify the name, description, or widgets
+. Reorder widgets using drag-and-drop
+. Click *Save*
+
+==== Sharing
+
+Dashboards can be marked as *Shared* to make them visible to other users:
+
+. Edit the dashboard
+. Enable the *Shared* checkbox
+. Save the dashboard
+
+==== Default Dashboard
+
+Mark a dashboard as *Default* to have it load automatically when accessing the custom dashboards section.
+
+==== Deleting
+
+. Navigate to the dashboard list
+. Click the *Delete* button on the dashboard to remove
+. Confirm deletion
+
+[WARNING]
+====
+Deleted dashboards cannot be recovered. Ensure you have exported any important configurations before deleting.
+====
+
+[[schema-documentation]]
+== Schema Documentation
+
+The Schema Documentation feature generates comprehensive data dictionaries from your PostgreSQL database schema.
+
+=== Accessing Schema Documentation
+
+Navigate to *Enterprise* > *Schema Docs* in the sidebar.
+
+=== Generating Documentation
+
+. Select the target *Schema* from the dropdown
+. Choose the output *Format*:
+   - *HTML* - Styled, interactive documentation with table of contents
+   - *Markdown* - GitHub-flavoured Markdown for version control
+   - *AsciiDoc* - For Antora integration
+. Configure included elements:
+   - Tables and columns
+   - Views and definitions
+   - Functions and signatures
+   - Sequences
+   - Custom types (ENUM, COMPOSITE)
+   - Indexes
+   - Constraints (PK, FK, UNIQUE, CHECK)
+   - Triggers
+   - Comments from `pg_description`
+   - Extensions
+. Click *Generate* to preview
+. Click *Download* to save the documentation
+
+=== Documentation Contents
+
+Generated documentation includes:
+
+==== Tables
+
+* Table name and schema
+* Column definitions with data types
+* Default values
+* NULL constraints
+* Column comments from database
+
+==== Relationships
+
+* Primary key definitions
+* Foreign key relationships with referenced tables
+* Unique constraints
+
+==== Indexes
+
+* Index name and type (btree, gin, gist, hash, brin)
+* Indexed columns
+* Index definition
+
+==== Views
+
+* View name
+* Column list
+* View definition (SQL)
+
+==== Functions
+
+* Function name and signature
+* Return type
+* Language (SQL, PL/pgSQL, etc.)
+* Function body (when available)
+
+==== Types
+
+* Custom ENUM types with values
+* COMPOSITE type attributes
+
+=== Use Cases
+
+* *Onboarding*: Generate documentation for new team members
+* *Compliance*: Maintain up-to-date data dictionaries for audits
+* *Version Control*: Export Markdown/AsciiDoc for Git repositories
+* *API Documentation*: Reference database schema in API docs
+
+== Next Steps
+
+* Review xref:troubleshooting.adoc[common issues] and solutions
+* Configure xref:configuration.adoc#history-sampling[history sampling] for trend analysis
+* Explore xref:admin-guide:index.adoc[administration guide] for production deployment

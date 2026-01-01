@@ -1,0 +1,241 @@
+{#include base}
+{#title}Logical Replication - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/logical-replication?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Logical Replication</h1>
+        <p class="text-muted">Publications, subscriptions, and replication origins</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Publications</span>
+                <h2 class="mb-0">{summary.publicationCount}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Subscriptions</span>
+                <h2 class="mb-0">{summary.subscriptionCount}</h2>
+                <small class="text-muted">{summary.enabledSubscriptions} enabled</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Origins</span>
+                <h2 class="mb-0">{summary.originCount}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.hasLogicalReplication}bg-success{#else}bg-warning text-dark{/if} mb-2">Status</span>
+                <h4 class="mb-0">{#if summary.hasLogicalReplication}Active{#else}No Replication{/if}</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Publications -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Publications</h5>
+                <span class="badge bg-primary">{publications.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if publications.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No publications configured</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Owner</th>
+                                <th>Tables</th>
+                                <th>Actions</th>
+                                <th>All Tables</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for pub in publications}
+                            <tr>
+                                <td><strong>{pub.name}</strong></td>
+                                <td><small class="text-muted">{pub.owner}</small></td>
+                                <td><span class="badge bg-info">{pub.tableCount}</span></td>
+                                <td><code class="small">{pub.actionsDisplay}</code></td>
+                                <td>
+                                    {#if pub.allTables}
+                                    <span class="badge bg-warning text-dark">ALL TABLES</span>
+                                    {#else}
+                                    <span class="badge bg-secondary">Specific</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscriptions -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Subscriptions</h5>
+                <span class="badge bg-info">{subscriptions.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if subscriptions.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No subscriptions configured</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Publications</th>
+                                <th>Slot</th>
+                                <th>Tables</th>
+                                <th>Connection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for sub in subscriptions}
+                            <tr>
+                                <td><strong>{sub.name}</strong></td>
+                                <td>
+                                    <span class="badge {sub.statusCssClass}">
+                                        {#if sub.enabled}Enabled{#else}Disabled{/if}
+                                    </span>
+                                </td>
+                                <td><code class="small">{sub.publicationsDisplay}</code></td>
+                                <td><code class="small">{sub.slotName}</code></td>
+                                <td><span class="badge bg-info">{sub.tableCount}</span></td>
+                                <td><small class="text-muted text-truncate d-inline-block" style="max-width: 200px;">{sub.connectionInfo}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Replication Origins -->
+{#if !origins.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Replication Origins</h5>
+                <span class="badge bg-secondary">{origins.size}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Remote LSN</th>
+                                <th>Local LSN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for origin in origins}
+                            <tr>
+                                <td>{origin.id}</td>
+                                <td><strong>{origin.name}</strong></td>
+                                <td><code class="small">{origin.remoteLsn ?: '-'}</code></td>
+                                <td><code class="small">{origin.localLsn ?: '-'}</code></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Subscription Stats -->
+{#if !subscriptionStats.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Subscription Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subscription</th>
+                                <th>Apply Errors</th>
+                                <th>Sync Errors</th>
+                                <th>Received LSN</th>
+                                <th>Latest LSN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for stat in subscriptionStats}
+                            <tr class="{#if stat.hasErrors}table-danger{/if}">
+                                <td><strong>{stat.name}</strong></td>
+                                <td>
+                                    {#if stat.applyErrorCount > 0}
+                                    <span class="text-danger">{stat.applyErrorCount}</span>
+                                    {#else}
+                                    0
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#if stat.syncErrorCount > 0}
+                                    <span class="text-danger">{stat.syncErrorCount}</span>
+                                    {#else}
+                                    0
+                                    {/if}
+                                </td>
+                                <td><code class="small">{stat.receivedLsn ?: '-'}</code></td>
+                                <td><code class="small">{stat.latestEndLsn ?: '-'}</code></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

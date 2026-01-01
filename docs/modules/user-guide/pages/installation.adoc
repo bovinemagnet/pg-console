@@ -1,0 +1,273 @@
+= Installation
+Paul Snow
+0.0.0
+:description: Installation instructions for pg-console including prerequisites, PostgreSQL extension setup, and building from source
+:keywords: installation, setup, prerequisites, pg_stat_statements
+
+[abstract]
+This guide covers the installation of pg-console, including system prerequisites, enabling required PostgreSQL extensions, and building the application from source.
+
+== Prerequisites
+
+Before installing pg-console, ensure your environment meets the following requirements:
+
+=== Java Runtime
+
+pg-console requires Java {java-version} or later.
+
+To verify your Java version:
+
+[source,bash]
+----
+java -version
+----
+
+The output should show version {java-version} or higher:
+
+[source,console]
+----
+openjdk version "21.0.1" 2023-10-17
+----
+
+If you need to install Java 21:
+
+* *Linux (Ubuntu/Debian)*: `sudo apt install openjdk-21-jre`
+* *Linux (RHEL/Fedora)*: `sudo dnf install java-21-openjdk`
+* *macOS*: `brew install openjdk@21`
+* *Windows*: Download from https://adoptium.net/[Eclipse Temurin]
+
+=== PostgreSQL Database
+
+pg-console supports PostgreSQL 12 and later versions. The following features require specific PostgreSQL components:
+
+* *Query Performance Monitoring* - Requires `pg_stat_statements` extension
+* *Lock Analysis* - Uses built-in `pg_locks` system view (always available)
+* *Table Statistics* - Uses `pg_stat_user_tables` and `pg_statio_user_tables` (always available)
+
+=== Database Permissions
+
+The database user configured for pg-console must have:
+
+* `CONNECT` privilege on monitored databases
+* `SELECT` privilege on system views (`pg_stat_statements`, `pg_stat_activity`, `pg_locks`, etc.)
+* `CREATE` privilege on the target database (for history schema creation, if history sampling is enabled)
+
+For production deployments, see xref:admin-guide:security.adoc#database-permissions[Database Permissions] in the Administration Guide.
+
+[[pg-stat-statements]]
+== Enabling pg_stat_statements
+
+The `pg_stat_statements` extension tracks query execution statistics and is essential for pg-console's slow query analysis features.
+
+=== Installation
+
+The extension is typically included with PostgreSQL but may require separate installation:
+
+* *Ubuntu/Debian*: `sudo apt install postgresql-contrib`
+* *RHEL/Fedora*: `sudo dnf install postgresql-contrib`
+* *macOS (Homebrew)*: Included with PostgreSQL installation
+
+=== Configuration
+
+. Edit your PostgreSQL configuration file (`postgresql.conf`):
++
+[source,ini]
+----
+shared_preload_libraries = 'pg_stat_statements'
+----
++
+[TIP]
+====
+If you have other extensions in `shared_preload_libraries`, separate them with commas:
+[source,ini]
+----
+shared_preload_libraries = 'pg_stat_statements,auth_delay,auto_explain'
+----
+====
+
+. Restart PostgreSQL to load the extension:
++
+[source,bash]
+----
+sudo systemctl restart postgresql
+----
+
+. Connect to each database you want to monitor and create the extension:
++
+[source,sql]
+----
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+----
+
+. Verify the extension is active:
++
+[source,sql]
+----
+SELECT * FROM pg_stat_statements LIMIT 1;
+----
++
+If successful, you'll see query statistics output.
+
+[WARNING]
+====
+Changes to `shared_preload_libraries` require a PostgreSQL restart, not just a reload. Plan this change during a maintenance window for production systems.
+====
+
+=== Optional Configuration
+
+You can tune `pg_stat_statements` behaviour in `postgresql.conf`:
+
+[source,ini]
+----
+pg_stat_statements.max = 10000          # Maximum number of statements tracked
+pg_stat_statements.track = all          # Track all statements (top, all, none)
+pg_stat_statements.track_utility = on   # Track utility statements (CREATE, DROP, etc.)
+----
+
+After making changes, reload PostgreSQL configuration:
+
+[source,bash]
+----
+sudo systemctl reload postgresql
+----
+
+== Download Options
+
+=== Pre-built JAR (Recommended)
+
+Download the latest release from the https://github.com/{github-repo}/releases[GitHub Releases page]:
+
+[source,bash]
+----
+wget https://github.com/{github-repo}/releases/latest/download/pg-console-runner.jar
+----
+
+Run the application:
+
+[source,bash]
+----
+java -jar pg-console-runner.jar
+----
+
+=== Docker Container
+
+Pull and run the official Docker image:
+
+[source,bash]
+----
+docker pull ghcr.io/bovinemagnet/pg-console:latest
+docker run -p 8080:8080 \
+  -e POSTGRES_URL=jdbc:postgresql://host.docker.internal:5432/postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  ghcr.io/bovinemagnet/pg-console:latest
+----
+
+[NOTE]
+====
+On Linux, use `--network host` or replace `host.docker.internal` with your PostgreSQL server's IP address.
+====
+
+== Building from Source
+
+To build pg-console from source, you'll need:
+
+* Java {java-version} JDK (not just JRE)
+* Git
+
+=== Clone the Repository
+
+[source,bash]
+----
+git clone https://github.com/{github-repo}.git
+cd pg-console
+----
+
+=== Build the Application
+
+Build the production JAR using Gradle wrapper:
+
+[source,bash]
+----
+gradle21w clean build
+----
+
+The built JAR will be located at:
+
+----
+build/quarkus-app/quarkus-run.jar
+----
+
+=== Run the Application
+
+[source,bash]
+----
+java -jar build/quarkus-app/quarkus-run.jar
+----
+
+=== Development Mode (Optional)
+
+For development with live reload:
+
+[source,bash]
+----
+gradle21w quarkusDev
+----
+
+Changes to Java code and templates will automatically reload without restarting the application.
+
+== Native Executable (Advanced)
+
+For faster startup and lower memory footprint, build a native executable using GraalVM:
+
+=== Prerequisites
+
+* GraalVM {java-version} or later
+* Native image tooling installed:
++
+[source,bash]
+----
+gu install native-image
+----
+
+=== Build Native Executable
+
+[source,bash]
+----
+gradle21w build -Dquarkus.package.type=native
+----
+
+The native executable will be located at:
+
+----
+build/pg-console-{project-version}-runner
+----
+
+Run the native executable:
+
+[source,bash]
+----
+./build/pg-console-{project-version}-runner
+----
+
+[IMPORTANT]
+====
+Native executables are platform-specific. Build on the same OS and architecture where you plan to deploy.
+====
+
+== Verification
+
+After installation, verify pg-console is running:
+
+. Access the dashboard at http://localhost:8080
+. You should see the overview dashboard with database metrics
+. Check the xref:dashboards.adoc#overview-dashboard[Overview Dashboard] section for details on available widgets
+
+If you encounter issues, see the xref:troubleshooting.adoc[Troubleshooting] guide.
+
+== Next Steps
+
+* xref:configuration.adoc[Configure database connections] and filtering options
+* Review xref:configuration.adoc#history-sampling[history sampling settings] to enable historical metrics
+* Explore the xref:dashboards.adoc[available dashboards] and features
+* For production deployments, see xref:admin-guide:index.adoc[Administration Guide]

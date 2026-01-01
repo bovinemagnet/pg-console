@@ -1,0 +1,831 @@
+= Security Configuration
+Paul Snow
+0.0.0
+:description: Security configuration for pg-console including authentication, database permissions, and network security
+:keywords: security, authentication, authorisation, permissions, postgresql, ssl, tls, monitoring
+
+This guide explains how to secure your pg-console deployment, including application authentication, database permissions, and network security best practices.
+
+== Overview
+
+pg-console provides multiple layers of security:
+
+* **Application Authentication** - Control access to the web interface using HTTP Basic authentication or reverse proxy integration
+* **Role-Based Authorisation** - Restrict dangerous operations (cancel/terminate queries) to admin users
+* **Database Permissions** - Minimal PostgreSQL permissions for read-only monitoring with optional elevated permissions for admin actions
+* **Network Security** - SSL/TLS for database connections and firewall configuration
+* **Audit Logging** - Track user actions and security events
+
+[#authentication]
+== Authentication
+
+By default, pg-console runs without authentication, which is suitable for development environments only. For production deployments, enable authentication to protect access to the dashboard.
+
+=== Enabling Security
+
+Enable authentication via environment variable or configuration property:
+
+[source,bash]
+----
+export PG_CONSOLE_SECURITY_ENABLED=true
+----
+
+Or in `application.properties`:
+
+[source,properties]
+----
+pg-console.security.enabled=true
+----
+
+=== File-Based Users
+
+pg-console supports file-based user authentication using two configuration files:
+
+* `users.properties` - Username and password hashes
+* `roles.properties` - User role assignments
+
+==== Creating users.properties
+
+Create a `users.properties` file in the application configuration directory:
+
+[source,properties]
+----
+# Format: username=password_hash
+admin=ENC:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
+dba_readonly=ENC:ef92b778bffe771ec47e3ffc8f10e6f6d2ff8f43b48abf32e8e7d25d6d0e4de9
+monitoring=ENC:2c6ee24b09816a6f14f95d1698b24ead03c7fc70d64b0c0e4f1e8ea7d5a7e4c4
+----
+
+Generate password hashes using the CLI:
+
+[source,bash]
+----
+java -jar build/quarkus-app/quarkus-run.jar hash-password
+Enter password: ********
+Confirm password: ********
+ENC:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
+----
+
+IMPORTANT: Always use hashed passwords, never plain text. The `ENC:` prefix indicates a SHA-256 hashed password.
+
+==== Creating roles.properties
+
+Create a `roles.properties` file to assign roles to users:
+
+[source,properties]
+----
+# Format: username=role1,role2,role3
+admin=user,admin
+dba_readonly=user
+monitoring=user
+----
+
+Available roles:
+
+[cols="1,3"]
+|===
+|Role |Description
+
+|`user`
+|Read-only access to all dashboards and metrics
+
+|`admin`
+|Full access including dangerous operations (cancel/terminate queries)
+|===
+
+==== Configuration Location
+
+Specify the location of the properties files:
+
+[source,properties]
+----
+pg-console.security.enabled=true
+pg-console.security.users-file=/etc/pgconsole/users.properties
+pg-console.security.roles-file=/etc/pgconsole/roles.properties
+----
+
+Or use environment variables:
+
+[source,bash]
+----
+export PG_CONSOLE_SECURITY_ENABLED=true
+export PG_CONSOLE_SECURITY_USERS_FILE=/etc/pgconsole/users.properties
+export PG_CONSOLE_SECURITY_ROLES_FILE=/etc/pgconsole/roles.properties
+----
+
+=== Admin Role Requirements
+
+Certain operations require the `admin` role:
+
+* **Cancel Query** (`/api/cancel-query`) - Sends SIGINT to a backend process
+* **Terminate Query** (`/api/terminate-query`) - Forcibly terminates a backend process
+* **Reset Statistics** (`/api/reset-stats`) - Resets `pg_stat_statements` data
+
+Users without the `admin` role see read-only dashboards without action buttons.
+
+=== Reverse Proxy Authentication
+
+For enterprise deployments, integrate pg-console with a reverse proxy for authentication:
+
+==== nginx Basic Authentication
+
+Configure nginx to handle HTTP Basic authentication:
+
+[source,nginx]
+----
+server {
+    listen 443 ssl;
+    server_name pgconsole.example.com;
+
+    ssl_certificate /etc/ssl/certs/pgconsole.crt;
+    ssl_certificate_key /etc/ssl/private/pgconsole.key;
+
+    auth_basic "pg-console";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Pass authenticated user to pg-console
+        proxy_set_header X-Remote-User $remote_user;
+    }
+}
+----
+
+Create the password file:
+
+[source,bash]
+----
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+sudo htpasswd /etc/nginx/.htpasswd dba_readonly
+----
+
+Configure pg-console to trust the reverse proxy:
+
+[source,properties]
+----
+pg-console.security.proxy-auth.enabled=true
+pg-console.security.proxy-auth.header=X-Remote-User
+----
+
+==== OAuth2/OIDC Integration
+
+For OAuth2 or OpenID Connect, use an authentication proxy such as OAuth2 Proxy:
+
+[source,yaml]
+----
+# oauth2-proxy configuration
+provider = "oidc"
+client_id = "pgconsole"
+client_secret = "YOUR_CLIENT_SECRET"
+redirect_url = "https://pgconsole.example.com/oauth2/callback"
+oidc_issuer_url = "https://auth.example.com"
+email_domains = ["example.com"]
+upstream = "http://localhost:8080"
+pass_user_headers = true
+----
+
+Configure pg-console to extract user information:
+
+[source,properties]
+----
+pg-console.security.proxy-auth.enabled=true
+pg-console.security.proxy-auth.header=X-Forwarded-User
+pg-console.security.proxy-auth.email-header=X-Forwarded-Email
+pg-console.security.proxy-auth.groups-header=X-Forwarded-Groups
+----
+
+Map OAuth2 groups to pg-console roles:
+
+[source,properties]
+----
+pg-console.security.proxy-auth.admin-groups=dba-team,platform-admins
+----
+
+[#database-permissions]
+== Database Permissions
+
+pg-console requires specific PostgreSQL permissions to monitor database activity. Follow the principle of least privilege by creating a dedicated monitoring user with minimal permissions.
+
+=== Read-Only Monitoring User
+
+For basic monitoring without administrative capabilities, create a user with these permissions:
+
+[source,sql]
+----
+-- Create dedicated monitoring user
+CREATE USER pgconsole_monitor WITH PASSWORD 'STRONG_PASSWORD_HERE';
+
+-- Grant CONNECT to all databases you want to monitor
+GRANT CONNECT ON DATABASE postgres TO pgconsole_monitor;
+GRANT CONNECT ON DATABASE production_app TO pgconsole_monitor;
+
+-- Grant usage on system schemas
+GRANT USAGE ON SCHEMA pg_catalog TO pgconsole_monitor;
+GRANT USAGE ON SCHEMA information_schema TO pgconsole_monitor;
+
+-- Grant read access to system views
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_catalog TO pgconsole_monitor;
+GRANT SELECT ON ALL TABLES IN SCHEMA information_schema TO pgconsole_monitor;
+
+-- Grant read access to user table statistics (per database)
+\c production_app
+GRANT USAGE ON SCHEMA public TO pgconsole_monitor;
+GRANT SELECT ON ALL TABLES IN SCHEMA information_schema TO pgconsole_monitor;
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_catalog TO pgconsole_monitor;
+
+-- Allow viewing of other users' queries
+GRANT pg_read_all_stats TO pgconsole_monitor;
+----
+
+TIP: The `pg_read_all_stats` role (PostgreSQL 10+) provides read access to all statistics views without requiring superuser privileges.
+
+=== Required Extensions
+
+pg-console requires the `pg_stat_statements` extension for query monitoring:
+
+[source,sql]
+----
+-- Enable extension (requires superuser)
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Grant read access to pg_stat_statements view
+GRANT SELECT ON pg_stat_statements TO pgconsole_monitor;
+----
+
+Add to `postgresql.conf`:
+
+[source,properties]
+----
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.max = 10000
+pg_stat_statements.track = all
+----
+
+Restart PostgreSQL to apply the changes:
+
+[source,bash]
+----
+sudo systemctl restart postgresql
+----
+
+=== History Schema Permissions
+
+pg-console stores historical metrics in a dedicated schema. Grant permissions for history tracking:
+
+[source,sql]
+----
+-- Create schema for pg-console historical data
+CREATE SCHEMA IF NOT EXISTS pgconsole;
+GRANT USAGE ON SCHEMA pgconsole TO pgconsole_monitor;
+GRANT CREATE ON SCHEMA pgconsole TO pgconsole_monitor;
+
+-- Allow pg-console to manage history tables
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgconsole TO pgconsole_monitor;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgconsole TO pgconsole_monitor;
+
+-- Grant default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole
+  GRANT ALL ON TABLES TO pgconsole_monitor;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole
+  GRANT ALL ON SEQUENCES TO pgconsole_monitor;
+----
+
+TIP: History tables are created automatically by Flyway migrations on first startup.
+
+=== Administrative Permissions
+
+For users with the `admin` role who need to cancel or terminate queries:
+
+[source,sql]
+----
+-- Grant permission to cancel and terminate queries
+GRANT pg_signal_backend TO pgconsole_monitor;
+----
+
+The `pg_signal_backend` role (PostgreSQL 9.6+) allows:
+
+* `pg_cancel_backend()` - Cancel a query (SIGINT)
+* `pg_terminate_backend()` - Terminate a connection (SIGTERM)
+
+WARNING: Only grant `pg_signal_backend` to trusted monitoring users. It allows terminating any user's queries, including superuser queries.
+
+=== Verifying Permissions
+
+Test the monitoring user's permissions:
+
+[source,sql]
+----
+-- Connect as monitoring user
+\c postgres pgconsole_monitor
+
+-- Verify access to statistics views
+SELECT count(*) FROM pg_stat_activity;
+SELECT count(*) FROM pg_stat_statements;
+SELECT count(*) FROM pg_stat_database;
+
+-- Verify table statistics access
+SELECT schemaname, tablename, n_live_tup
+FROM pg_stat_user_tables
+LIMIT 5;
+
+-- Test cancel permission (if granted)
+SELECT pg_cancel_backend(12345);  -- Use a test PID
+----
+
+=== Permission Troubleshooting
+
+Common permission errors and solutions:
+
+[cols="2,3"]
+|===
+|Error |Solution
+
+|`permission denied for view pg_stat_statements`
+|Grant `SELECT` on `pg_stat_statements` or assign `pg_read_all_stats` role
+
+|`permission denied for schema pgconsole`
+|Grant `USAGE` and `CREATE` on schema `pgconsole`
+
+|`must be superuser to cancel superuser query`
+|Normal behaviour; monitoring users cannot cancel superuser queries even with `pg_signal_backend`
+
+|`extension "pg_stat_statements" does not exist`
+|Create extension as superuser: `CREATE EXTENSION pg_stat_statements;`
+
+|`cannot access pg_stat_activity rows for other users`
+|Grant `pg_read_all_stats` role or make user superuser
+|===
+
+== Network Security
+
+Secure network communication between pg-console and PostgreSQL.
+
+=== SSL/TLS for PostgreSQL Connections
+
+Enable SSL/TLS encryption for database connections:
+
+==== PostgreSQL Server Configuration
+
+Edit `postgresql.conf`:
+
+[source,properties]
+----
+ssl = on
+ssl_cert_file = '/etc/postgresql/ssl/server.crt'
+ssl_key_file = '/etc/postgresql/ssl/server.key'
+ssl_ca_file = '/etc/postgresql/ssl/ca.crt'
+----
+
+Edit `pg_hba.conf` to require SSL:
+
+[source]
+----
+# Require SSL for monitoring user
+hostssl all pgconsole_monitor 0.0.0.0/0 md5
+----
+
+Restart PostgreSQL:
+
+[source,bash]
+----
+sudo systemctl restart postgresql
+----
+
+==== pg-console Client Configuration
+
+Configure SSL mode in the JDBC connection URL:
+
+[source,properties]
+----
+POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres?sslmode=verify-full&sslrootcert=/etc/pgconsole/ca.crt
+----
+
+Available SSL modes:
+
+[cols="1,3"]
+|===
+|SSL Mode |Description
+
+|`disable`
+|No SSL (development only)
+
+|`allow`
+|Try SSL, fall back to plain
+
+|`prefer`
+|Prefer SSL, fall back to plain (default)
+
+|`require`
+|Require SSL, no certificate verification
+
+|`verify-ca`
+|Require SSL, verify certificate against CA
+
+|`verify-full`
+|Require SSL, verify certificate and hostname
+|===
+
+IMPORTANT: Use `verify-full` in production environments to prevent man-in-the-middle attacks.
+
+==== Certificate Validation
+
+Place the CA certificate in the container or server:
+
+[source,bash]
+----
+sudo mkdir -p /etc/pgconsole/ssl
+sudo cp ca.crt /etc/pgconsole/ssl/
+sudo chown pgconsole:pgconsole /etc/pgconsole/ssl/ca.crt
+sudo chmod 0600 /etc/pgconsole/ssl/ca.crt
+----
+
+=== Firewall Configuration
+
+Restrict network access to PostgreSQL and pg-console.
+
+==== PostgreSQL Firewall Rules
+
+Allow connections only from pg-console server:
+
+[source,bash]
+----
+# UFW (Ubuntu)
+sudo ufw allow from 10.0.1.100 to any port 5432 proto tcp
+
+# firewalld (RHEL/CentOS)
+sudo firewall-cmd --permanent --add-rich-rule='
+  rule family="ipv4" source address="10.0.1.100" port port="5432" protocol="tcp" accept'
+sudo firewall-cmd --reload
+
+# iptables
+sudo iptables -A INPUT -p tcp -s 10.0.1.100 --dport 5432 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 5432 -j DROP
+----
+
+==== pg-console Firewall Rules
+
+Restrict access to the web interface:
+
+[source,bash]
+----
+# Allow only from trusted networks
+sudo ufw allow from 10.0.0.0/24 to any port 8080 proto tcp
+sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp
+----
+
+Alternatively, bind pg-console to localhost and use a reverse proxy:
+
+[source,properties]
+----
+quarkus.http.host=127.0.0.1
+quarkus.http.port=8080
+----
+
+=== Network Segmentation
+
+Deploy pg-console in a secure network segment:
+
+1. **Management VLAN** - Isolate monitoring infrastructure
+2. **Bastion Host** - Require jump host for access
+3. **VPN Access** - Require VPN connection to reach pg-console
+
+Example architecture:
+
+----
+Internet → Firewall → VPN Gateway → Management VLAN → pg-console → Database VLAN → PostgreSQL
+----
+
+== Best Practices
+
+=== Credential Management
+
+1. **Strong Passwords**: Use long, random passwords (minimum 16 characters)
+2. **Password Rotation**: Rotate database and application passwords regularly (quarterly)
+3. **Secrets Management**: Use dedicated secrets management systems
+4. **Environment Variables**: Never hardcode credentials in configuration files
+
+==== HashiCorp Vault Integration
+
+Store database credentials in Vault:
+
+[source,properties]
+----
+pg-console.vault.enabled=true
+pg-console.vault.url=https://vault.example.com:8200
+pg-console.vault.token=${VAULT_TOKEN}
+pg-console.vault.database-path=secret/database/pgconsole
+----
+
+Retrieve credentials dynamically:
+
+[source,properties]
+----
+POSTGRES_URL=${vault:secret/database/pgconsole#url}
+POSTGRES_USER=${vault:secret/database/pgconsole#username}
+POSTGRES_PASSWORD=${vault:secret/database/pgconsole#password}
+----
+
+==== AWS Secrets Manager
+
+Use AWS Secrets Manager for RDS credentials:
+
+[source,bash]
+----
+export POSTGRES_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id prod/pgconsole/db-password \
+  --query SecretString --output text)
+----
+
+=== Audit Logging
+
+Enable audit logging for security events and user actions:
+
+[source,properties]
+----
+pg-console.security.audit.enabled=true
+pg-console.security.audit.log-file=/var/log/pgconsole/audit.log
+pg-console.security.audit.events=login,logout,query-cancel,query-terminate,settings-change
+----
+
+Audit log format:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T14:30:15.123Z",
+  "event": "query-terminate",
+  "user": "admin",
+  "ip": "10.0.1.50",
+  "database": "production_app",
+  "pid": 12345,
+  "query": "SELECT * FROM users WHERE...",
+  "result": "success"
+}
+----
+
+Review audit logs regularly:
+
+[source,bash]
+----
+# Recent admin actions
+sudo tail -f /var/log/pgconsole/audit.log | grep -E 'query-cancel|query-terminate'
+
+# Failed login attempts
+sudo grep '"event":"login","result":"failure"' /var/log/pgconsole/audit.log
+----
+
+=== PostgreSQL Audit Configuration
+
+Enable PostgreSQL logging for additional security:
+
+[source,properties]
+----
+# postgresql.conf
+logging_collector = on
+log_directory = '/var/log/postgresql'
+log_filename = 'postgresql-%Y-%m-%d.log'
+log_connections = on
+log_disconnections = on
+log_duration = on
+log_statement = 'ddl'
+log_line_prefix = '%t [%p]: user=%u,db=%d,app=%a,client=%h '
+----
+
+Track pg-console connections:
+
+[source,sql]
+----
+-- View pg-console sessions
+SELECT usename, application_name, client_addr, backend_start, state
+FROM pg_stat_activity
+WHERE usename = 'pgconsole_monitor';
+----
+
+=== Secrets in Version Control
+
+Never commit secrets to version control:
+
+1. **Use `.gitignore`**: Exclude configuration files with secrets
++
+[source,gitignore]
+----
+users.properties
+roles.properties
+application.properties
+.env
+----
+
+2. **Template Files**: Commit template files instead
++
+[source,properties]
+----
+# application.properties.template
+POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres
+POSTGRES_USER=REPLACE_WITH_ACTUAL_USER
+POSTGRES_PASSWORD=REPLACE_WITH_ACTUAL_PASSWORD
+----
+
+3. **Environment Variables**: Document required variables in README
++
+[source,bash]
+----
+# Required environment variables
+export POSTGRES_URL="jdbc:postgresql://db.example.com:5432/postgres"
+export POSTGRES_USER="pgconsole_monitor"
+export POSTGRES_PASSWORD="$(cat /run/secrets/db-password)"
+----
+
+=== Principle of Least Privilege
+
+Apply minimal permissions at all levels:
+
+1. **Application Level**: Readonly users cannot perform admin actions
+2. **Database Level**: Monitoring user cannot modify data
+3. **Network Level**: Restrict access to required IP ranges only
+4. **OS Level**: Run pg-console as non-root user
+
+Example non-root deployment:
+
+[source,bash]
+----
+# Create dedicated user
+sudo useradd -r -s /bin/false pgconsole
+
+# Set ownership
+sudo chown -R pgconsole:pgconsole /opt/pgconsole
+sudo chown -R pgconsole:pgconsole /etc/pgconsole
+
+# Run as non-root
+sudo -u pgconsole java -jar /opt/pgconsole/quarkus-run.jar
+----
+
+=== Regular Security Reviews
+
+Schedule periodic security reviews:
+
+* **Monthly**: Review audit logs for suspicious activity
+* **Quarterly**: Rotate passwords and API keys
+* **Quarterly**: Review and update user access permissions
+* **Annually**: Penetration testing and security assessment
+* **Annually**: Update dependencies and patch vulnerabilities
+
+=== Security Checklist
+
+Before deploying to production:
+
+- [ ] Authentication enabled (`PG_CONSOLE_SECURITY_ENABLED=true`)
+- [ ] Strong passwords for all users (minimum 16 characters)
+- [ ] Admin role restricted to authorised users only
+- [ ] Dedicated PostgreSQL monitoring user created
+- [ ] Minimal database permissions granted
+- [ ] `pg_stat_statements` extension enabled
+- [ ] SSL/TLS enabled for database connections (`sslmode=verify-full`)
+- [ ] Firewall rules configured to restrict access
+- [ ] Audit logging enabled
+- [ ] Secrets stored in environment variables or secrets manager
+- [ ] No credentials committed to version control
+- [ ] pg-console running as non-root user
+- [ ] Reverse proxy with HTTPS configured
+- [ ] Security headers configured (CSP, HSTS, X-Frame-Options)
+- [ ] Regular backup of configuration files
+- [ ] Incident response plan documented
+
+== Troubleshooting
+
+=== Authentication Issues
+
+==== Users Cannot Log In
+
+Verify user configuration:
+
+[source,bash]
+----
+# Check users.properties exists and is readable
+ls -l /etc/pgconsole/users.properties
+
+# Verify password hash format
+grep "^username=" /etc/pgconsole/users.properties
+----
+
+Test password hash generation:
+
+[source,bash]
+----
+java -jar build/quarkus-app/quarkus-run.jar hash-password
+----
+
+Review authentication logs:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole | grep -i authentication
+----
+
+==== Admin Actions Forbidden
+
+Verify role assignment:
+
+[source,bash]
+----
+# Check roles.properties
+grep "^username=" /etc/pgconsole/roles.properties
+# Should include: username=user,admin
+----
+
+Ensure user has `admin` role, not just `user`.
+
+=== Database Permission Issues
+
+==== Cannot View pg_stat_statements
+
+Grant required permissions:
+
+[source,sql]
+----
+-- As superuser
+GRANT pg_read_all_stats TO pgconsole_monitor;
+GRANT SELECT ON pg_stat_statements TO pgconsole_monitor;
+----
+
+Verify extension is enabled:
+
+[source,sql]
+----
+SELECT * FROM pg_extension WHERE extname = 'pg_stat_statements';
+----
+
+==== Cannot Cancel Queries
+
+Grant signal permissions:
+
+[source,sql]
+----
+-- As superuser
+GRANT pg_signal_backend TO pgconsole_monitor;
+----
+
+Verify role membership:
+
+[source,sql]
+----
+SELECT rolname, admin_option
+FROM pg_auth_members m
+JOIN pg_roles r ON m.roleid = r.oid
+WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'pgconsole_monitor');
+----
+
+=== SSL Connection Issues
+
+==== SSL Handshake Failure
+
+Verify PostgreSQL SSL configuration:
+
+[source,bash]
+----
+# Check SSL is enabled
+sudo -u postgres psql -c "SHOW ssl;"
+
+# Verify certificate files
+ls -l /etc/postgresql/ssl/server.{crt,key}
+----
+
+Test SSL connection:
+
+[source,bash]
+----
+psql "sslmode=require host=db.example.com port=5432 dbname=postgres user=pgconsole_monitor"
+----
+
+Review PostgreSQL logs:
+
+[source,bash]
+----
+sudo tail -f /var/log/postgresql/postgresql-*.log | grep -i ssl
+----
+
+==== Certificate Verification Failed
+
+Ensure CA certificate is accessible:
+
+[source,bash]
+----
+ls -l /etc/pgconsole/ssl/ca.crt
+----
+
+Verify certificate chain:
+
+[source,bash]
+----
+openssl verify -CAfile /etc/pgconsole/ssl/ca.crt /etc/postgresql/ssl/server.crt
+----
+
+== Next Steps
+
+* Review the xref:deployment.adoc[Deployment Guide] for production hardening
+* Configure xref:alerting.adoc[Alerting] for security events
+* Explore xref:multi-instance.adoc[Multi-Instance Monitoring] with per-instance authentication

@@ -1,0 +1,176 @@
+{#include base}
+{#title}Index Advisor - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/index-advisor?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Index Advisor</h1>
+        <p class="text-muted">Recommendations for improving index usage and identifying issues</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Missing Indexes</span>
+                <h2 class="mb-0">{summary.highSeqScanTables}</h2>
+                <small class="text-muted">table{#if summary.highSeqScanTables != 1}s{/if} with high seq scans</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Unused Indexes</span>
+                <h2 class="mb-0">{summary.unusedIndexes}</h2>
+                <small class="text-muted">of {summary.totalIndexes} total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Unused Space</span>
+                <h2 class="mb-0">{summary.unusedIndexSize ?: '0 bytes'}</h2>
+                <small class="text-muted">wasted by unused indexes</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Usage Rate</span>
+                <h2 class="mb-0">{summary.usedPercentage}%</h2>
+                <small class="text-muted">indexes actively used</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Index Recommendations</h5>
+            </div>
+            <div class="card-body p-0">
+                {#if recommendations.isEmpty()}
+                <div class="p-4 text-center text-success">
+                    <h4>No Recommendations</h4>
+                    <p class="mb-0">All indexes appear to be well-optimised</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Type</th>
+                                <th>Table / Index</th>
+                                <th>Recommendation</th>
+                                <th>Statistics</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for rec in recommendations}
+                            <tr>
+                                <td>
+                                    <span class="badge {rec.severityCssClass}">{rec.severity}</span>
+                                </td>
+                                <td>
+                                    <span class="badge {rec.typeCssClass}">{rec.typeDisplay}</span>
+                                </td>
+                                <td>
+                                    <strong>{rec.fullTableName}</strong>
+                                    {#if rec.indexName != null}
+                                    <br><code class="text-muted">{rec.indexName}</code>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <strong>{rec.recommendation}</strong>
+                                    <br><small class="text-muted">{rec.rationale}</small>
+                                    {#if rec.suggestedAction != null}
+                                    <br><small class="text-info"><em>{rec.suggestedAction}</em></small>
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#switch rec.type.name()}
+                                        {#case 'MISSING_INDEX'}
+                                        <small>
+                                            <strong>{rec.seqScanRatioFormatted}</strong> seq scans<br>
+                                            {rec.seqScans} seq / {rec.idxScans} idx<br>
+                                            {rec.tableRows} rows • {rec.tableSize}
+                                        </small>
+                                        {#case 'UNUSED_INDEX'}
+                                        <small>
+                                            <strong>{rec.idxScans}</strong> scans<br>
+                                            Size: {rec.indexSize}
+                                        </small>
+                                        {#case 'DUPLICATE_INDEX'}
+                                        <small>
+                                            Size: {rec.indexSize}
+                                        </small>
+                                        {#else}
+                                        <small class="text-muted">—</small>
+                                    {/switch}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reference Section -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Index Recommendations</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-danger">Missing Index</span></h6>
+                        <p class="text-muted small">
+                            Tables with high sequential scan ratios (>70%) that may benefit from adding indexes.
+                            High seq scan ratios often indicate missing indexes on frequently queried columns.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-warning text-dark">Unused Index</span></h6>
+                        <p class="text-muted small">
+                            Indexes that have never been used since statistics were last reset.
+                            These consume storage and add overhead to writes without providing query benefits.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-secondary">Duplicate Index</span></h6>
+                        <p class="text-muted small">
+                            Indexes where the leading columns are covered by another index.
+                            The smaller index may be redundant and could be safely removed.
+                        </p>
+                    </div>
+                </div>
+                <hr>
+                <p class="text-muted small mb-0">
+                    <strong>Note:</strong> Always verify recommendations against your actual query patterns before making changes.
+                    Consider waiting for a full business cycle to ensure indexes aren't used by periodic jobs.
+                    Use <code>pg_stat_reset()</code> to reset statistics after changes.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

@@ -1,0 +1,243 @@
+{#include base}
+{#title}Query Regressions - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/query-regressions?instance={currentInstance ?: 'default'}&window={windowHours}&threshold={thresholdPercent}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Query Regression Detection</h1>
+        <p class="text-muted">
+            Comparing query performance: last {windowHours}h vs previous {windowHours}h
+            (threshold: {thresholdPercent}% change)
+        </p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Regressions</span>
+                <h2 class="mb-0">{summary.totalRegressions}</h2>
+                <small class="text-muted">queries got slower</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">Improvements</span>
+                <h2 class="mb-0">{summary.totalImprovements}</h2>
+                <small class="text-muted">queries got faster</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-danger mb-2">Critical</span>
+                <h2 class="mb-0">{summary.criticalCount}</h2>
+                <small class="text-muted">&gt;100% slower</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">High</span>
+                <h2 class="mb-0">{summary.highCount}</h2>
+                <small class="text-muted">&gt;50% slower</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Controls -->
+<div class="row mb-3">
+    <div class="col-auto">
+        <div class="btn-group" role="group">
+            <a href="/query-regressions?instance={currentInstance}&window=6&threshold={thresholdPercent}"
+               class="btn btn-outline-secondary {#if windowHours == 6}active{/if}">6h</a>
+            <a href="/query-regressions?instance={currentInstance}&window=12&threshold={thresholdPercent}"
+               class="btn btn-outline-secondary {#if windowHours == 12}active{/if}">12h</a>
+            <a href="/query-regressions?instance={currentInstance}&window=24&threshold={thresholdPercent}"
+               class="btn btn-outline-secondary {#if windowHours == 24}active{/if}">24h</a>
+            <a href="/query-regressions?instance={currentInstance}&window=48&threshold={thresholdPercent}"
+               class="btn btn-outline-secondary {#if windowHours == 48}active{/if}">48h</a>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group" role="group">
+            <a href="/query-regressions?instance={currentInstance}&window={windowHours}&threshold=25"
+               class="btn btn-outline-secondary {#if thresholdPercent == 25}active{/if}">&gt;25%</a>
+            <a href="/query-regressions?instance={currentInstance}&window={windowHours}&threshold=50"
+               class="btn btn-outline-secondary {#if thresholdPercent == 50}active{/if}">&gt;50%</a>
+            <a href="/query-regressions?instance={currentInstance}&window={windowHours}&threshold=100"
+               class="btn btn-outline-secondary {#if thresholdPercent == 100}active{/if}">&gt;100%</a>
+        </div>
+    </div>
+</div>
+
+<!-- Regressions Table -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Query Regressions (Slower)</h5>
+                <span class="badge bg-danger">{regressions.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if regressions.isEmpty()}
+                <div class="p-4 text-center text-success">
+                    <h4>No Regressions Detected</h4>
+                    <p class="mb-0">All queries are performing within acceptable thresholds</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Query</th>
+                                <th class="text-end">Previous</th>
+                                <th class="text-end">Current</th>
+                                <th class="text-end">Change</th>
+                                <th class="text-end">Calls</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for reg in regressions}
+                            <tr>
+                                <td>
+                                    <span class="badge {reg.severityCssClass}">{reg.severity}</span>
+                                </td>
+                                <td class="query-preview">
+                                    <a href="/slow-queries/{reg.queryId}?instance={currentInstance}">
+                                        {reg.queryPreview}
+                                    </a>
+                                    <span class="query-full">{reg.queryText}</span>
+                                </td>
+                                <td class="text-end">
+                                    <small>{reg.previousMeanTimeFormatted}</small>
+                                </td>
+                                <td class="text-end">
+                                    <strong>{reg.currentMeanTimeFormatted}</strong>
+                                </td>
+                                <td class="text-end">
+                                    <span class="text-danger">
+                                        <strong>{reg.meanTimeChangeFormatted}</strong>
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <small class="text-muted">{reg.callsDeltaFormatted}</small>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Improvements Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Query Improvements (Faster)</h5>
+                <span class="badge bg-success">{improvements.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if improvements.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No significant improvements detected</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Query</th>
+                                <th class="text-end">Previous</th>
+                                <th class="text-end">Current</th>
+                                <th class="text-end">Change</th>
+                                <th class="text-end">Calls</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for imp in improvements}
+                            <tr>
+                                <td class="query-preview">
+                                    <a href="/slow-queries/{imp.queryId}?instance={currentInstance}">
+                                        {imp.queryPreview}
+                                    </a>
+                                    <span class="query-full">{imp.queryText}</span>
+                                </td>
+                                <td class="text-end">
+                                    <small>{imp.previousMeanTimeFormatted}</small>
+                                </td>
+                                <td class="text-end">
+                                    <strong>{imp.currentMeanTimeFormatted}</strong>
+                                </td>
+                                <td class="text-end">
+                                    <span class="text-success">
+                                        <strong>{imp.meanTimeChangeFormatted}</strong>
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <small class="text-muted">{imp.callsDeltaFormatted}</small>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Information Section -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Query Regressions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Severity Levels</h6>
+                        <dl class="mb-0">
+                            <dt><span class="badge bg-danger">Critical</span></dt>
+                            <dd class="text-muted small">Query is more than 2x slower (&gt;100% increase)</dd>
+                            <dt><span class="badge bg-warning text-dark">High</span></dt>
+                            <dd class="text-muted small">Query is 1.5-2x slower (50-100% increase)</dd>
+                            <dt><span class="badge bg-info">Medium</span></dt>
+                            <dd class="text-muted small">Query is 1.25-1.5x slower (25-50% increase)</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Investigation Tips</h6>
+                        <ul class="text-muted small mb-0">
+                            <li>Check EXPLAIN plan for changes in query execution</li>
+                            <li>Verify indexes haven't been dropped or become invalid</li>
+                            <li>Check for table bloat or missing VACUUM</li>
+                            <li>Review recent schema or data volume changes</li>
+                            <li>Compare during similar load periods (business hours vs off-peak)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

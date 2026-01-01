@@ -1,0 +1,182 @@
+{#include base}
+{#title}Alert Silences{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-volume-mute me-2"></i>Alert Silences
+        </h1>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSilenceModal">
+            <i class="bi bi-plus-lg me-1"></i>Create Silence
+        </button>
+    </div>
+
+    <!-- Active Silences -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <i class="bi bi-volume-mute me-2"></i>Active Silences ({activeSilences.size})
+        </div>
+        <div class="card-body p-0">
+            {#if activeSilences.isEmpty}
+            <div class="p-4 text-center text-muted">
+                No active silences
+            </div>
+            {#else}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Matchers</th>
+                            <th>Started</th>
+                            <th>Expires</th>
+                            <th>Remaining</th>
+                            <th>Created By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for silence in activeSilences}
+                        <tr>
+                            <td><strong>{silence.name}</strong></td>
+                            <td>
+                                {#for matcher in silence.matchers}
+                                <span class="badge bg-secondary me-1">{matcher.displayText}</span>
+                                {#else}
+                                <span class="text-muted">All alerts</span>
+                                {/for}
+                            </td>
+                            <td class="small text-muted">{silence.startTime}</td>
+                            <td class="small">{silence.endTimeFormatted}</td>
+                            <td><span class="badge bg-warning text-dark">{silence.remainingMinutes}m</span></td>
+                            <td class="small">{silence.createdBy ?: '-'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        hx-post="/notifications/api/silences/{silence.id}/expire"
+                                        hx-swap="none"
+                                        title="Expire Now">
+                                    <i class="bi bi-x-circle"></i> Expire
+                                </button>
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+            {/if}
+        </div>
+    </div>
+
+    <!-- All Silences -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>All Silences
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Name</th>
+                            <th>Matchers</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Created By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for silence in silences}
+                        <tr class="{silence.active ? '' : 'table-secondary'}">
+                            <td><span class="badge {silence.statusCssClass}">{silence.statusText}</span></td>
+                            <td>{silence.name}</td>
+                            <td>
+                                {#for matcher in silence.matchers}
+                                <span class="badge bg-secondary me-1 small">{matcher.displayText}</span>
+                                {/for}
+                            </td>
+                            <td class="small">{silence.startTime}</td>
+                            <td class="small">{silence.endTimeFormatted}</td>
+                            <td class="small">{silence.createdBy ?: '-'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        hx-delete="/notifications/api/silences/{silence.id}"
+                                        hx-confirm="Delete this silence?"
+                                        hx-swap="none">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {#else}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                No silences configured
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Navigation -->
+    <div class="mt-4">
+        <a href="/notifications" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Create Silence Modal -->
+<div class="modal fade" id="createSilenceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Silence</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="/notifications/api/silences" hx-ext="json-enc">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Duration (minutes)</label>
+                        <select class="form-select" name="durationMinutes">
+                            <option value="30">30 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="120">2 hours</option>
+                            <option value="240">4 hours</option>
+                            <option value="480">8 hours</option>
+                            <option value="1440">24 hours</option>
+                        </select>
+                    </div>
+                    <hr>
+                    <h6>Matchers (optional)</h6>
+                    <div class="mb-3">
+                        <label class="form-label">Alert Type</label>
+                        <input type="text" class="form-control" name="alertType" placeholder="e.g., HIGH_CPU">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Instance Name</label>
+                        <input type="text" class="form-control" name="instanceName" placeholder="e.g., production-db">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Create Silence</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{/content}
+{/include}

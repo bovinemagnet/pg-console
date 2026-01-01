@@ -1,0 +1,130 @@
+= API Reference
+Paul Snow
+0.0.0
+:description: API reference documentation for pg-console REST API endpoints
+:keywords: api, rest, json, endpoints, monitoring
+
+pg-console provides a comprehensive REST API for programmatic access to PostgreSQL monitoring data. The API returns JSON responses suitable for integration with external tools, monitoring systems, and custom dashboards.
+
+== API Features
+
+The pg-console REST API provides:
+
+* *JSON responses* - All endpoints return structured JSON data
+* *Multi-instance support* - Query metrics from multiple PostgreSQL instances
+* *Real-time data* - Access current database activity and statistics
+* *Historical metrics* - Retrieve historical performance data and trends
+* *Security integration* - Optional authentication and authorisation when security is enabled
+* *Feature toggles* - Endpoints respect feature toggle configuration
+
+== API Versioning
+
+All API endpoints are versioned under the `/api/v1` path prefix. This ensures backward compatibility as the API evolves.
+
+[source,plaintext]
+----
+/api/v1/<endpoint>
+----
+
+== Quick Start
+
+Access overview statistics for the default PostgreSQL instance:
+
+[source,bash]
+----
+curl http://localhost:8080/api/v1/overview
+----
+
+Response:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "stats": {
+    "activeConnections": 12,
+    "maxConnections": 100,
+    "databaseSize": 5368709120,
+    "cacheHitRatio": 99.5,
+    "version": "PostgreSQL 16.1"
+  }
+}
+----
+
+== Authentication
+
+When security is enabled (see xref:admin-guide:security.adoc[Security Configuration]), API endpoints require authentication. Requests must include appropriate credentials based on the configured authentication mechanism.
+
+NOTE: Authentication and authorisation requirements are described in detail in xref:rest-api.adoc#authentication[REST API Authentication].
+
+== OpenAPI Documentation
+
+pg-console includes built-in OpenAPI (Swagger) documentation for interactive API exploration:
+
+* *OpenAPI specification* - `http://localhost:8080/q/openapi`
+* *Swagger UI* - `http://localhost:8080/q/swagger-ui`
+
+The Swagger UI provides an interactive interface to explore all available endpoints, view request/response schemas, and test API calls directly from your browser.
+
+== API Categories
+
+The API is organised into several functional categories:
+
+xref:endpoints.adoc#core-monitoring[Core Monitoring]::
+Essential database monitoring metrics including overview statistics, current activity, query performance, locks, tables, and databases.
+
+xref:endpoints.adoc#insights[Insights & Analysis]::
+Intelligent insights including anomaly detection, forecasting, recommendations, and natural language query processing.
+
+xref:endpoints.adoc#security[Security & Compliance]::
+Security monitoring including role auditing, connection security, data access patterns, compliance scoring, and recommendations.
+
+xref:endpoints.adoc#schema-comparison[Schema Comparison]::
+Schema comparison and migration capabilities for comparing database schemas across instances.
+
+xref:endpoints.adoc#infrastructure[Infrastructure]::
+Infrastructure monitoring including replication status, vacuum progress, and background processes.
+
+xref:endpoints.adoc#system[System]::
+System endpoints including health checks and instance information.
+
+== Response Format
+
+All API endpoints follow a consistent response structure:
+
+[source,json]
+----
+{
+  "timestamp": "ISO 8601 timestamp",
+  "instance": "instance identifier",
+  "count": "number of items (where applicable)",
+  "<data>": "endpoint-specific data"
+}
+----
+
+== Error Handling
+
+API errors return appropriate HTTP status codes with error details:
+
+* `200 OK` - Successful request
+* `404 Not Found` - Endpoint disabled or resource not found
+* `500 Internal Server Error` - Server-side error
+
+Error responses include an error message:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "status": "unhealthy",
+  "error": "Connection refused to PostgreSQL instance"
+}
+----
+
+== Next Steps
+
+* xref:rest-api.adoc[REST API Overview] - Detailed API documentation
+* xref:endpoints.adoc[API Endpoints] - Complete endpoint reference with examples
+* xref:admin-guide:configuration.adoc[Configuration] - Configure API behaviour
+* xref:admin-guide:security.adoc[Security] - Secure your API endpoints

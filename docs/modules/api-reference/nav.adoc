@@ -1,0 +1,3 @@
+* xref:index.adoc[API Reference]
+* xref:rest-api.adoc[REST API Overview]
+* xref:endpoints.adoc[API Endpoints]

@@ -1,6 +1,9 @@
 plugins {
     id 'java'
-    id 'io.quarkus' version '3.16.3'
+    id 'io.quarkus' version '3.30.5'
+    id 'jacoco'
+    id "org.antora" version "${antoraPluginVersion}"
+
 }
 
 repositories {
@@ -9,16 +12,39 @@ repositories {
 }
 
 dependencies {
-    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.16.3')
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.30.5')
     implementation 'io.quarkus:quarkus-rest'
     implementation 'io.quarkus:quarkus-rest-qute'
     implementation 'io.quarkus:quarkus-qute'
     implementation 'io.quarkus:quarkus-jdbc-postgresql'
     implementation 'io.quarkus:quarkus-agroal'
     implementation 'io.quarkus:quarkus-arc'
-    
+    implementation 'io.quarkus:quarkus-flyway'
+    implementation 'io.quarkus:quarkus-scheduler'
+    implementation 'io.quarkus:quarkus-elytron-security-properties-file'
+    implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'io.quarkus:quarkus-micrometer-registry-prometheus'
+    implementation 'io.quarkus:quarkus-mailer'
+    implementation 'io.quarkus:quarkus-logging-json'
+    implementation 'io.quarkus:quarkus-picocli'
+    implementation 'io.quarkus:quarkus-smallrye-openapi'
+
+    // Test dependencies - Core
     testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'io.quarkus:quarkus-junit5-mockito'
     testImplementation 'io.rest-assured:rest-assured'
+    testImplementation 'io.quarkus:quarkus-jdbc-h2'
+
+    // Test dependencies - Testcontainers for PostgreSQL integration tests
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:postgresql:1.19.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+
+    // Test dependencies - Better assertions
+    testImplementation 'org.assertj:assertj-core:3.25.1'
+
+    // Test dependencies - Playwright for E2E tests
+    testImplementation 'com.microsoft.playwright:playwright:1.40.0'
 }
 
 group 'com.bovinemagnet'
@@ -30,10 +56,120 @@ java {
     }
 }
 
+// =============================================================================
+// Unit Test Configuration
+// =============================================================================
 test {
     systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
+    useJUnitPlatform {
+        excludeTags 'integration', 'e2e'
+    }
+    finalizedBy jacocoTestReport
 }
 
+// =============================================================================
+// Integration Test Configuration (Testcontainers)
+// =============================================================================
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests with Testcontainers (requires Docker)'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+
+    shouldRunAfter test
+    finalizedBy jacocoTestReport
+}
+
+// =============================================================================
+// E2E Test Configuration (Playwright)
+// =============================================================================
+tasks.register('e2eTest', Test) {
+    description = 'Runs end-to-end browser tests with Playwright'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+
+    shouldRunAfter integrationTest
+}
+
+// =============================================================================
+// JaCoCo Code Coverage Configuration
+// =============================================================================
+jacoco {
+    toolVersion = '0.8.11'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/model/**',      // Exclude DTOs/POJOs
+                '**/config/**',     // Exclude configuration classes
+                '**/cli/**'         // Exclude CLI classes
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.60  // Start at 60%, gradually increase to 80%
+            }
+        }
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.50
+            }
+            excludes = [
+                'com.bovinemagnet.pgconsole.model.*',
+                'com.bovinemagnet.pgconsole.config.*',
+                'com.bovinemagnet.pgconsole.cli.*'
+            ]
+        }
+    }
+}
+
+// =============================================================================
+// Full Verification Task
+// =============================================================================
+tasks.register('fullTest') {
+    description = 'Runs all tests: unit, integration, and generates coverage report'
+    group = 'verification'
+    dependsOn test, integrationTest, jacocoTestReport
+}
+
+check.dependsOn integrationTest
+
+// =============================================================================
+// Compilation Settings
+// =============================================================================
 compileJava {
     options.encoding = 'UTF-8'
     options.compilerArgs << '-parameters'
@@ -41,4 +177,14 @@ compileJava {
 
 compileTestJava {
     options.encoding = 'UTF-8'
+}
+
+
+antora {
+    playbook = file('antora-playbook.yml')
+    options = [clean: true, fetch: true, stacktrace: true]
+    packages = [
+        '@antora/lunr-extension': 'latest',
+        '@sntke/antora-mermaid-extension': 'latest'
+    ]
 }

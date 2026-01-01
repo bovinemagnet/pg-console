@@ -1,0 +1,244 @@
+{#include base}
+{#title}{dashboard.name} - Custom Dashboard{/title}
+
+<div id="refreshable-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item">
+                        <a href="/dashboards/custom?instance={instance}">Custom Dashboards</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">{dashboard.name}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-1">
+                <i class="bi bi-grid-1x2 me-2"></i>{dashboard.name}
+                {#if dashboard.default}
+                <span class="badge bg-primary ms-2" title="Default dashboard">
+                    <i class="bi bi-star-fill"></i> Default
+                </span>
+                {/if}
+                {#if dashboard.shared}
+                <span class="badge bg-success ms-2" title="Shared dashboard">
+                    <i class="bi bi-people-fill"></i> Shared
+                </span>
+                {/if}
+            </h1>
+            {#if dashboard.description}
+            <p class="text-muted mb-0">{dashboard.description}</p>
+            {/if}
+        </div>
+        <div class="btn-group">
+            <a href="/dashboards/custom/{dashboard.id}/edit?instance={instance}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-get="/dashboards/custom/{dashboard.id}?instance={instance}"
+                    hx-target="#refreshable-content"
+                    hx-swap="innerHTML">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    {#if !dashboard.tags.isEmpty}
+    <div class="mb-3">
+        {#for tag in dashboard.tags}
+        <span class="badge bg-secondary me-1">{tag}</span>
+        {/for}
+    </div>
+    {/if}
+
+    {#if dashboard.widgets.isEmpty}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        This dashboard has no widgets.
+        <a href="/dashboards/custom/{dashboard.id}/edit?instance={instance}">Add some widgets</a> to get started.
+    </div>
+    {#else}
+    <div class="row">
+        {#for widget in dashboard.widgets}
+        <div class="{widget.colClass} mb-4" id="widget-{widget.id}">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <h6 class="card-title mb-0">
+                        <i class="bi {widget.icon} me-2"></i>{widget.displayTitle}
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            hx-get="/dashboards/custom/{dashboard.id}/widget/{widget.id}/refresh?instance={instance}"
+                            hx-target="#widget-{widget.id} .card-body"
+                            hx-swap="innerHTML"
+                            title="Refresh widget">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    {#switch widget.widgetType}
+                    {#case 'connections'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-primary">{widget.data.get('current')}</div>
+                            <div class="text-muted">of {widget.data.get('max')} max ({widget.data.get('percentage')}%)</div>
+                            <div class="progress mt-2" style="height: 8px;">
+                                <div class="progress-bar" role="progressbar"
+                                     style="width: {widget.data.get('percentage')}%"
+                                     aria-valuenow="{widget.data.get('percentage')}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        {/if}
+                    {#case 'cache-ratio'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-success">{widget.data.get('formatted')}</div>
+                            <div class="text-muted">Cache Hit Ratio</div>
+                        </div>
+                        {/if}
+                    {#case 'active-queries'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-info">{widget.data.get('count')}</div>
+                            <div class="text-muted">Active Queries</div>
+                        </div>
+                        {/if}
+                    {#case 'blocked-queries'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            {#if widget.data.get('count') > 0}
+                            <div class="display-4 text-danger">{widget.data.get('count')}</div>
+                            {#else}
+                            <div class="display-4 text-success">{widget.data.get('count')}</div>
+                            {/if}
+                            <div class="text-muted">Blocked Queries</div>
+                        </div>
+                        {/if}
+                    {#case 'db-size'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-info">{widget.data.get('formatted')}</div>
+                            <div class="text-muted">Database Size</div>
+                        </div>
+                        {/if}
+                    {#case 'longest-query'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-warning">{widget.data.get('formatted')}</div>
+                            <div class="text-muted">Longest Running Query</div>
+                        </div>
+                        {/if}
+                    {#case 'top-tables'}
+                        {#if widget.data}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Table</th>
+                                        <th class="text-end">Size</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#for table in widget.data}
+                                    <tr>
+                                        <td><code>{table.tableName}</code></td>
+                                        <td class="text-end">{table.prettySize}</td>
+                                    </tr>
+                                    {/for}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/if}
+                    {#case 'top-indexes'}
+                        {#if widget.data}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Index</th>
+                                        <th class="text-end">Size</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#for idx in widget.data}
+                                    <tr>
+                                        <td><code>{idx.indexName}</code></td>
+                                        <td class="text-end">{idx.prettySize}</td>
+                                    </tr>
+                                    {/for}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/if}
+                    {#case 'sparkline-connections'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            {widget.data.raw}
+                            <div class="text-muted mt-2">Connection Trend (24h)</div>
+                        </div>
+                        {/if}
+                    {#case 'sparkline-queries'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            {widget.data.raw}
+                            <div class="text-muted mt-2">Query Trend (24h)</div>
+                        </div>
+                        {/if}
+                    {#case 'transaction-rate'}
+                        {#if widget.data}
+                        <div class="text-center">
+                            <div class="display-4 text-primary">{widget.data}</div>
+                            <div class="text-muted">Transactions/sec</div>
+                        </div>
+                        {/if}
+                    {#case 'tuple-stats'}
+                        {#if widget.data}
+                        <dl class="row mb-0">
+                            <dt class="col-6">Inserted</dt>
+                            <dd class="col-6 text-end">{widget.data.get('inserted')}</dd>
+                            <dt class="col-6">Updated</dt>
+                            <dd class="col-6 text-end">{widget.data.get('updated')}</dd>
+                            <dt class="col-6">Deleted</dt>
+                            <dd class="col-6 text-end">{widget.data.get('deleted')}</dd>
+                            <dt class="col-6">Fetched</dt>
+                            <dd class="col-6 text-end">{widget.data.get('fetched')}</dd>
+                        </dl>
+                        {/if}
+                    {#case 'custom-sql'}
+                        {#if widget.data}
+                            {#if widget.data.get('error')}
+                            <div class="alert alert-danger mb-0">{widget.data.get('error')}</div>
+                            {#else}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <tbody>
+                                        {#for row in widget.data}
+                                        <tr>
+                                            {#for entry in row.entrySet()}
+                                            <td>{entry.value}</td>
+                                            {/for}
+                                        </tr>
+                                        {/for}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {/if}
+                        {/if}
+                    {#else}
+                        {#if widget.data}
+                            {#if widget.data.get('error')}
+                            <div class="alert alert-danger mb-0">{widget.data.get('error')}</div>
+                            {#else}
+                            <pre class="mb-0">{widget.data}</pre>
+                            {/if}
+                        {#else}
+                        <div class="text-muted text-center">No data</div>
+                        {/if}
+                    {/switch}
+                </div>
+            </div>
+        </div>
+        {/for}
+    </div>
+    {/if}
+</div>
+
+{/include}

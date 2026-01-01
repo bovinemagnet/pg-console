@@ -1,0 +1,271 @@
+{#include base}
+{#title}Data Lineage - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/data-lineage?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Data Lineage & Schema</h1>
+        <p class="text-muted">Event triggers, foreign keys, views, and object dependencies</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Event Triggers</span>
+                <h3 class="mb-0">{summary.eventTriggerCount}</h3>
+                <small class="text-muted">{summary.enabledTriggers} enabled</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Foreign Keys</span>
+                <h3 class="mb-0">{summary.foreignKeyCount}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Views</span>
+                <h3 class="mb-0">{summary.viewCount}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Mat. Views</span>
+                <h3 class="mb-0">{summary.materialisedViewCount}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">Functions</span>
+                <h3 class="mb-0">{summary.functionCount}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Triggers -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Event Triggers</h5>
+                <small class="text-muted">DDL event monitoring</small>
+            </div>
+            <div class="card-body p-0">
+                {#if eventTriggers.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No event triggers configured</p>
+                    <small>Event triggers can monitor DDL commands like CREATE, ALTER, DROP</small>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Event</th>
+                                <th>Status</th>
+                                <th>Function</th>
+                                <th>Tags</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for trigger in eventTriggers}
+                            <tr>
+                                <td><strong>{trigger.name}</strong></td>
+                                <td><code class="small">{trigger.event}</code></td>
+                                <td><span class="badge {trigger.enabledCssClass}">{trigger.enabledDisplay}</span></td>
+                                <td><code class="small">{trigger.functionName}</code></td>
+                                <td><small class="text-muted">{trigger.tagsDisplay}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Foreign Key Relationships -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Foreign Key Relationships</h5>
+                <span class="badge bg-info">{foreignKeys.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if foreignKeys.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No foreign key relationships found</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>From Table</th>
+                                <th>Column</th>
+                                <th></th>
+                                <th>To Table</th>
+                                <th>Column</th>
+                                <th>ON UPDATE</th>
+                                <th>ON DELETE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for fk in foreignKeys}
+                            <tr class="{#if fk.hasCascade}table-warning{/if}">
+                                <td><strong>{fk.fromFullName}</strong></td>
+                                <td><code class="small">{fk.fromColumn}</code></td>
+                                <td class="text-center">&rarr;</td>
+                                <td><strong>{fk.toFullName}</strong></td>
+                                <td><code class="small">{fk.toColumn}</code></td>
+                                <td>
+                                    <span class="badge {#if fk.updateRule == 'CASCADE'}bg-warning text-dark{#else}bg-secondary{/if}">
+                                        {fk.updateRule}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {#if fk.deleteRule == 'CASCADE'}bg-danger{#else}bg-secondary{/if}">
+                                        {fk.deleteRule}
+                                    </span>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Dependencies -->
+{#if !viewDependencies.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">View Dependencies</h5>
+                <small class="text-muted">Tables referenced by views</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>View</th>
+                                <th></th>
+                                <th>Depends On</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for dep in viewDependencies}
+                            <tr>
+                                <td><strong>{dep.viewFullName}</strong></td>
+                                <td class="text-center">&rarr;</td>
+                                <td><code>{dep.dependsOnName}</code></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Function Dependencies -->
+{#if !functionDependencies.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Function Dependencies</h5>
+                <small class="text-muted">Tables referenced by functions</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Function</th>
+                                <th>Arguments</th>
+                                <th></th>
+                                <th>Depends On</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for dep in functionDependencies}
+                            <tr>
+                                <td><strong>{dep.fullName}</strong></td>
+                                <td><code class="small">{dep.arguments}</code></td>
+                                <td class="text-center">&rarr;</td>
+                                <td><code>{dep.dependsOnName}</code></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Help Text -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Data Lineage</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Event Triggers</h6>
+                        <p class="text-muted small">
+                            Event triggers fire on DDL events (CREATE, ALTER, DROP).
+                            They can be used to audit schema changes or enforce policies.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Foreign Keys</h6>
+                        <p class="text-muted small">
+                            Foreign key relationships show data dependencies between tables.
+                            CASCADE rules indicate automatic propagation of changes.
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Impact Analysis</h6>
+                        <p class="text-muted small">
+                            Use dependencies to understand the impact of schema changes.
+                            Views and functions may break if referenced tables are modified.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

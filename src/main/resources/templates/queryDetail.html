@@ -1,0 +1,272 @@
+{#include base}
+{#title}Query Detail - PostgreSQL Console{/title}
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/?instance={currentInstance ?: 'default'}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/slow-queries?instance={currentInstance ?: 'default'}">Slow Queries</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Query Detail</li>
+            </ol>
+        </nav>
+        <h1>Query Detail</h1>
+    </div>
+</div>
+
+{#if query == null}
+<div class="alert alert-warning">
+    <h4 class="alert-heading">Query Not Found</h4>
+    <p class="mb-0">The requested query could not be found in pg_stat_statements. It may have been reset or the query ID is invalid.</p>
+    <hr>
+    <a href="/slow-queries?instance={currentInstance ?: 'default'}" class="btn btn-primary">Back to Slow Queries</a>
+</div>
+{#else}
+
+<!-- Query Text -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Query Text</h5>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyQuery()" id="copyBtn">
+                        Copy Query
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Explain
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(false, false)">
+                                EXPLAIN (plan only)
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(true, false)">
+                                EXPLAIN ANALYZE
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" onclick="runExplain(true, true)">
+                                EXPLAIN ANALYZE BUFFERS
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                <pre class="mb-0" id="queryText" style="white-space: pre-wrap; font-size: 0.9em;">{query.query}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Explain Plan Result -->
+<div class="row mb-4">
+    <div class="col" id="explain-result">
+        <!-- Explain plan will be loaded here -->
+    </div>
+</div>
+
+<!-- Statistics Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Total Calls</h6>
+                <h2 class="mb-0">{query.totalCalls}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Total Time</h6>
+                <h2 class="mb-0">{query.totalTimeFormatted}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Mean Time</h6>
+                <h2 class="mb-0">{query.meanTimeFormatted}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Total Rows</h6>
+                <h2 class="mb-0">{query.rows}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trend Sparklines -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Mean Time Trend (24h)</h5>
+            </div>
+            <div class="card-body text-center">
+                {meanTimeSparkline.raw}
+                <small class="text-muted d-block mt-2">Mean execution time over the last 24 hours</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Call Count Trend (24h)</h5>
+            </div>
+            <div class="card-body text-center">
+                {callsSparkline.raw}
+                <small class="text-muted d-block mt-2">Total calls over the last 24 hours</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Statistics -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Timing Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 40%">Min Time</th>
+                            <td>{query.minTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Max Time</th>
+                            <td>{query.maxTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Mean Time</th>
+                            <td>{query.meanTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Std Dev</th>
+                            <td>{query.stddevTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Total Time</th>
+                            <td>{query.totalTimeFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Block I/O Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 40%">Shared Blocks Hit</th>
+                            <td>{query.sharedBlksHit}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Shared Blocks Read</th>
+                            <td>{query.sharedBlksRead}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Shared Blocks Written</th>
+                            <td>{query.sharedBlksWritten}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Cache Hit Ratio</th>
+                            <td>
+                                <span class="{#if query.cacheHitRatio < 90}text-warning{#else}text-success{/if}">
+                                    {query.cacheHitRatioFormatted}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Temp Blocks Read</th>
+                            <td>{query.tempBlksRead}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Temp Blocks Written</th>
+                            <td>{query.tempBlksWritten}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Query ID -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">
+                    <strong>Query ID:</strong> <code>{query.queryId}</code>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyQuery() {
+    const queryText = document.getElementById('queryText').textContent;
+    navigator.clipboard.writeText(queryText).then(function() {
+        const btn = document.getElementById('copyBtn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-success');
+        setTimeout(function() {
+            btn.textContent = originalText;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+        }, 2000);
+    });
+}
+
+function runExplain(analyse, buffers) {
+    const queryText = document.getElementById('queryText').textContent;
+    const resultDiv = document.getElementById('explain-result');
+    const instance = '{currentInstance ?: 'default'}';
+
+    // Show loading indicator
+    resultDiv.innerHTML = '<div class="card"><div class="card-body text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 mb-0">Generating execution plan...</p></div></div>';
+
+    // Build the URL with proper encoding
+    const params = new URLSearchParams();
+    params.append('instance', instance);
+    params.append('query', queryText);
+    params.append('analyse', analyse);
+    params.append('buffers', buffers);
+
+    fetch('/api/explain?' + params.toString(), {
+        method: 'POST'
+    })
+    .then(response => response.text())
+    .then(html => {
+        resultDiv.innerHTML = html;
+    })
+    .catch(error => {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Failed to generate explain plan: ' + error.message + '</div>';
+    });
+}
+</script>
+
+{/if}
+
+{/include}

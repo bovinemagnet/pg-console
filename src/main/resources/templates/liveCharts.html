@@ -1,0 +1,276 @@
+{#include base}
+{#title}Live Charts - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Interactive Live Charts</h1>
+        <p class="text-muted">Real-time database metrics with configurable refresh intervals</p>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group" role="group" aria-label="Refresh controls">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="pauseBtn" onclick="togglePause()">
+                <i class="bi bi-pause-fill"></i> Pause
+            </button>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                    Interval: <span id="intervalDisplay">5s</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" onclick="setInterval(3000)">3 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setInterval(5000)">5 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setInterval(10000)">10 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setInterval(30000)">30 seconds</a></li>
+                </ul>
+            </div>
+        </div>
+        <span class="badge bg-success ms-2" id="statusBadge">Live</span>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Connections Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Database Connections</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="connectionsChart" height="200"></canvas>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Active: <span id="activeConn">0</span></span>
+                    <span class="badge" style="background-color: #6c757d">Idle: <span id="idleConn">0</span></span>
+                    <span class="badge" style="background-color: #ffc107; color: #000">Idle in Txn: <span id="idleTxnConn">0</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Transaction Rate</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="transactionsChart" height="200"></canvas>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Commits/s: <span id="commitsRate">0</span></span>
+                    <span class="badge" style="background-color: #dc3545">Rollbacks/s: <span id="rollbacksRate">0</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Tuple Operations Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Tuple Operations</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="tuplesChart" height="200"></canvas>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Inserts/s: <span id="insertsRate">0</span></span>
+                    <span class="badge" style="background-color: #007bff">Updates/s: <span id="updatesRate">0</span></span>
+                    <span class="badge" style="background-color: #dc3545">Deletes/s: <span id="deletesRate">0</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cache Hit Ratio Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Cache Hit Ratio</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="cacheChart" height="200"></canvas>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Buffer: <span id="bufferHit">0</span>%</span>
+                    <span class="badge" style="background-color: #007bff">Index: <span id="indexHit">0</span>%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    let isPaused = false;
+    let refreshInterval = 5000;
+    let intervalId = null;
+    const maxDataPoints = 60;
+    const instance = '{instance ?: "default"}';
+
+    // Chart configurations
+    const chartConfig = {
+        type: 'line',
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            scales: {
+                x: { display: false },
+                y: { beginAtZero: true }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    };
+
+    // Initialise charts
+    const connectionsChart = new Chart(document.getElementById('connectionsChart'), {
+        ...chartConfig,
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Active', data: [], borderColor: '#28a745', tension: 0.1 },
+                { label: 'Idle', data: [], borderColor: '#6c757d', tension: 0.1 },
+                { label: 'Idle in Txn', data: [], borderColor: '#ffc107', tension: 0.1 }
+            ]
+        }
+    });
+
+    const transactionsChart = new Chart(document.getElementById('transactionsChart'), {
+        ...chartConfig,
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Commits', data: [], borderColor: '#28a745', tension: 0.1 },
+                { label: 'Rollbacks', data: [], borderColor: '#dc3545', tension: 0.1 }
+            ]
+        }
+    });
+
+    const tuplesChart = new Chart(document.getElementById('tuplesChart'), {
+        ...chartConfig,
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Inserts', data: [], borderColor: '#28a745', tension: 0.1 },
+                { label: 'Updates', data: [], borderColor: '#007bff', tension: 0.1 },
+                { label: 'Deletes', data: [], borderColor: '#dc3545', tension: 0.1 }
+            ]
+        }
+    });
+
+    const cacheChart = new Chart(document.getElementById('cacheChart'), {
+        ...chartConfig,
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Buffer Cache', data: [], borderColor: '#28a745', tension: 0.1 },
+                { label: 'Index Cache', data: [], borderColor: '#007bff', tension: 0.1 }
+            ]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: { x: { display: false }, y: { beginAtZero: true, max: 100 } }
+        }
+    });
+
+    // Previous values for rate calculation
+    let prevCommits = null, prevRollbacks = null;
+    let prevInserts = null, prevUpdates = null, prevDeletes = null;
+
+    function updateCharts() {
+        if (isPaused) return;
+
+        const timestamp = new Date().toLocaleTimeString();
+
+        // Fetch connections
+        fetch('/api/diagnostics/live-charts/connections?instance=' + instance)
+            .then(r => r.json())
+            .then(data => {
+                addDataPoint(connectionsChart, timestamp, [data.active, data.idle, data.idleInTransaction]);
+                document.getElementById('activeConn').textContent = data.active;
+                document.getElementById('idleConn').textContent = data.idle;
+                document.getElementById('idleTxnConn').textContent = data.idleInTransaction;
+            });
+
+        // Fetch transactions
+        fetch('/api/diagnostics/live-charts/transactions?instance=' + instance)
+            .then(r => r.json())
+            .then(data => {
+                const commitsRate = prevCommits !== null ? Math.max(0, (data.commits - prevCommits) / (refreshInterval / 1000)) : 0;
+                const rollbacksRate = prevRollbacks !== null ? Math.max(0, (data.rollbacks - prevRollbacks) / (refreshInterval / 1000)) : 0;
+                prevCommits = data.commits;
+                prevRollbacks = data.rollbacks;
+                addDataPoint(transactionsChart, timestamp, [commitsRate.toFixed(1), rollbacksRate.toFixed(1)]);
+                document.getElementById('commitsRate').textContent = commitsRate.toFixed(1);
+                document.getElementById('rollbacksRate').textContent = rollbacksRate.toFixed(1);
+            });
+
+        // Fetch tuples
+        fetch('/api/diagnostics/live-charts/tuples?instance=' + instance)
+            .then(r => r.json())
+            .then(data => {
+                const insertRate = prevInserts !== null ? Math.max(0, (data.inserted - prevInserts) / (refreshInterval / 1000)) : 0;
+                const updateRate = prevUpdates !== null ? Math.max(0, (data.updated - prevUpdates) / (refreshInterval / 1000)) : 0;
+                const deleteRate = prevDeletes !== null ? Math.max(0, (data.deleted - prevDeletes) / (refreshInterval / 1000)) : 0;
+                prevInserts = data.inserted;
+                prevUpdates = data.updated;
+                prevDeletes = data.deleted;
+                addDataPoint(tuplesChart, timestamp, [insertRate.toFixed(1), updateRate.toFixed(1), deleteRate.toFixed(1)]);
+                document.getElementById('insertsRate').textContent = insertRate.toFixed(1);
+                document.getElementById('updatesRate').textContent = updateRate.toFixed(1);
+                document.getElementById('deletesRate').textContent = deleteRate.toFixed(1);
+            });
+
+        // Fetch cache
+        fetch('/api/diagnostics/live-charts/cache?instance=' + instance)
+            .then(r => r.json())
+            .then(data => {
+                addDataPoint(cacheChart, timestamp, [data.bufferHitRatio.toFixed(1), data.indexHitRatio.toFixed(1)]);
+                document.getElementById('bufferHit').textContent = data.bufferHitRatio.toFixed(1);
+                document.getElementById('indexHit').textContent = data.indexHitRatio.toFixed(1);
+            });
+    }
+
+    function addDataPoint(chart, label, values) {
+        chart.data.labels.push(label);
+        values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+
+        if (chart.data.labels.length > maxDataPoints) {
+            chart.data.labels.shift();
+            chart.data.datasets.forEach(ds => ds.data.shift());
+        }
+        chart.update('none');
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        const btn = document.getElementById('pauseBtn');
+        const badge = document.getElementById('statusBadge');
+        if (isPaused) {
+            btn.innerHTML = '<i class="bi bi-play-fill"></i> Resume';
+            badge.className = 'badge bg-warning ms-2';
+            badge.textContent = 'Paused';
+        } else {
+            btn.innerHTML = '<i class="bi bi-pause-fill"></i> Pause';
+            badge.className = 'badge bg-success ms-2';
+            badge.textContent = 'Live';
+        }
+    }
+
+    function setInterval(ms) {
+        refreshInterval = ms;
+        document.getElementById('intervalDisplay').textContent = (ms / 1000) + 's';
+        if (intervalId) clearInterval(intervalId);
+        intervalId = window.setInterval(updateCharts, refreshInterval);
+    }
+
+    // Start updates
+    updateCharts();
+    intervalId = window.setInterval(updateCharts, refreshInterval);
+</script>
+
+{/include}

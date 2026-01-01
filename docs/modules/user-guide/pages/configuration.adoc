@@ -1,0 +1,400 @@
+= Configuration
+Paul Snow
+0.0.0
+:description: Configuration reference for pg-console including environment variables, database connections, history sampling, and security settings
+:keywords: configuration, environment variables, database connection, security
+
+[abstract]
+This guide covers all configuration options for pg-console, including database connection settings, database filtering, history sampling, and security configuration.
+
+== Configuration Methods
+
+pg-console uses environment variables for configuration. You can set these in several ways:
+
+* *Shell environment*: `export POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres`
+* *System service*: Configure in systemd unit file (see xref:admin-guide:deployment.adoc#systemd[Systemd Deployment])
+* *Docker*: Pass via `-e` flags or `env_file` in docker-compose.yml
+* *Kubernetes*: Define in ConfigMap or Secret resources
+
+[[database-connection]]
+== Database Connection
+
+Configure the PostgreSQL database connection using these environment variables:
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`POSTGRES_URL`
+|JDBC connection URL to PostgreSQL server
+|`jdbc:postgresql://localhost:5432/postgres`
+
+|`POSTGRES_USER`
+|Database username for authentication
+|`postgres`
+
+|`POSTGRES_PASSWORD`
+|Database password for authentication
+|`postgres`
+|===
+
+=== Connection URL Format
+
+The `POSTGRES_URL` follows standard JDBC format:
+
+[source]
+----
+jdbc:postgresql://[host]:[port]/[database]?[parameters]
+----
+
+*Examples:*
+
+.Local PostgreSQL with default port
+[source]
+----
+jdbc:postgresql://localhost:5432/myapp
+----
+
+.Remote PostgreSQL with SSL
+[source]
+----
+jdbc:postgresql://db.example.com:5432/production?ssl=true&sslmode=require
+----
+
+.PostgreSQL with connection timeout
+[source]
+----
+jdbc:postgresql://localhost:5432/postgres?connectTimeout=10
+----
+
+[TIP]
+====
+Common JDBC parameters:
+
+* `ssl=true` - Enable SSL/TLS encryption
+* `sslmode=require` - Require SSL (reject unencrypted connections)
+* `connectTimeout=10` - Connection timeout in seconds
+* `socketTimeout=30` - Socket read timeout in seconds
+* `applicationName=pg-console` - Set application name in pg_stat_activity
+====
+
+=== Connection Pooling
+
+pg-console uses Agroal (Quarkus default) for connection pooling. Configure pool settings:
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`QUARKUS_DATASOURCE_JDBC_MIN_SIZE`
+|Minimum number of connections in pool
+|`0`
+
+|`QUARKUS_DATASOURCE_JDBC_MAX_SIZE`
+|Maximum number of connections in pool
+|`20`
+
+|`QUARKUS_DATASOURCE_JDBC_INITIAL_SIZE`
+|Initial number of connections
+|`0`
+|===
+
+Example configuration:
+
+[source,bash]
+----
+export QUARKUS_DATASOURCE_JDBC_MIN_SIZE=5
+export QUARKUS_DATASOURCE_JDBC_MAX_SIZE=50
+----
+
+== Database Filtering
+
+By default, pg-console monitors all non-template databases. You can restrict monitoring to specific databases using the `PG_CONSOLE_DATABASES` variable.
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`PG_CONSOLE_DATABASES`
+|Comma-separated list of database names to monitor. Leave empty to monitor all databases.
+|_(empty - monitor all)_
+|===
+
+=== Examples
+
+.Monitor only production databases
+[source,bash]
+----
+export PG_CONSOLE_DATABASES=app_production,analytics_prod
+----
+
+.Monitor a single database
+[source,bash]
+----
+export PG_CONSOLE_DATABASES=myapp
+----
+
+.Monitor all databases (default behaviour)
+[source,bash]
+----
+export PG_CONSOLE_DATABASES=
+----
+
+[NOTE]
+====
+Template databases (`template0`, `template1`) are always excluded regardless of this setting.
+====
+
+[[history-sampling]]
+== History Sampling
+
+pg-console can collect historical metrics for trend analysis and sparkline visualisation. This feature creates a `pgconsole` schema in the connected database to store samples.
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`PG_CONSOLE_HISTORY_ENABLED`
+|Enable or disable history sampling
+|`true`
+
+|`PG_CONSOLE_HISTORY_INTERVAL`
+|Sampling interval in seconds
+|`60`
+
+|`PG_CONSOLE_HISTORY_RETENTION`
+|Number of days to retain historical data
+|`7`
+
+|`PG_CONSOLE_HISTORY_TOP_QUERIES`
+|Number of top queries to sample per interval
+|`50`
+|===
+
+=== Disabling History Sampling
+
+To disable history collection entirely:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=false
+----
+
+When disabled:
+
+* No `pgconsole` schema is created
+* No historical data is collected
+* Sparklines will not appear on dashboards
+* Reduced database write load
+
+=== Tuning History Retention
+
+Adjust retention period based on your needs:
+
+[source,bash]
+----
+# Keep 30 days of history
+export PG_CONSOLE_HISTORY_RETENTION=30
+
+# Keep only 24 hours of history
+export PG_CONSOLE_HISTORY_RETENTION=1
+----
+
+Old data is automatically purged by a daily scheduled job.
+
+=== Sampling Frequency
+
+Balance between data granularity and database load:
+
+[source,bash]
+----
+# High-frequency sampling (every 30 seconds)
+export PG_CONSOLE_HISTORY_INTERVAL=30
+
+# Low-frequency sampling (every 5 minutes)
+export PG_CONSOLE_HISTORY_INTERVAL=300
+----
+
+[IMPORTANT]
+====
+More frequent sampling increases database write load and storage requirements. For high-traffic databases, consider increasing the interval to 120 seconds or more.
+====
+
+== Server Configuration
+
+Configure the web server bind address and port:
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`QUARKUS_HTTP_HOST`
+|Network interface to bind to
+|`0.0.0.0`
+
+|`QUARKUS_HTTP_PORT`
+|HTTP port to listen on
+|`8080`
+|===
+
+=== Examples
+
+.Bind to localhost only (disable remote access)
+[source,bash]
+----
+export QUARKUS_HTTP_HOST=127.0.0.1
+export QUARKUS_HTTP_PORT=8080
+----
+
+.Use custom port
+[source,bash]
+----
+export QUARKUS_HTTP_PORT=3000
+----
+
+== Security Settings
+
+=== Basic Authentication
+
+pg-console does not include built-in authentication. For production deployments, use a reverse proxy (nginx, Apache) or API gateway to add authentication.
+
+See xref:admin-guide:security.adoc#authentication[Authentication] in the Administration Guide for detailed guidance.
+
+=== Read-Only Mode
+
+To prevent accidental schema changes, use a read-only database user:
+
+[source,sql]
+----
+-- Create read-only role
+CREATE ROLE pgconsole_readonly LOGIN PASSWORD 'secure_password';
+
+-- Grant connection
+GRANT CONNECT ON DATABASE myapp TO pgconsole_readonly;
+
+-- Grant schema usage
+GRANT USAGE ON SCHEMA public TO pgconsole_readonly;
+
+-- Grant SELECT on all tables
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgconsole_readonly;
+
+-- Grant SELECT on system views (required for monitoring)
+GRANT pg_monitor TO pgconsole_readonly;
+----
+
+[NOTE]
+====
+If you use a read-only user and enable history sampling, the application will fail to create the `pgconsole` schema. Either:
+
+* Disable history sampling (`PG_CONSOLE_HISTORY_ENABLED=false`)
+* Grant `CREATE` privilege on the database to allow schema creation
+====
+
+=== SSL/TLS Connections
+
+Enable encrypted connections to PostgreSQL:
+
+[source,bash]
+----
+export POSTGRES_URL="jdbc:postgresql://db.example.com:5432/postgres?ssl=true&sslmode=require"
+----
+
+SSL modes:
+
+* `disable` - No SSL (default)
+* `allow` - Try SSL, fall back to non-SSL
+* `prefer` - Try SSL, warn if unavailable
+* `require` - Require SSL or reject connection
+* `verify-ca` - Require SSL and verify certificate authority
+* `verify-full` - Require SSL and verify hostname
+
+For production environments, use `sslmode=require` or higher.
+
+== Logging Configuration
+
+Configure application logging levels:
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`QUARKUS_LOG_LEVEL`
+|Global log level
+|`INFO`
+
+|`QUARKUS_LOG_CATEGORY_COM_BOVINEMAGNET_LEVEL`
+|Log level for pg-console classes
+|`INFO`
+|===
+
+Available log levels: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`
+
+.Example: Enable debug logging
+[source,bash]
+----
+export QUARKUS_LOG_LEVEL=DEBUG
+export QUARKUS_LOG_CATEGORY_COM_BOVINEMAGNET_LEVEL=DEBUG
+----
+
+== Alerting Configuration
+
+pg-console includes a built-in alerting system. For production monitoring:
+
+* Enable alerting via `PG_CONSOLE_ALERTING_ENABLED=true`
+* Configure webhook integrations (Slack, Discord, Microsoft Teams)
+* Set up email notifications via SMTP
+* Customise thresholds for your environment
+
+See xref:admin-guide:alerting.adoc[Alerting Configuration] for complete guidance.
+
+== Configuration Example
+
+Complete example for a production deployment:
+
+[source,bash]
+----
+# Database connection
+export POSTGRES_URL="jdbc:postgresql://prod-db.example.com:5432/myapp?ssl=true&sslmode=require"
+export POSTGRES_USER="pgconsole_user"
+export POSTGRES_PASSWORD="$(cat /run/secrets/db-password)"
+
+# Monitor specific databases
+export PG_CONSOLE_DATABASES="myapp_prod,analytics_prod"
+
+# History sampling
+export PG_CONSOLE_HISTORY_ENABLED=true
+export PG_CONSOLE_HISTORY_INTERVAL=120
+export PG_CONSOLE_HISTORY_RETENTION=30
+export PG_CONSOLE_HISTORY_TOP_QUERIES=100
+
+# Server configuration
+export QUARKUS_HTTP_HOST=0.0.0.0
+export QUARKUS_HTTP_PORT=8080
+
+# Connection pool
+export QUARKUS_DATASOURCE_JDBC_MIN_SIZE=5
+export QUARKUS_DATASOURCE_JDBC_MAX_SIZE=20
+
+# Logging
+export QUARKUS_LOG_LEVEL=INFO
+----
+
+== Verifying Configuration
+
+After applying configuration changes:
+
+. Restart pg-console
+. Check the startup logs for configuration values
+. Access the xref:dashboards.adoc#about[About page] (`/about`) to verify:
+  - Database connection details
+  - PostgreSQL version
+  - History sampling status
+  - Application version
+
+If you encounter issues, see the xref:troubleshooting.adoc[Troubleshooting] guide.
+
+== Next Steps
+
+* Explore the xref:dashboards.adoc[available dashboards]
+* Review xref:admin-guide:deployment.adoc[production deployment] options
+* Configure xref:admin-guide:alerting.adoc[alerting and notifications]

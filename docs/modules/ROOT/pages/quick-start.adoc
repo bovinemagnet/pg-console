@@ -1,0 +1,188 @@
+= Quick Start
+Paul Snow
+0.0.0
+:description: Get pg-console up and running in minutes
+:keywords: quick start, installation, setup, getting started
+
+Get pg-console up and running in minutes with this quick start guide.
+
+== Prerequisites
+
+Before you begin, ensure you have the following installed and configured:
+
+* *Java 21 or later* - Required to run the pg-console application
+* *PostgreSQL 12 or later* - The database server you want to monitor
+* *pg_stat_statements extension* - Must be enabled on your PostgreSQL server
+
+=== Enable pg_stat_statements
+
+The `pg_stat_statements` extension is required for query performance analysis. Enable it by adding the following to your PostgreSQL configuration:
+
+[source,postgresql]
+----
+# postgresql.conf
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = all
+----
+
+After modifying the configuration, restart PostgreSQL and create the extension:
+
+[source,sql]
+----
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+----
+
+TIP: Most managed PostgreSQL services (AWS RDS, Azure Database, Google Cloud SQL) include `pg_stat_statements` by default or allow easy enablement through their console.
+
+== Download and Build
+
+Clone the repository and build the application:
+
+[source,bash]
+----
+git clone https://github.com/bovinemagnet/pg-console.git
+cd pg-console
+gradle21w clean build
+----
+
+The build produces a runnable JAR at `build/quarkus-app/quarkus-run.jar`.
+
+== Running with Local PostgreSQL
+
+For testing and development, you can quickly start a local PostgreSQL instance using Docker Compose:
+
+[source,bash]
+----
+docker-compose up -d
+----
+
+This starts PostgreSQL on port 5432 with:
+
+* Username: `postgres`
+* Password: `postgres`
+* Database: `postgres`
+* Extensions: `pg_stat_statements` pre-enabled
+* Sample data: Automatically loaded for demonstration
+
+== Running pg-console
+
+Start the pg-console application:
+
+[source,bash]
+----
+java -jar build/quarkus-app/quarkus-run.jar
+----
+
+By default, pg-console connects to `localhost:5432` with username and password `postgres`.
+
+== Configuration
+
+Configure database connection and monitoring behaviour using environment variables:
+
+.Essential Environment Variables
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`POSTGRES_URL`
+|JDBC connection URL
+|`jdbc:postgresql://localhost:5432/postgres`
+
+|`POSTGRES_USER`
+|Database username
+|`postgres`
+
+|`POSTGRES_PASSWORD`
+|Database password
+|`postgres`
+
+|`PG_CONSOLE_DATABASES`
+|Comma-separated list of databases to monitor (empty = all non-template databases)
+|_empty_ (all databases)
+
+|`PG_CONSOLE_HISTORY_ENABLED`
+|Enable historical metrics sampling
+|`true`
+
+|`PG_CONSOLE_HISTORY_INTERVAL`
+|Sampling interval in seconds
+|`60`
+
+|`PG_CONSOLE_HISTORY_RETENTION`
+|Days to retain historical data
+|`7`
+|===
+
+.Example: Custom Connection
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://dbserver:5432/production
+export POSTGRES_USER=monitor
+export POSTGRES_PASSWORD=secure_password
+export PG_CONSOLE_DATABASES=myapp_prod,analytics
+
+java -jar build/quarkus-app/quarkus-run.jar
+----
+
+.Example: Monitor Single Database
+[source,bash]
+----
+export PG_CONSOLE_DATABASES=sim_prd_eplus
+
+java -jar build/quarkus-app/quarkus-run.jar
+----
+
+NOTE: When `PG_CONSOLE_DATABASES` is set, only the specified databases appear in the dashboard. This is useful for focusing on specific databases in multi-tenant environments.
+
+== Access the Dashboard
+
+Once started, open your browser and navigate to:
+
+http://localhost:8080
+
+You should see the pg-console overview dashboard displaying:
+
+* Active database connections
+* Current query activity
+* Cache hit ratios
+* Database sizes
+* Top tables and indexes by activity
+
+== Next Steps
+
+Now that pg-console is running, explore the documentation to learn more:
+
+* xref:user-guide:dashboards.adoc[Dashboards] - Understanding the monitoring dashboards and widgets
+* xref:user-guide:configuration.adoc[Configuration] - Customising pg-console for your environment
+* xref:user-guide:troubleshooting.adoc[Troubleshooting] - Solving common issues
+* xref:admin-guide:configuration.adoc[Configuration Reference] - Complete list of configuration options
+* xref:admin-guide:deployment.adoc[Deployment Guide] - Production deployment best practices
+
+== Troubleshooting
+
+.Cannot connect to database
+Check that PostgreSQL is running and accepting connections. Verify the connection parameters:
+
+[source,bash]
+----
+psql -h localhost -U postgres -d postgres
+----
+
+.No query statistics available
+Ensure `pg_stat_statements` is enabled and has collected data. Run some queries against your database, then check:
+
+[source,sql]
+----
+SELECT count(*) FROM pg_stat_statements;
+----
+
+.Permission errors
+The monitoring user needs the following permissions:
+
+[source,sql]
+----
+GRANT pg_monitor TO your_monitoring_user;
+GRANT EXECUTE ON FUNCTION pg_stat_statements_reset() TO your_monitoring_user;
+----
+
+For more help, see the xref:user-guide:troubleshooting.adoc[Troubleshooting Guide].

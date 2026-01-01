@@ -1,20 +1,23 @@
 {#include base}
 {#title}Current Activity - PostgreSQL Console{/title}
-{#insert}
-<div class="row mt-4">
-    <div class="col-12">
+
+<div id="refreshable-content" hx-get="/activity?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
         <h1>Current Activity</h1>
         <p class="text-muted">Active connections and running queries</p>
-        <button class="btn btn-sm btn-secondary" 
-                hx-get="/activity" 
-                hx-target="body"
-                hx-swap="innerHTML">
-            🔄 Refresh
-        </button>
+    </div>
+    <div class="col-auto">
+        <a href="/incident-report/export?instance={currentInstance ?: 'default'}"
+           class="btn btn-outline-danger"
+           title="Capture a point-in-time snapshot of database state">
+            Capture Incident Report
+        </a>
     </div>
 </div>
 
-<div class="row mt-3">
+<div class="row">
     <div class="col-12">
         {#if activities.isEmpty()}
         <div class="alert alert-info">
@@ -34,6 +37,9 @@
                         <th>Query Start</th>
                         <th>Query</th>
                         <th>Blocking</th>
+                        {#if securityEnabled}
+                        <th>Actions</th>
+                        {/if}
                     </tr>
                 </thead>
                 <tbody>
@@ -44,16 +50,16 @@
                         <td>{act.database}</td>
                         <td>{act.applicationName}</td>
                         <td>
-                            <span class="badge 
+                            <span class="badge
                                 {#if act.state == 'active'}bg-success
-                                {#else if act.state == 'idle in transaction'}bg-warning
+                                {#else if act.state == 'idle in transaction'}bg-warning text-dark
                                 {#else}bg-secondary{/if}">
                                 {act.state}
                             </span>
                         </td>
                         <td>
                             {#if act.waitEventType}
-                                {act.waitEventType}: {act.waitEvent}
+                                <small>{act.waitEventType}: {act.waitEvent}</small>
                             {#else}
                                 -
                             {/if}
@@ -65,11 +71,27 @@
                         </td>
                         <td>
                             {#if act.blockingPid}
-                                <span class="blocking">⚠️ {act.blockingPid}</span>
+                                <a href="/locks?instance={currentInstance ?: 'default'}" class="blocking">⚠️ {act.blockingPid}</a>
                             {#else}
                                 -
                             {/if}
                         </td>
+                        {#if securityEnabled}
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-warning btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#cancelModal"
+                                        data-pid="{act.pid}" data-query="{act.shortQuery}">
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#terminateModal"
+                                        data-pid="{act.pid}" data-query="{act.shortQuery}">
+                                    Kill
+                                </button>
+                            </div>
+                        </td>
+                        {/if}
                     </tr>
                     {/for}
                 </tbody>
@@ -78,5 +100,124 @@
         {/if}
     </div>
 </div>
-{/insert}
+
+</div>
+
+{#if securityEnabled}
+<!-- Cancel Query Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="cancelModalLabel">⚠️ Cancel Query</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to <strong>cancel</strong> this query?</p>
+                <p class="text-muted small">This will send a cancel signal to the query (pg_cancel_backend). The query will be interrupted but the connection will remain active.</p>
+                <p><strong>PID:</strong> <span id="cancelPid"></span></p>
+                <p><strong>Query:</strong> <code id="cancelQuery" class="small"></code></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" id="confirmCancel">
+                    Cancel Query
+                </button>
+                <span id="cancelResult" class="ms-2"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terminate Connection Modal -->
+<div class="modal fade" id="terminateModal" tabindex="-1" aria-labelledby="terminateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="terminateModalLabel">🛑 Terminate Connection</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <strong>Warning!</strong> This is a destructive action.
+                </div>
+                <p>Are you sure you want to <strong>terminate</strong> this connection?</p>
+                <p class="text-muted small">This will forcefully terminate the backend process (pg_terminate_backend). The connection will be closed immediately and any uncommitted transactions will be rolled back.</p>
+                <p><strong>PID:</strong> <span id="terminatePid"></span></p>
+                <p><strong>Query:</strong> <code id="terminateQuery" class="small"></code></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="confirmTerminate">
+                    Terminate Connection
+                </button>
+                <span id="terminateResult" class="ms-2"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Cancel Modal
+    document.getElementById('cancelModal').addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var pid = button.getAttribute('data-pid');
+        var query = button.getAttribute('data-query');
+        document.getElementById('cancelPid').textContent = pid;
+        document.getElementById('cancelQuery').textContent = query;
+        document.getElementById('cancelResult').innerHTML = '';
+        document.getElementById('confirmCancel').disabled = false;
+        document.getElementById('confirmCancel').setAttribute('data-pid', pid);
+    });
+
+    document.getElementById('confirmCancel').addEventListener('click', function() {
+        var pid = this.getAttribute('data-pid');
+        var resultSpan = document.getElementById('cancelResult');
+        var btn = this;
+        btn.disabled = true;
+
+        fetch('/api/activity/' + pid + '/cancel?instance={currentInstance ?: 'default'}', {
+            method: 'POST'
+        })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            resultSpan.innerHTML = html;
+        })
+        .catch(function(err) {
+            resultSpan.innerHTML = '<span class="badge bg-danger">Error: ' + err + '</span>';
+        });
+    });
+
+    // Terminate Modal
+    document.getElementById('terminateModal').addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var pid = button.getAttribute('data-pid');
+        var query = button.getAttribute('data-query');
+        document.getElementById('terminatePid').textContent = pid;
+        document.getElementById('terminateQuery').textContent = query;
+        document.getElementById('terminateResult').innerHTML = '';
+        document.getElementById('confirmTerminate').disabled = false;
+        document.getElementById('confirmTerminate').setAttribute('data-pid', pid);
+    });
+
+    document.getElementById('confirmTerminate').addEventListener('click', function() {
+        var pid = this.getAttribute('data-pid');
+        var resultSpan = document.getElementById('terminateResult');
+        var btn = this;
+        btn.disabled = true;
+
+        fetch('/api/activity/' + pid + '/terminate?instance={currentInstance ?: 'default'}', {
+            method: 'POST'
+        })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            resultSpan.innerHTML = html;
+        })
+        .catch(function(err) {
+            resultSpan.innerHTML = '<span class="badge bg-danger">Error: ' + err + '</span>';
+        });
+    });
+</script>
+{/if}
+
 {/include}

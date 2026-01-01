@@ -1,0 +1,87 @@
+graph LR
+    %% Browser and UI Layer
+    Browser[Browser<br/>User Interface]
+
+    %% Presentation Layer
+    subgraph Presentation["Presentation Layer"]
+        Qute[Qute Templates<br/>Server-side HTML]
+        HTMX[htmx Enhancements<br/>Dynamic Updates]
+    end
+
+    %% REST API Layer
+    subgraph REST["REST Resources (JAX-RS)"]
+        DashboardResource[DashboardResource<br/>Dashboard Endpoints]
+        ApiResource[ApiResource<br/>API Endpoints]
+        SecurityResource[SecurityResource<br/>Security Endpoints]
+    end
+
+    %% Services Layer
+    subgraph Services["Services Layer"]
+        PostgresService[PostgresService<br/>Query Execution]
+        SparklineService[SparklineService<br/>SVG Generation]
+        AlertService[AlertService<br/>Alert Logic]
+        HistoryService[HistoryService<br/>History Management]
+        MetricsSampler[MetricsSamplerService<br/>Scheduled Sampling]
+    end
+
+    %% Repository Layer
+    subgraph Repository["Repository Layer"]
+        HistoryRepo[HistoryRepository<br/>Data Access]
+    end
+
+    %% Data Layer
+    subgraph Data["PostgreSQL Database"]
+        SystemViews[System Views<br/>pg_stat_statements<br/>pg_stat_activity<br/>pg_locks<br/>pg_stat_database]
+        HistorySchema[History Schema<br/>pgconsole.query_history<br/>pgconsole.connection_history<br/>pgconsole.database_history]
+    end
+
+    %% Data Flow - Browser to Presentation
+    Browser -->|HTTP Request| HTMX
+    HTMX -->|Page Request| Qute
+
+    %% Data Flow - Presentation to REST
+    Qute -->|Render Data| DashboardResource
+    HTMX -->|AJAX Request| ApiResource
+    Browser -->|Auth Request| SecurityResource
+
+    %% Data Flow - REST to Services
+    DashboardResource -->|Query Metrics| PostgresService
+    DashboardResource -->|Generate Charts| SparklineService
+    ApiResource -->|Check Alerts| AlertService
+    ApiResource -->|Fetch History| HistoryService
+    SecurityResource -->|Validate| PostgresService
+
+    %% Data Flow - Services to Repository
+    SparklineService -->|Read History| HistoryRepo
+    HistoryService -->|Read/Write| HistoryRepo
+    MetricsSampler -->|Store Samples| HistoryRepo
+
+    %% Data Flow - Services to Database
+    PostgresService -->|SQL Queries| SystemViews
+    PostgresService -->|Read Metrics| HistorySchema
+
+    %% Data Flow - Repository to Database
+    HistoryRepo -->|JDBC| HistorySchema
+
+    %% Data Flow - Scheduled Tasks
+    MetricsSampler -.->|Periodic Sampling| PostgresService
+    MetricsSampler -.->|Cleanup Old Data| HistoryRepo
+
+    %% Response Flow
+    Qute -->|HTML Response| Browser
+    HTMX -->|HTML Fragments| Browser
+
+    %% Styling
+    classDef browserStyle fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef presentationStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef restStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef serviceStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef repoStyle fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef dataStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+
+    class Browser browserStyle
+    class Qute,HTMX presentationStyle
+    class DashboardResource,ApiResource,SecurityResource restStyle
+    class PostgresService,SparklineService,AlertService,HistoryService,MetricsSampler serviceStyle
+    class HistoryRepo repoStyle
+    class SystemViews,HistorySchema dataStyle

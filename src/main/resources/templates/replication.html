@@ -1,0 +1,262 @@
+{#include base}
+{#title}Replication - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/replication?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Replication Dashboard</h1>
+        <p class="text-muted">
+            {#if isReplica}
+            <span class="badge bg-info me-2">Standby Server</span>
+            This server is operating as a replica
+            {#else}
+            <span class="badge bg-success me-2">Primary Server</span>
+            Streaming replication status and slot management
+            {/if}
+        </p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">WAL Level</span>
+                <h3 class="mb-0">{walStats.walLevel ?: 'N/A'}</h3>
+                <small class="text-muted">replication mode</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">Replicas</span>
+                <h2 class="mb-0">{summary.streamingReplicas} / {summary.totalReplicas}</h2>
+                <small class="text-muted">streaming / total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Slots</span>
+                <h2 class="mb-0">{summary.activeSlots} / {summary.totalSlots}</h2>
+                <small class="text-muted">active / total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.maxLagBytes > 1048576}bg-warning text-dark{#else}bg-secondary{/if} mb-2">Max Lag</span>
+                <h3 class="mb-0">{summary.maxLagFormatted}</h3>
+                <small class="text-muted">behind primary</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Streaming Replicas Table -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Streaming Replicas</h5>
+                <span class="badge bg-info">{replicas.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if replicas.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h4>No Streaming Replicas</h4>
+                    <p class="mb-0">
+                        {#if isReplica}
+                        This server is a replica, not a primary.
+                        {#else}
+                        No replicas are currently connected to this primary.
+                        {/if}
+                    </p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>State</th>
+                                <th>Application</th>
+                                <th>Client</th>
+                                <th>Sync</th>
+                                <th class="text-end">Replay Lag</th>
+                                <th class="text-end">Write Lag</th>
+                                <th class="text-end">Bytes Behind</th>
+                                <th>Replay LSN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for replica in replicas}
+                            <tr class="{#if replica.hasLag}table-warning{/if}">
+                                <td>
+                                    <span class="badge {replica.stateCssClass}">{replica.state}</span>
+                                </td>
+                                <td>
+                                    <strong>{replica.applicationName}</strong>
+                                    <br><small class="text-muted">PID: {replica.pid}</small>
+                                </td>
+                                <td>
+                                    {replica.clientDisplay}
+                                    {#if replica.clientPort > 0}
+                                    <br><small class="text-muted">:{replica.clientPort}</small>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <span class="badge {replica.syncStateCssClass}">{replica.syncState}</span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="{#if replica.replayLag > 1000}text-warning{/if}">
+                                        {replica.replayLagFormatted}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    {replica.writeLagFormatted}
+                                </td>
+                                <td class="text-end">
+                                    <span class="{#if replica.lagBytes > 10485760}text-danger{#else if replica.lagBytes > 1048576}text-warning{/if}">
+                                        {replica.lagBytesFormatted}
+                                    </span>
+                                </td>
+                                <td>
+                                    <code class="small">{replica.replayLsn}</code>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Replication Slots Table -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Replication Slots</h5>
+                <span class="badge bg-info">{slots.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if slots.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No replication slots configured</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Slot Name</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Database</th>
+                                <th>Plugin</th>
+                                <th class="text-end">WAL Retained</th>
+                                <th>Restart LSN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for slot in slots}
+                            <tr class="{#if slot.retainingExcessiveWal}table-warning{/if}">
+                                <td>
+                                    <strong>{slot.slotName}</strong>
+                                    {#if slot.temporary}
+                                    <span class="badge bg-secondary ms-1">Temp</span>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <span class="badge {slot.slotTypeCssClass}">{slot.slotType}</span>
+                                </td>
+                                <td>
+                                    <span class="badge {slot.activeCssClass}">{slot.activeDisplay}</span>
+                                    {#if slot.activePid > 0}
+                                    <br><small class="text-muted">PID: {slot.activePid}</small>
+                                    {/if}
+                                </td>
+                                <td>{slot.database ?: '—'}</td>
+                                <td><code class="small">{slot.plugin ?: '—'}</code></td>
+                                <td class="text-end">
+                                    <span class="{slot.retainedWalCssClass}">
+                                        {slot.walRetainedFormatted}
+                                    </span>
+                                </td>
+                                <td>
+                                    <code class="small">{slot.restartLsn ?: '—'}</code>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WAL Information -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">WAL Configuration</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Current LSN</dt>
+                    <dd class="col-sm-6"><code>{walStats.currentLsn ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">Current WAL File</dt>
+                    <dd class="col-sm-6"><code class="small">{walStats.currentWalFile ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">WAL Segment Size</dt>
+                    <dd class="col-sm-6">{walStats.walSegmentSizeFormatted}</dd>
+
+                    <dt class="col-sm-6">WAL Senders</dt>
+                    <dd class="col-sm-6">{walStats.activeWalSenders} / {walStats.maxWalSenders}</dd>
+
+                    <dt class="col-sm-6">Replication Slots</dt>
+                    <dd class="col-sm-6">{walStats.usedReplicationSlots} / {walStats.maxReplicationSlots}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Replication</h5>
+            </div>
+            <div class="card-body">
+                <h6>Sync States</h6>
+                <dl class="small mb-2">
+                    <dt><span class="badge bg-success">sync</span></dt>
+                    <dd class="text-muted">Synchronous replica - commits wait for confirmation</dd>
+                    <dt><span class="badge bg-info">async</span></dt>
+                    <dd class="text-muted">Asynchronous replica - may lag behind primary</dd>
+                </dl>
+                <h6>Slot Types</h6>
+                <dl class="small mb-0">
+                    <dt><span class="badge bg-secondary">Physical</span></dt>
+                    <dd class="text-muted">Streaming replication slot (byte-for-byte copy)</dd>
+                    <dt><span class="badge bg-info">Logical</span></dt>
+                    <dd class="text-muted">Logical replication slot (table-level changes)</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

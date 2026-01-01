@@ -1,0 +1,145 @@
+= Developer Guide
+Paul Snow
+0.0.0
+:description: Developer guide for contributing to and extending pg-console
+:keywords: development, architecture, testing, contributing
+
+Welcome to the pg-console Developer Guide. This guide provides technical information for developers who want to contribute to pg-console, understand its internal architecture, or extend its functionality.
+
+== Overview
+
+pg-console is built with modern Java technologies and follows server-side rendering principles. The application provides real-time PostgreSQL monitoring through a clean web interface without requiring complex client-side JavaScript frameworks.
+
+=== Technology Stack
+
+The core technologies used in pg-console are:
+
+* *Quarkus 3.16.3* - Supersonic Subatomic Java framework
+* *Java 21* - Latest LTS version with modern language features
+* *Qute* - Server-side templating engine
+* *htmx* - Progressive enhancement for dynamic interactions
+* *Bootstrap 5* - Responsive CSS framework
+* *Plain JDBC* - Direct SQL access to PostgreSQL system views
+
+=== Development Philosophy
+
+pg-console follows several key principles:
+
+Server-side rendering::
+All pages work without JavaScript. htmx provides progressive enhancement for improved user experience without requiring a build pipeline.
+
+Direct SQL access::
+Uses plain JDBC to query PostgreSQL system views (`pg_stat_statements`, `pg_stat_activity`, `pg_locks`) rather than an ORM layer.
+
+Minimal dependencies::
+Keeps the dependency footprint small and avoids unnecessary complexity.
+
+Security by design::
+Implements allowlist-based sorting, parameterised queries, and read-only database access.
+
+=== What's in This Guide
+
+This Developer Guide covers:
+
+xref:architecture.adoc[Architecture]::
+Learn about the system architecture, package structure, design decisions, and how requests flow through the application layers.
+
+xref:database-schema.adoc[Database Schema]::
+Understand the `pgconsole` schema used for storing historical metrics, alert data, and how Flyway manages migrations.
+
+xref:testing.adoc[Testing]::
+Discover the testing strategy, including unit tests, integration tests with Testcontainers, E2E tests with Playwright, and code coverage reporting.
+
+== Getting Started
+
+=== Prerequisites
+
+Before you begin development, ensure you have:
+
+* Java 21 or later
+* PostgreSQL 12 or later with `pg_stat_statements` extension enabled
+* Docker and Docker Compose (optional, for local PostgreSQL)
+* Git for version control
+
+=== Quick Start
+
+Clone the repository and start development:
+
+[source,bash]
+----
+# Clone the repository
+git clone https://github.com/your-org/pg-console.git
+cd pg-console
+
+# Start local PostgreSQL (optional)
+docker-compose up -d
+
+# Run in development mode with live reload
+gradle21w quarkusDev
+----
+
+The application will be available at http://localhost:8080.
+
+=== Development Workflow
+
+. Make your changes to the codebase
+. Test your changes with `gradle21w test`
+. Run the application in dev mode with `gradle21w quarkusDev`
+. Submit a pull request with tests and documentation
+
+For detailed build commands, see xref:admin-guide:deployment.adoc[Deployment Guide].
+
+== Project Structure
+
+The project follows a standard Quarkus application layout:
+
+[source,text]
+----
+pg-console/
+├── src/
+│   ├── main/
+│   │   ├── java/com/bovinemagnet/pgconsole/
+│   │   │   ├── model/        # DTOs and domain models
+│   │   │   ├── repository/   # Data access layer
+│   │   │   ├── resource/     # REST endpoints
+│   │   │   └── service/      # Business logic
+│   │   └── resources/
+│   │       ├── templates/    # Qute HTML templates
+│   │       ├── db/migration/ # Flyway migration scripts
+│   │       └── META-INF/     # Configuration
+│   └── test/
+│       ├── java/             # Unit and integration tests
+│       └── resources/        # Test configuration
+├── docs/                     # Antora documentation
+├── build.gradle.kts          # Gradle build configuration
+└── docker-compose.yml        # Local PostgreSQL setup
+----
+
+== Contributing
+
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
+
+. Fork the repository
+. Create a feature branch (`git checkout -b feature/amazing-feature`)
+. Write tests for your changes
+. Ensure all tests pass (`gradle21w test`)
+. Update documentation as needed
+. Commit your changes with clear messages
+. Push to your branch and open a pull request
+
+== Getting Help
+
+If you need assistance:
+
+* Check the xref:user-guide:index.adoc[User Guide] for usage information
+* Review the xref:admin-guide:index.adoc[Admin Guide] for deployment and configuration
+* Browse the xref:api-reference:index.adoc[API Reference] for endpoint documentation
+* Open an issue on GitHub for bugs or feature requests
+
+== Next Steps
+
+Continue reading to learn about:
+
+* xref:architecture.adoc[System Architecture] - Understand how pg-console is designed
+* xref:database-schema.adoc[Database Schema] - Learn about the historical data storage
+* xref:testing.adoc[Testing Strategy] - Explore the test suite and coverage

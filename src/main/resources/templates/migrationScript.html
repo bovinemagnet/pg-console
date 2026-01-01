@@ -1,0 +1,248 @@
+{#include base}
+{#title}Migration Script - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/schema-comparison">Schema Comparison</a></li>
+                <li class="breadcrumb-item active">Migration Script</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-file-code me-2"></i>Migration Script</h1>
+        <p class="text-muted">
+            Generated DDL to migrate from
+            <strong>{result.sourceInstance}.{result.sourceSchema}</strong>
+            to
+            <strong>{result.destinationInstance}.{result.destinationSchema}</strong>
+        </p>
+    </div>
+</div>
+
+<!-- Script Info -->
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{script.statementCount}</h3>
+                <small class="text-muted">Total Statements</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-danger">{script.breakingStatementCount}</h3>
+                <small class="text-muted">Breaking Changes</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{script.wrapOption.displayName}</h3>
+                <small class="text-muted">Transaction Mode</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{script.generatedAtFormatted}</h3>
+                <small class="text-muted">Generated</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="btn-group">
+            <a href="/schema-comparison" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+            <a href="/schema-comparison/download-script?sourceInstance={result.sourceInstance}&destInstance={result.destinationInstance}&sourceSchema={result.sourceSchema}&destSchema={result.destinationSchema}&wrapOption={selectedWrapOption}&includeDrops={includeDrops}"
+               class="btn btn-primary">
+                <i class="bi bi-download me-1"></i>Download .sql
+            </a>
+            <button type="button" class="btn btn-outline-secondary" onclick="copyScript()">
+                <i class="bi bi-clipboard me-1"></i>Copy to Clipboard
+            </button>
+        </div>
+
+        <div class="btn-group ms-3">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="bi bi-funnel me-1"></i>Filter
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" onclick="showAll()">Show All</a></li>
+                <li><a class="dropdown-item" href="#" onclick="showOnly('CREATE')">CREATE Only</a></li>
+                <li><a class="dropdown-item" href="#" onclick="showOnly('ALTER')">ALTER Only</a></li>
+                <li><a class="dropdown-item" href="#" onclick="showOnly('DROP')">DROP Only</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{#if script.breakingStatementCount > 0}
+<div class="alert alert-danger" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>Warning!</strong> This script contains {script.breakingStatementCount} breaking change(s)
+    that may result in data loss. Review carefully before executing.
+</div>
+{/if}
+
+<!-- Script Options -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Regenerate Options</h5>
+            </div>
+            <div class="card-body">
+                <form action="/schema-comparison/generate-migration" method="post" class="row g-3 align-items-end">
+                    <input type="hidden" name="sourceInstance" value="{result.sourceInstance}">
+                    <input type="hidden" name="destInstance" value="{result.destinationInstance}">
+                    <input type="hidden" name="sourceSchema" value="{result.sourceSchema}">
+                    <input type="hidden" name="destSchema" value="{result.destinationSchema}">
+
+                    <div class="col-md-4">
+                        <label class="form-label">Transaction Wrapping</label>
+                        <select class="form-select" name="wrapOption">
+                            {#for opt in wrapOptions}
+                            <option value="{opt.name()}" {#if opt == selectedWrapOption}selected{/if}>
+                                {opt.displayName}
+                            </option>
+                            {/for}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="includeDrops"
+                                   id="includeDrops" value="true" {#if includeDrops}checked{/if}>
+                            <label class="form-check-label text-danger" for="includeDrops">
+                                Include DROP statements
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-repeat me-1"></i>Regenerate
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script Content -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-code-slash me-2"></i>Generated Script</h5>
+                <span class="badge bg-secondary">{script.statementCount} statements</span>
+            </div>
+            <div class="card-body p-0">
+                <pre class="bg-dark text-light p-3 mb-0 overflow-auto" style="max-height: 600px;" id="scriptContent"><code>{script.fullScript}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Individual Statements -->
+{#if !script.statements.isEmpty()}
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-ol me-2"></i>Statement Breakdown</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">#</th>
+                                <th>Type</th>
+                                <th>Object</th>
+                                <th>Severity</th>
+                                <th>Statement Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for stmt in script.orderedStatements}
+                            <tr class="statement-row"
+                                data-type="{#if stmt.createStatement}CREATE{#else if stmt.dropStatement}DROP{#else}ALTER{/if}">
+                                <td class="text-muted">{stmt.order + 1}</td>
+                                <td>
+                                    <i class="bi {stmt.objectType.iconClass} me-1"></i>
+                                    {stmt.objectType.displayName}
+                                </td>
+                                <td><code>{stmt.objectName}</code></td>
+                                <td>
+                                    <span class="badge {stmt.severity.cssClass}">{stmt.severity.displayName}</span>
+                                </td>
+                                <td>
+                                    {#if stmt.createStatement}
+                                    <span class="badge bg-success">CREATE</span>
+                                    {#else if stmt.dropStatement}
+                                    <span class="badge bg-danger">DROP</span>
+                                    {#else if stmt.alterStatement}
+                                    <span class="badge bg-warning text-dark">ALTER</span>
+                                    {#else}
+                                    <span class="badge bg-secondary">OTHER</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {#if stmt.warningMessage}
+                            <tr class="statement-row table-warning"
+                                data-type="{#if stmt.createStatement}CREATE{#else if stmt.dropStatement}DROP{#else}ALTER{/if}">
+                                <td></td>
+                                <td colspan="4">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <small>{stmt.warningMessage}</small>
+                                </td>
+                            </tr>
+                            {/if}
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+<script>
+function copyScript() {
+    const content = document.getElementById('scriptContent').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        const btn = event.target;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
+        setTimeout(() => btn.innerHTML = originalHtml, 2000);
+    });
+}
+
+function showAll() {
+    document.querySelectorAll('.statement-row').forEach(row => row.style.display = '');
+}
+
+function showOnly(type) {
+    document.querySelectorAll('.statement-row').forEach(row => {
+        row.style.display = row.dataset.type === type ? '' : 'none';
+    });
+}
+</script>
+
+{/include}

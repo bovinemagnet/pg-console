@@ -1,0 +1,1454 @@
+= Configuration Reference
+Paul Snow
+0.0.0
+:description: Complete configuration reference for pg-console PostgreSQL monitoring dashboard
+:keywords: configuration, environment variables, application.properties, database connection, security, feature toggles, CORS
+
+This guide provides a comprehensive reference for all configuration options available in pg-console.
+
+== Overview
+
+pg-console can be configured through:
+
+* **Environment variables** - Recommended for deployment environments
+* **application.properties** - Located in `src/main/resources/application.properties`
+* **System properties** - Via `-D` flags when launching the application
+
+Environment variables take precedence over properties file values. Configuration follows standard Quarkus conventions.
+
+== Database Connection
+
+Configure the PostgreSQL database connection that pg-console will monitor.
+
+=== Basic Connection
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=postgres
+----
+
+Or in `application.properties`:
+
+[source,properties]
+----
+quarkus.datasource.jdbc.url=${POSTGRES_URL:jdbc:postgresql://localhost:5432/postgres}
+quarkus.datasource.username=${POSTGRES_USER:postgres}
+quarkus.datasource.password=${POSTGRES_PASSWORD:postgres}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`POSTGRES_URL`
+|`jdbc:postgresql://localhost:5432/postgres`
+|JDBC connection URL to the PostgreSQL server
+
+|`POSTGRES_USER`
+|`postgres`
+|Database username for authentication
+
+|`POSTGRES_PASSWORD`
+|`postgres`
+|Database password for authentication
+|===
+
+=== Connection URL Format
+
+The JDBC URL supports all standard PostgreSQL connection parameters:
+
+[source]
+----
+jdbc:postgresql://host:port/database?param1=value1&param2=value2
+----
+
+Common parameters:
+
+* `ssl=true` - Enable SSL/TLS connections
+* `sslmode=require` - Require SSL connections
+* `sslrootcert=/path/to/ca.crt` - CA certificate for SSL verification
+* `sslcert=/path/to/client.crt` - Client certificate
+* `sslkey=/path/to/client.key` - Client private key
+* `connectTimeout=10` - Connection timeout in seconds
+* `socketTimeout=30` - Socket read timeout in seconds
+* `ApplicationName=pg-console` - Application name visible in `pg_stat_activity`
+
+Example with SSL:
+
+[source,bash]
+----
+export POSTGRES_URL="jdbc:postgresql://db.example.com:5432/production?ssl=true&sslmode=require&ApplicationName=pg-console"
+----
+
+=== Database Filtering
+
+Restrict monitoring to specific databases:
+
+[source,bash]
+----
+# Monitor only specific databases (comma-separated)
+export PG_CONSOLE_DATABASES=postgres,myapp_prod,analytics
+----
+
+[source,properties]
+----
+pg-console.databases=${PG_CONSOLE_DATABASES}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_DATABASES`
+|_(all databases)_
+|Comma-separated list of database names to monitor. Leave unset to monitor all non-template databases.
+|===
+
+Examples:
+
+[source,bash]
+----
+# Monitor all databases (default)
+unset PG_CONSOLE_DATABASES
+
+# Monitor only production databases
+export PG_CONSOLE_DATABASES=app_prod,analytics_prod
+
+# Monitor single database
+export PG_CONSOLE_DATABASES=sim_prd_eplus
+----
+
+== Schema and Persistence Mode
+
+pg-console can operate in two modes: with full persistence (default) or in schema-free read-only mode.
+
+[source,bash]
+----
+export PG_CONSOLE_SCHEMA_ENABLED=true          # Enable pgconsole schema creation
+export PG_CONSOLE_IN_MEMORY_MINUTES=30         # In-memory retention (when schema disabled)
+----
+
+[source,properties]
+----
+pg-console.schema.enabled=${PG_CONSOLE_SCHEMA_ENABLED:true}
+pg-console.history.in-memory-minutes=${PG_CONSOLE_IN_MEMORY_MINUTES:30}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_SCHEMA_ENABLED`
+|`true`
+|Enable creation of `pgconsole` schema for persistent storage. When `false`, pg-console operates in read-only mode without creating any database objects.
+
+|`PG_CONSOLE_IN_MEMORY_MINUTES`
+|`30`
+|Minutes of trend data to retain in memory when schema is disabled. Used for short-term sparklines without database persistence.
+|===
+
+When `PG_CONSOLE_SCHEMA_ENABLED=false`:
+
+* No `pgconsole` schema is created
+* Flyway migrations are skipped
+* Real-time monitoring continues to work normally
+* Short-term trends use in-memory storage
+* Long-term history, bookmarks, audit logging, and alerts are unavailable
+
+See xref:schema-free-mode.adoc[Schema-Free Mode] for detailed information about read-only operation.
+
+== History Sampling
+
+pg-console samples database metrics at regular intervals to provide historical analysis and sparkline graphs. This feature requires `PG_CONSOLE_SCHEMA_ENABLED=true`.
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=true
+export PG_CONSOLE_HISTORY_INTERVAL=60
+export PG_CONSOLE_HISTORY_RETENTION=7
+export PG_CONSOLE_HISTORY_TOP_QUERIES=50
+----
+
+[source,properties]
+----
+pg-console.history.enabled=${PG_CONSOLE_HISTORY_ENABLED:true}
+pg-console.history.interval-seconds=${PG_CONSOLE_HISTORY_INTERVAL:60}
+pg-console.history.retention-days=${PG_CONSOLE_HISTORY_RETENTION:7}
+pg-console.history.top-queries=${PG_CONSOLE_HISTORY_TOP_QUERIES:50}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_HISTORY_ENABLED`
+|`true`
+|Enable or disable historical metric sampling (requires schema enabled)
+
+|`PG_CONSOLE_HISTORY_INTERVAL`
+|`60`
+|Sampling interval in seconds (minimum: 10)
+
+|`PG_CONSOLE_HISTORY_RETENTION`
+|`7`
+|Number of days to retain historical data
+
+|`PG_CONSOLE_HISTORY_TOP_QUERIES`
+|`50`
+|Number of top queries to sample from `pg_stat_statements`
+|===
+
+=== Storage Requirements
+
+History data is stored in the `pgconsole` schema. Storage requirements depend on:
+
+* Sampling interval (shorter intervals = more data)
+* Retention period (longer retention = more data)
+* Number of monitored databases and queries
+* Database activity level
+
+Typical storage usage: 100-500 MB per week with default settings.
+
+=== Disabling History
+
+To disable history sampling whilst keeping the `pgconsole` schema:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=false
+----
+
+This disables:
+
+* Scheduled metric sampling
+* Historical data storage
+* Sparkline graphs in dashboards
+
+For completely read-only monitoring without any schema creation, use `PG_CONSOLE_SCHEMA_ENABLED=false` instead. See xref:schema-free-mode.adoc[Schema-Free Mode].
+
+== Multi-Instance Monitoring
+
+Monitor multiple PostgreSQL instances from a single pg-console deployment.
+
+[source,bash]
+----
+# Define instance names (first is default)
+export PG_CONSOLE_INSTANCES=default,production,staging
+
+# Connection details for additional instances
+export POSTGRES_PRODUCTION_URL=jdbc:postgresql://prod.example.com:5432/postgres
+export POSTGRES_PRODUCTION_USER=monitor_user
+export POSTGRES_PRODUCTION_PASSWORD=secret123
+
+export POSTGRES_STAGING_URL=jdbc:postgresql://staging.example.com:5432/postgres
+export POSTGRES_STAGING_USER=monitor_user
+export POSTGRES_STAGING_PASSWORD=secret456
+----
+
+[source,properties]
+----
+pg-console.instances=${PG_CONSOLE_INSTANCES:default}
+
+# Display names (optional)
+pg-console.instance.production.display-name=Production DB
+pg-console.instance.staging.display-name=Staging DB
+
+# Named datasources
+quarkus.datasource.production.db-kind=postgresql
+quarkus.datasource.production.jdbc.url=${POSTGRES_PRODUCTION_URL}
+quarkus.datasource.production.username=${POSTGRES_PRODUCTION_USER}
+quarkus.datasource.production.password=${POSTGRES_PRODUCTION_PASSWORD}
+
+quarkus.datasource.staging.db-kind=postgresql
+quarkus.datasource.staging.jdbc.url=${POSTGRES_STAGING_URL}
+quarkus.datasource.staging.username=${POSTGRES_STAGING_USER}
+quarkus.datasource.staging.password=${POSTGRES_STAGING_PASSWORD}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_INSTANCES`
+|`default`
+|Comma-separated list of instance names
+
+|`pg-console.instance.<name>.display-name`
+|_(instance name)_
+|Human-readable display name for the instance
+
+|`quarkus.datasource.<name>.jdbc.url`
+|_(required)_
+|JDBC URL for the named instance
+
+|`quarkus.datasource.<name>.username`
+|_(required)_
+|Username for the named instance
+
+|`quarkus.datasource.<name>.password`
+|_(required)_
+|Password for the named instance
+|===
+
+See xref:multi-instance.adoc[Multi-Instance Monitoring] for detailed setup instructions.
+
+[#feature-toggles]
+== Dashboard Feature Toggles
+
+Control which dashboard sections and pages are visible. All features are enabled by default (opt-out model).
+
+=== Section-Level Toggles
+
+Disable entire dashboard sections:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_MONITORING=true      # Monitoring section
+export PG_CONSOLE_DASH_ANALYSIS=true        # Analysis section
+export PG_CONSOLE_DASH_DIAGNOSTICS=true     # Diagnostics section
+export PG_CONSOLE_DASH_INFRASTRUCTURE=true  # Infrastructure section
+export PG_CONSOLE_DASH_DATA_CONTROL=true    # Data Control section
+export PG_CONSOLE_DASH_ENTERPRISE=true      # Enterprise section
+export PG_CONSOLE_DASH_SECURITY=true        # Security section
+----
+
+[source,properties]
+----
+pg-console.dashboards.monitoring.enabled=${PG_CONSOLE_DASH_MONITORING:true}
+pg-console.dashboards.analysis.enabled=${PG_CONSOLE_DASH_ANALYSIS:true}
+pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
+pg-console.dashboards.infrastructure.enabled=${PG_CONSOLE_DASH_INFRASTRUCTURE:true}
+pg-console.dashboards.data-control.enabled=${PG_CONSOLE_DASH_DATA_CONTROL:true}
+pg-console.dashboards.enterprise.enabled=${PG_CONSOLE_DASH_ENTERPRISE:true}
+pg-console.dashboards.security.enabled=${PG_CONSOLE_DASH_SECURITY:true}
+----
+
+=== Monitoring Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_DASHBOARD=true      # Overview dashboard
+export PG_CONSOLE_DASH_ACTIVITY=true       # Current activity
+export PG_CONSOLE_DASH_SLOW_QUERIES=true   # Slow queries (pg_stat_statements)
+export PG_CONSOLE_DASH_LOCKS=true          # Lock contention
+export PG_CONSOLE_DASH_WAIT_EVENTS=true    # Wait event analysis
+export PG_CONSOLE_DASH_TABLES=true         # Table statistics
+export PG_CONSOLE_DASH_DATABASES=true      # Database metrics
+----
+
+[source,properties]
+----
+pg-console.dashboards.monitoring.dashboard=${PG_CONSOLE_DASH_DASHBOARD:true}
+pg-console.dashboards.monitoring.activity=${PG_CONSOLE_DASH_ACTIVITY:true}
+pg-console.dashboards.monitoring.slow-queries=${PG_CONSOLE_DASH_SLOW_QUERIES:true}
+pg-console.dashboards.monitoring.locks=${PG_CONSOLE_DASH_LOCKS:true}
+pg-console.dashboards.monitoring.wait-events=${PG_CONSOLE_DASH_WAIT_EVENTS:true}
+pg-console.dashboards.monitoring.tables=${PG_CONSOLE_DASH_TABLES:true}
+pg-console.dashboards.monitoring.databases=${PG_CONSOLE_DASH_DATABASES:true}
+----
+
+=== Analysis Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_INDEX_ADVISOR=true        # Index recommendations
+export PG_CONSOLE_DASH_QUERY_REGRESSIONS=true    # Query performance changes
+export PG_CONSOLE_DASH_TABLE_MAINTENANCE=true    # Vacuum/analyse recommendations
+export PG_CONSOLE_DASH_BASELINES=true            # Performance baselines
+----
+
+[source,properties]
+----
+pg-console.dashboards.analysis.index-advisor=${PG_CONSOLE_DASH_INDEX_ADVISOR:true}
+pg-console.dashboards.analysis.query-regressions=${PG_CONSOLE_DASH_QUERY_REGRESSIONS:true}
+pg-console.dashboards.analysis.table-maintenance=${PG_CONSOLE_DASH_TABLE_MAINTENANCE:true}
+pg-console.dashboards.analysis.baselines=${PG_CONSOLE_DASH_BASELINES:true}
+----
+
+=== Infrastructure Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_REPLICATION=true           # Replication status
+export PG_CONSOLE_DASH_INFRASTRUCTURE_PAGE=true   # Infrastructure overview
+----
+
+[source,properties]
+----
+pg-console.dashboards.infrastructure.replication=${PG_CONSOLE_DASH_REPLICATION:true}
+pg-console.dashboards.infrastructure.infrastructure=${PG_CONSOLE_DASH_INFRASTRUCTURE_PAGE:true}
+----
+
+=== Data Control Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_LOGICAL_REPLICATION=true   # Logical replication
+export PG_CONSOLE_DASH_CDC=true                   # Change Data Capture
+export PG_CONSOLE_DASH_DATA_LINEAGE=true          # Data lineage tracking
+export PG_CONSOLE_DASH_PARTITIONS=true            # Partition management
+----
+
+[source,properties]
+----
+pg-console.dashboards.data-control.logical-replication=${PG_CONSOLE_DASH_LOGICAL_REPLICATION:true}
+pg-console.dashboards.data-control.cdc=${PG_CONSOLE_DASH_CDC:true}
+pg-console.dashboards.data-control.data-lineage=${PG_CONSOLE_DASH_DATA_LINEAGE:true}
+pg-console.dashboards.data-control.partitions=${PG_CONSOLE_DASH_PARTITIONS:true}
+----
+
+=== Enterprise Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_COMPARISON=true          # Instance comparison
+export PG_CONSOLE_DASH_SCHEMA_COMPARISON=true   # Schema comparison
+export PG_CONSOLE_DASH_BOOKMARKS=true           # Saved queries/views
+export PG_CONSOLE_DASH_AUDIT_LOG=true           # Audit logging
+----
+
+[source,properties]
+----
+pg-console.dashboards.enterprise.comparison=${PG_CONSOLE_DASH_COMPARISON:true}
+pg-console.dashboards.enterprise.schema-comparison=${PG_CONSOLE_DASH_SCHEMA_COMPARISON:true}
+pg-console.dashboards.enterprise.bookmarks=${PG_CONSOLE_DASH_BOOKMARKS:true}
+pg-console.dashboards.enterprise.audit-log=${PG_CONSOLE_DASH_AUDIT_LOG:true}
+----
+
+=== Security Section Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_SECURITY_OVERVIEW=true        # Security overview
+export PG_CONSOLE_DASH_SECURITY_ROLES=true           # Role management
+export PG_CONSOLE_DASH_SECURITY_CONNECTIONS=true     # Connection security
+export PG_CONSOLE_DASH_SECURITY_ACCESS=true          # Access control
+export PG_CONSOLE_DASH_SECURITY_COMPLIANCE=true      # Compliance checks
+export PG_CONSOLE_DASH_SECURITY_RECOMMENDATIONS=true # Security recommendations
+----
+
+[source,properties]
+----
+pg-console.dashboards.security.overview=${PG_CONSOLE_DASH_SECURITY_OVERVIEW:true}
+pg-console.dashboards.security.roles=${PG_CONSOLE_DASH_SECURITY_ROLES:true}
+pg-console.dashboards.security.connections=${PG_CONSOLE_DASH_SECURITY_CONNECTIONS:true}
+pg-console.dashboards.security.access=${PG_CONSOLE_DASH_SECURITY_ACCESS:true}
+pg-console.dashboards.security.compliance=${PG_CONSOLE_DASH_SECURITY_COMPLIANCE:true}
+pg-console.dashboards.security.recommendations=${PG_CONSOLE_DASH_SECURITY_RECOMMENDATIONS:true}
+----
+
+[[diagnostics-configuration]]
+=== Diagnostics Section Pages
+
+The diagnostics section provides specialised tools for advanced database analysis. See xref:user-guide:diagnostics.adoc[Advanced Diagnostics] for detailed usage information.
+
+==== Section Toggle
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_DIAGNOSTICS=true  # Enable/disable entire diagnostics section
+----
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
+----
+
+==== Individual Diagnostic Pages
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_PIPELINE_RISK=true        # Queue/pipeline backlog monitoring
+export PG_CONSOLE_DASH_TOAST_BLOAT=true          # TOAST table bloat analysis
+export PG_CONSOLE_DASH_INDEX_REDUNDANCY=true     # Duplicate/overlapping index detection
+export PG_CONSOLE_DASH_STAT_FRESHNESS=true       # Table statistics freshness
+export PG_CONSOLE_DASH_WRITE_READ=true           # Write/read ratio analysis
+export PG_CONSOLE_DASH_HOT_EFFICIENCY=true       # HOT update efficiency monitoring
+export PG_CONSOLE_DASH_CORRELATION=true          # Column correlation analysis
+export PG_CONSOLE_DASH_LIVE_CHARTS=true          # Real-time interactive charts
+export PG_CONSOLE_DASH_XID_WRAPAROUND=true       # Transaction ID wraparound monitoring
+----
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.pipeline-risk=${PG_CONSOLE_DASH_PIPELINE_RISK:true}
+pg-console.dashboards.diagnostics.toast-bloat=${PG_CONSOLE_DASH_TOAST_BLOAT:true}
+pg-console.dashboards.diagnostics.index-redundancy=${PG_CONSOLE_DASH_INDEX_REDUNDANCY:true}
+pg-console.dashboards.diagnostics.statistical-freshness=${PG_CONSOLE_DASH_STAT_FRESHNESS:true}
+pg-console.dashboards.diagnostics.write-read-ratio=${PG_CONSOLE_DASH_WRITE_READ:true}
+pg-console.dashboards.diagnostics.hot-efficiency=${PG_CONSOLE_DASH_HOT_EFFICIENCY:true}
+pg-console.dashboards.diagnostics.correlation=${PG_CONSOLE_DASH_CORRELATION:true}
+pg-console.dashboards.diagnostics.live-charts=${PG_CONSOLE_DASH_LIVE_CHARTS:true}
+pg-console.dashboards.diagnostics.xid-wraparound=${PG_CONSOLE_DASH_XID_WRAPAROUND:true}
+----
+
+==== Diagnostic Thresholds and Configuration
+
+[source,bash]
+----
+# Pipeline Risk Monitoring
+export PG_CONSOLE_QUEUE_PATTERNS=*_queue,*_event,*_job,*_task
+export PG_CONSOLE_QUEUE_STALE_HOURS=24
+
+# TOAST Bloat Analysis
+export PG_CONSOLE_TOAST_BLOAT_WARN=30
+
+# HOT Update Efficiency
+export PG_CONSOLE_HOT_WARN=50
+
+# Transaction ID Wraparound
+export PG_CONSOLE_XID_WARN=50
+export PG_CONSOLE_XID_CRITICAL=75
+----
+
+[source,properties]
+----
+# Pipeline Risk Monitoring
+pg-console.diagnostics.queue-patterns=${PG_CONSOLE_QUEUE_PATTERNS:*_queue,*_event,*_job,*_task}
+pg-console.diagnostics.queue-stale-hours=${PG_CONSOLE_QUEUE_STALE_HOURS:24}
+
+# TOAST Bloat Analysis
+pg-console.diagnostics.toast-bloat-warn-percent=${PG_CONSOLE_TOAST_BLOAT_WARN:30}
+
+# HOT Update Efficiency
+pg-console.diagnostics.hot-efficiency-warn-percent=${PG_CONSOLE_HOT_WARN:50}
+
+# Transaction ID Wraparound
+pg-console.diagnostics.xid-warn-percent=${PG_CONSOLE_XID_WARN:50}
+pg-console.diagnostics.xid-critical-percent=${PG_CONSOLE_XID_CRITICAL:75}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_QUEUE_PATTERNS`
+|`*_queue,*_event,*_job,*_task`
+|Comma-separated table name patterns for pipeline risk monitoring
+
+|`PG_CONSOLE_QUEUE_STALE_HOURS`
+|`24`
+|Hours after which pipeline rows are considered stale
+
+|`PG_CONSOLE_TOAST_BLOAT_WARN`
+|`30`
+|TOAST bloat percentage threshold for warnings
+
+|`PG_CONSOLE_HOT_WARN`
+|`50`
+|HOT update ratio percentage threshold for warnings
+
+|`PG_CONSOLE_XID_WARN`
+|`50`
+|Transaction ID age percentage for warning status
+
+|`PG_CONSOLE_XID_CRITICAL`
+|`75`
+|Transaction ID age percentage for critical status
+|===
+
+=== Feature Toggle Examples
+
+Minimal monitoring-only deployment:
+
+[source,bash]
+----
+# Enable only core monitoring features
+export PG_CONSOLE_DASH_ANALYSIS=false
+export PG_CONSOLE_DASH_INFRASTRUCTURE=false
+export PG_CONSOLE_DASH_DATA_CONTROL=false
+export PG_CONSOLE_DASH_ENTERPRISE=false
+export PG_CONSOLE_DASH_SECURITY=false
+----
+
+Read-only monitoring (disable admin features):
+
+[source,bash]
+----
+# Disable features requiring write access
+export PG_CONSOLE_DASH_TABLE_MAINTENANCE=false
+export PG_CONSOLE_DASH_PARTITIONS=false
+export PG_CONSOLE_DASH_AUDIT_LOG=false
+----
+
+== Security Configuration
+
+Enable HTTP Basic authentication to restrict access to pg-console.
+
+=== Enabling Security
+
+[source,bash]
+----
+export PG_CONSOLE_SECURITY_ENABLED=true
+----
+
+[source,properties]
+----
+pg-console.security.enabled=${PG_CONSOLE_SECURITY_ENABLED:false}
+quarkus.security.users.file.enabled=${pg-console.security.enabled}
+quarkus.http.auth.basic=${pg-console.security.enabled}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_SECURITY_ENABLED`
+|`false`
+|Enable HTTP Basic authentication
+
+|`quarkus.security.users.file.enabled`
+|_(follows security.enabled)_
+|Enable file-based user authentication
+
+|`quarkus.http.auth.basic`
+|_(follows security.enabled)_
+|Enable HTTP Basic authentication mechanism
+|===
+
+=== File-Based Authentication
+
+Create `users.properties` and `roles.properties` files:
+
+**users.properties:**
+[source,properties]
+----
+admin=secret123
+dba_team=password456
+readonly=view789
+----
+
+**roles.properties:**
+[source,properties]
+----
+admin=admin,user
+dba_team=user
+readonly=user
+----
+
+[source,properties]
+----
+quarkus.security.users.file.plain-text=true
+quarkus.security.users.file.users=users.properties
+quarkus.security.users.file.roles=roles.properties
+----
+
+IMPORTANT: In production, use encrypted passwords or integrate with LDAP/OAuth2. Plain-text passwords are only suitable for development.
+
+=== Role-Based Access Control
+
+Configure admin-only endpoints:
+
+[source,properties]
+----
+# Require admin role for destructive operations
+quarkus.http.auth.permission.admin-actions.paths=/api/activity/*/cancel,/api/activity/*/terminate
+quarkus.http.auth.permission.admin-actions.policy=role-policy-admin
+quarkus.http.auth.permission.admin-actions.methods=POST
+quarkus.http.auth.permission.admin-actions.enabled=${pg-console.security.enabled}
+
+quarkus.http.auth.policy.role-policy-admin.roles-allowed=admin
+----
+
+Admin-protected operations:
+
+* `POST /api/activity/{pid}/cancel` - Cancel a running query
+* `POST /api/activity/{pid}/terminate` - Terminate a database connection
+
+=== Development Profile
+
+Security is disabled by default in development mode:
+
+[source,properties]
+----
+%dev.pg-console.security.enabled=false
+----
+
+== Alerting Configuration
+
+Configure thresholds and cooldown periods for alerting.
+
+See xref:alerting.adoc[Alerting Configuration] for comprehensive alerting setup including webhooks and email.
+
+=== Basic Alerting Settings
+
+[source,bash]
+----
+export PG_CONSOLE_ALERTING_ENABLED=true
+export PG_CONSOLE_ALERTING_COOLDOWN=300
+----
+
+[source,properties]
+----
+pg-console.alerting.enabled=${PG_CONSOLE_ALERTING_ENABLED:false}
+pg-console.alerting.cooldown-seconds=${PG_CONSOLE_ALERTING_COOLDOWN:300}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_ALERTING_ENABLED`
+|`false`
+|Enable alerting system
+
+|`PG_CONSOLE_ALERTING_COOLDOWN`
+|`300`
+|Minimum seconds between alerts of the same type (prevents alert storms)
+|===
+
+=== Alert Thresholds
+
+[source,bash]
+----
+export PG_CONSOLE_ALERT_CONN_PERCENT=90      # Connection usage percentage
+export PG_CONSOLE_ALERT_BLOCKED=5            # Number of blocked queries
+export PG_CONSOLE_ALERT_LONG_QUERY=300       # Long query duration (seconds)
+export PG_CONSOLE_ALERT_CACHE_HIT=90         # Cache hit ratio percentage
+----
+
+[source,properties]
+----
+pg-console.alerting.thresholds.connection-percent=${PG_CONSOLE_ALERT_CONN_PERCENT:90}
+pg-console.alerting.thresholds.blocked-queries=${PG_CONSOLE_ALERT_BLOCKED:5}
+pg-console.alerting.thresholds.long-query-seconds=${PG_CONSOLE_ALERT_LONG_QUERY:300}
+pg-console.alerting.thresholds.cache-hit-ratio=${PG_CONSOLE_ALERT_CACHE_HIT:90}
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_ALERT_CONN_PERCENT`
+|`90`
+|Alert when connection usage exceeds this percentage of `max_connections`
+
+|`PG_CONSOLE_ALERT_BLOCKED`
+|`5`
+|Alert when this many queries are blocked by locks
+
+|`PG_CONSOLE_ALERT_LONG_QUERY`
+|`300`
+|Alert when queries exceed this duration in seconds
+
+|`PG_CONSOLE_ALERT_CACHE_HIT`
+|`90`
+|Alert when cache hit ratio falls below this percentage
+|===
+
+== Logging Configuration
+
+Configure logging levels, formats, and output destinations.
+
+=== Basic Logging
+
+[source,properties]
+----
+# Base log level
+quarkus.log.level=INFO
+
+# Category-specific levels
+quarkus.log.category."com.bovinemagnet.pgconsole".level=INFO
+quarkus.log.category."pgconsole".level=INFO
+quarkus.log.category."pgconsole.SQL".level=DEBUG
+quarkus.log.category."pgconsole.SECURITY".level=INFO
+quarkus.log.category."pgconsole.AUDIT".level=INFO
+quarkus.log.category."pgconsole.RESOURCES".level=INFO
+----
+
+=== Console Logging
+
+[source,properties]
+----
+quarkus.log.console.format=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%c{2.}] (%X{correlationId}) %s%e%n
+----
+
+Format placeholders:
+
+* `%d{yyyy-MM-dd HH:mm:ss.SSS}` - Timestamp
+* `%-5p` - Log level (INFO, WARN, ERROR)
+* `%c{2.}` - Logger category (abbreviated)
+* `%X{correlationId}` - MDC correlation ID
+* `%s` - Message
+* `%e` - Exception stack trace
+* `%n` - Newline
+
+=== File Logging
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_FILE_ENABLED=true
+export PG_CONSOLE_LOG_FILE_PATH=/var/log/pg-console
+export PG_CONSOLE_LOG_FILE_SIZE=10M
+export PG_CONSOLE_LOG_FILE_BACKUP=5
+----
+
+[source,properties]
+----
+quarkus.log.file.enabled=${PG_CONSOLE_LOG_FILE_ENABLED:false}
+quarkus.log.file.path=${PG_CONSOLE_LOG_FILE_PATH:/var/log/pg-console}/pg-console.log
+quarkus.log.file.format=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%c{2.}] (%X{correlationId}) %s%e%n
+quarkus.log.file.rotation.max-file-size=${PG_CONSOLE_LOG_FILE_SIZE:10M}
+quarkus.log.file.rotation.max-backup-index=${PG_CONSOLE_LOG_FILE_BACKUP:5}
+quarkus.log.file.rotation.file-suffix=.yyyy-MM-dd
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_LOG_FILE_ENABLED`
+|`false`
+|Enable logging to file
+
+|`PG_CONSOLE_LOG_FILE_PATH`
+|`/var/log/pg-console`
+|Directory for log files
+
+|`PG_CONSOLE_LOG_FILE_SIZE`
+|`10M`
+|Maximum log file size before rotation
+
+|`PG_CONSOLE_LOG_FILE_BACKUP`
+|`5`
+|Number of rotated log files to keep
+|===
+
+=== Enhanced Logging Options
+
+pg-console provides enhanced logging features via the `pgconsole-logging` prefix.
+
+==== Log Format
+
+[source,bash]
+----
+# Structured JSON logging (recommended for production)
+export PG_CONSOLE_LOG_FORMAT=json
+
+# Human-readable plain text (recommended for development)
+export PG_CONSOLE_LOG_FORMAT=plain
+----
+
+[source,properties]
+----
+pgconsole-logging.format=${PG_CONSOLE_LOG_FORMAT:plain}
+----
+
+JSON format example:
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T14:30:15.123Z",
+  "level": "INFO",
+  "logger": "pgconsole.RESOURCES",
+  "correlationId": "abc123",
+  "message": "Fetched slow queries",
+  "instance": "production",
+  "user": "admin"
+}
+----
+
+==== SQL Query Logging
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_SQL_ENABLED=true      # Enable SQL logging
+export PG_CONSOLE_LOG_SQL_SLOW_MS=1000      # Log queries slower than 1000ms
+export PG_CONSOLE_LOG_SQL_PARAMS=false      # Log query parameters
+----
+
+[source,properties]
+----
+pgconsole-logging.sql.enabled=${PG_CONSOLE_LOG_SQL_ENABLED:false}
+pgconsole-logging.sql.slow-threshold-ms=${PG_CONSOLE_LOG_SQL_SLOW_MS:1000}
+pgconsole-logging.sql.log-parameters=${PG_CONSOLE_LOG_SQL_PARAMS:false}
+pgconsole-logging.sql.max-query-length=2000
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_LOG_SQL_ENABLED`
+|`false`
+|Enable SQL query logging to the `pgconsole.SQL` category
+
+|`PG_CONSOLE_LOG_SQL_SLOW_MS`
+|`1000`
+|Log queries that exceed this threshold in milliseconds
+
+|`PG_CONSOLE_LOG_SQL_PARAMS`
+|`false`
+|Include query parameters in logs (may expose sensitive data)
+
+|`pgconsole-logging.sql.max-query-length`
+|`2000`
+|Maximum query text length to log
+|===
+
+==== Sensitive Data Redaction
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_REDACT=true           # Enable redaction
+export PG_CONSOLE_LOG_MASK_PII=false        # Mask personally identifiable information
+----
+
+[source,properties]
+----
+pgconsole-logging.redact.enabled=${PG_CONSOLE_LOG_REDACT:true}
+pgconsole-logging.redact.patterns=password,secret,token,key,credential,auth,apikey,api_key,bearer,jwt
+pgconsole-logging.redact.replacement=[REDACTED]
+pgconsole-logging.redact.mask-pii=${PG_CONSOLE_LOG_MASK_PII:false}
+pgconsole-logging.redact.redact-connection-strings=true
+----
+
+Redaction automatically replaces sensitive patterns:
+
+[source]
+----
+# Before redaction:
+password=secret123&apikey=abc456
+
+# After redaction:
+password=[REDACTED]&apikey=[REDACTED]
+----
+
+==== Asynchronous Logging
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_ASYNC=true            # Enable async logging
+export PG_CONSOLE_LOG_ASYNC_QUEUE=1024     # Queue size
+----
+
+[source,properties]
+----
+pgconsole-logging.async.enabled=${PG_CONSOLE_LOG_ASYNC:true}
+pgconsole-logging.async.queue-size=${PG_CONSOLE_LOG_ASYNC_QUEUE:1024}
+pgconsole-logging.async.overflow-policy=BLOCK
+----
+
+Async logging improves performance by processing log events in a background thread.
+
+==== MDC Context Propagation
+
+[source,properties]
+----
+pgconsole-logging.mdc.correlation-id-enabled=true
+pgconsole-logging.mdc.correlation-id-header=X-Correlation-ID
+pgconsole-logging.mdc.include-user=true
+pgconsole-logging.mdc.include-instance=true
+pgconsole-logging.mdc.include-client-ip=true
+----
+
+MDC (Mapped Diagnostic Context) adds contextual information to every log entry:
+
+* **Correlation ID** - Unique request identifier for distributed tracing
+* **User** - Authenticated username
+* **Instance** - Database instance name (in multi-instance setups)
+* **Client IP** - Source IP address
+
+==== Performance Logging
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_SLOW_MS=5000          # Log slow requests
+export PG_CONSOLE_LOG_RESOURCES=false       # Log resource usage
+----
+
+[source,properties]
+----
+pgconsole-logging.performance.latency-logging-enabled=true
+pgconsole-logging.performance.slow-threshold-ms=${PG_CONSOLE_LOG_SLOW_MS:5000}
+pgconsole-logging.performance.resource-logging-enabled=${PG_CONSOLE_LOG_RESOURCES:false}
+pgconsole-logging.performance.resource-logging-interval-seconds=60
+----
+
+Logs requests exceeding the latency threshold and optionally logs resource usage (CPU, memory) at regular intervals.
+
+==== Separate Error Log
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_ERROR_FILE=true       # Enable separate error log
+----
+
+[source,properties]
+----
+pgconsole-logging.file.error-log-enabled=${PG_CONSOLE_LOG_ERROR_FILE:false}
+pgconsole-logging.file.error-file-name=pg-console-error.log
+----
+
+Creates a separate log file containing only ERROR and FATAL level messages for easier troubleshooting.
+
+[#cors]
+== CORS Configuration
+
+Configure Cross-Origin Resource Sharing (CORS) to allow web applications from different origins to access pg-console's API.
+
+=== Enabling CORS
+
+CORS is disabled by default. Enable it for API access from web browsers:
+
+[source,properties]
+----
+# Enable CORS
+quarkus.http.cors=true
+
+# Allow specific origins
+quarkus.http.cors.origins=https://app.example.com,https://dashboard.example.com
+
+# Allow all origins (development only - not recommended for production)
+# quarkus.http.cors.origins=*
+
+# Allow credentials (cookies, authorization headers)
+quarkus.http.cors.access-control-allow-credentials=true
+
+# Allowed HTTP methods
+quarkus.http.cors.methods=GET,POST,PUT,DELETE,OPTIONS
+
+# Allowed headers
+quarkus.http.cors.headers=accept,authorization,content-type,x-requested-with,x-correlation-id
+
+# Exposed headers (accessible to JavaScript)
+quarkus.http.cors.exposed-headers=Content-Disposition,X-Total-Count
+
+# Preflight cache duration (seconds)
+quarkus.http.cors.access-control-max-age=3600
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`quarkus.http.cors`
+|`false`
+|Enable CORS support
+
+|`quarkus.http.cors.origins`
+|_(none)_
+|Comma-separated list of allowed origins. Use `*` to allow all (insecure).
+
+|`quarkus.http.cors.access-control-allow-credentials`
+|`false`
+|Allow credentials (cookies, HTTP authentication)
+
+|`quarkus.http.cors.methods`
+|`GET,POST,PUT,DELETE,OPTIONS`
+|Allowed HTTP methods
+
+|`quarkus.http.cors.headers`
+|_(standard headers)_
+|Allowed request headers
+
+|`quarkus.http.cors.exposed-headers`
+|_(none)_
+|Response headers exposed to JavaScript
+
+|`quarkus.http.cors.access-control-max-age`
+|`3600`
+|Preflight cache duration in seconds
+|===
+
+=== CORS Examples
+
+==== Development Setup
+
+Allow CORS from localhost during development:
+
+[source,properties]
+----
+%dev.quarkus.http.cors=true
+%dev.quarkus.http.cors.origins=http://localhost:3000,http://localhost:5173
+%dev.quarkus.http.cors.access-control-allow-credentials=true
+----
+
+==== Production Setup
+
+Restrict to specific production origins:
+
+[source,properties]
+----
+quarkus.http.cors=true
+quarkus.http.cors.origins=https://pgconsole.example.com,https://dashboard.example.com
+quarkus.http.cors.access-control-allow-credentials=true
+quarkus.http.cors.methods=GET,POST
+quarkus.http.cors.access-control-max-age=7200
+----
+
+==== API-Only CORS
+
+Enable CORS only for API endpoints:
+
+[source,properties]
+----
+quarkus.http.cors=true
+quarkus.http.cors.origins=https://app.example.com
+quarkus.http.cors.access-control-allow-credentials=true
+
+# Apply CORS only to /api/* paths
+quarkus.http.cors.origins./api/*=https://app.example.com
+----
+
+=== Security Considerations
+
+WARNING: Never use `quarkus.http.cors.origins=*` with `access-control-allow-credentials=true` in production. This allows any website to make authenticated requests to your API.
+
+Best practices:
+
+* **Specify exact origins** - Use full URLs, not wildcards
+* **Enable credentials only when needed** - Most read-only APIs don't require credentials
+* **Limit methods** - Only allow necessary HTTP methods
+* **Short cache duration** - Use shorter `max-age` values during development
+* **Monitor CORS errors** - Review browser console for CORS-related errors
+
+== OpenAPI and Swagger Configuration
+
+pg-console exposes an OpenAPI specification and Swagger UI for API documentation.
+
+=== OpenAPI Configuration
+
+[source,properties]
+----
+# API metadata
+mp.openapi.extensions.smallrye.info.title=pg-console API
+mp.openapi.extensions.smallrye.info.version=1.0.0
+mp.openapi.extensions.smallrye.info.description=REST API for PostgreSQL monitoring dashboard
+mp.openapi.extensions.smallrye.info.contact.name=Paul Snow
+mp.openapi.extensions.smallrye.info.license.name=Apache 2.0
+mp.openapi.extensions.smallrye.info.license.url=https://www.apache.org/licenses/LICENSE-2.0.html
+
+# Enable Swagger UI in all environments
+quarkus.swagger-ui.always-include=true
+quarkus.swagger-ui.path=/q/swagger-ui
+
+# OpenAPI spec endpoint
+quarkus.smallrye-openapi.path=/q/openapi
+----
+
+=== Accessing API Documentation
+
+* **Swagger UI**: http://localhost:8080/q/swagger-ui
+* **OpenAPI Spec (JSON)**: http://localhost:8080/q/openapi
+* **OpenAPI Spec (YAML)**: http://localhost:8080/q/openapi?format=yaml
+
+=== Disabling in Production
+
+To disable Swagger UI in production (while keeping OpenAPI spec):
+
+[source,properties]
+----
+# Disable Swagger UI in production profile
+%prod.quarkus.swagger-ui.always-include=false
+
+# Keep OpenAPI spec available
+%prod.quarkus.smallrye-openapi.path=/q/openapi
+----
+
+Or disable both:
+
+[source,properties]
+----
+%prod.quarkus.swagger-ui.enable=false
+%prod.mp.openapi.scan.disable=true
+----
+
+== HTTP Server Configuration
+
+Configure the embedded HTTP server.
+
+[source,properties]
+----
+# Port and host
+quarkus.http.port=8080
+quarkus.http.host=0.0.0.0
+
+# SSL/TLS (optional)
+# quarkus.http.ssl.certificate.files=/path/to/cert.pem
+# quarkus.http.ssl.certificate.key-files=/path/to/key.pem
+# quarkus.http.insecure-requests=redirect
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`quarkus.http.port`
+|`8080`
+|HTTP port
+
+|`quarkus.http.host`
+|`0.0.0.0`
+|Bind address (use `127.0.0.1` for localhost-only)
+
+|`quarkus.http.ssl.certificate.files`
+|_(none)_
+|Path to SSL certificate file (PEM format)
+
+|`quarkus.http.ssl.certificate.key-files`
+|_(none)_
+|Path to SSL private key file (PEM format)
+
+|`quarkus.http.insecure-requests`
+|`enabled`
+|Handle HTTP requests: `enabled`, `redirect` (to HTTPS), or `disabled`
+|===
+
+=== TLS/SSL Configuration
+
+Enable HTTPS:
+
+[source,bash]
+----
+export QUARKUS_HTTP_SSL_PORT=8443
+export QUARKUS_HTTP_SSL_CERTIFICATE_FILES=/etc/ssl/certs/pg-console.pem
+export QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES=/etc/ssl/private/pg-console-key.pem
+export QUARKUS_HTTP_INSECURE_REQUESTS=redirect
+----
+
+[source,properties]
+----
+quarkus.http.ssl-port=8443
+quarkus.http.ssl.certificate.files=/etc/ssl/certs/pg-console.pem
+quarkus.http.ssl.certificate.key-files=/etc/ssl/private/pg-console-key.pem
+quarkus.http.insecure-requests=redirect
+----
+
+== Quarkus Qute Templating
+
+Configure server-side HTML templating.
+
+[source,properties]
+----
+# Content type overrides
+quarkus.qute.content-types.css=text/css;charset=utf-8
+quarkus.qute.content-types.js=application/javascript;charset=utf-8
+----
+
+These settings ensure proper MIME types for CSS and JavaScript files served through Qute templates.
+
+== Application Metadata
+
+[source,properties]
+----
+quarkus.application.name=pg-console
+quarkus.application.version=1.0.0
+----
+
+Application metadata is displayed in:
+
+* About page (`/about`)
+* API responses (headers)
+* Logs and monitoring data
+
+== Scheduler Configuration
+
+pg-console uses scheduled jobs for metric sampling and retention cleanup.
+
+[source,properties]
+----
+# Disable scheduler in development to avoid errors during hot-reload
+%dev.quarkus.scheduler.enabled=false
+----
+
+In production, the scheduler is enabled by default and controls:
+
+* Metric sampling (interval configured via `pg-console.history.interval-seconds`)
+* History retention cleanup (daily job)
+* Alert evaluation (when alerting is enabled)
+
+== Environment Profiles
+
+Quarkus supports environment-specific configuration profiles: `dev`, `test`, and `prod`.
+
+=== Profile-Specific Configuration
+
+[source,properties]
+----
+# Development profile
+%dev.pg-console.security.enabled=false
+%dev.quarkus.scheduler.enabled=false
+%dev.quarkus.http.cors.origins=http://localhost:3000
+
+# Production profile
+%prod.pg-console.security.enabled=true
+%prod.quarkus.swagger-ui.always-include=false
+%prod.quarkus.log.level=INFO
+----
+
+=== Activating Profiles
+
+Set the profile via environment variable:
+
+[source,bash]
+----
+# Production
+export QUARKUS_PROFILE=prod
+
+# Development (default for quarkusDev)
+export QUARKUS_PROFILE=dev
+----
+
+Or via system property:
+
+[source,bash]
+----
+java -Dquarkus.profile=prod -jar pg-console.jar
+----
+
+== Configuration Best Practices
+
+1. **Use environment variables for secrets** - Never commit passwords or API keys to `application.properties`
+2. **Profile-based configuration** - Use `%dev`, `%test`, `%prod` prefixes for environment-specific settings
+3. **Secure defaults** - Keep security features disabled in `application.properties` but enabled in production via environment variables
+4. **Document custom settings** - Add comments explaining non-obvious configuration choices
+5. **Validate on startup** - pg-console validates critical configuration (database connection, required extensions) during application startup
+6. **Monitor configuration changes** - Track configuration changes in version control and deployment logs
+
+== Example Configurations
+
+=== Minimal Development Setup
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=postgres
+export PG_CONSOLE_HISTORY_ENABLED=false  # Disable history in dev
+----
+
+=== Read-Only Monitoring (Schema-Free Mode)
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/production?ssl=true
+export POSTGRES_USER=readonly_monitor
+export POSTGRES_PASSWORD=${DB_PASSWORD}
+export PG_CONSOLE_SCHEMA_ENABLED=false   # No schema creation
+export PG_CONSOLE_IN_MEMORY_MINUTES=60   # Keep 1 hour of trends in memory
+----
+
+=== Production Single-Instance
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/production?ssl=true&sslmode=require
+export POSTGRES_USER=monitor_user
+export POSTGRES_PASSWORD=${DB_PASSWORD}  # From secrets manager
+export PG_CONSOLE_SECURITY_ENABLED=true
+export PG_CONSOLE_HISTORY_RETENTION=30
+export PG_CONSOLE_ALERTING_ENABLED=true
+export PG_CONSOLE_LOG_FILE_ENABLED=true
+export PG_CONSOLE_LOG_FORMAT=json
+----
+
+=== Production Multi-Instance with Feature Toggles
+
+[source,bash]
+----
+# Instances
+export PG_CONSOLE_INSTANCES=production,staging,analytics
+
+# Production instance
+export POSTGRES_PRODUCTION_URL=jdbc:postgresql://prod-db.example.com:5432/postgres?ssl=true
+export POSTGRES_PRODUCTION_USER=monitor
+export POSTGRES_PRODUCTION_PASSWORD=${PROD_DB_PASSWORD}
+
+# Staging instance
+export POSTGRES_STAGING_URL=jdbc:postgresql://staging-db.example.com:5432/postgres
+export POSTGRES_STAGING_USER=monitor
+export POSTGRES_STAGING_PASSWORD=${STAGING_DB_PASSWORD}
+
+# Analytics instance
+export POSTGRES_ANALYTICS_URL=jdbc:postgresql://analytics-db.example.com:5432/postgres
+export POSTGRES_ANALYTICS_USER=readonly
+export POSTGRES_ANALYTICS_PASSWORD=${ANALYTICS_DB_PASSWORD}
+
+# Security
+export PG_CONSOLE_SECURITY_ENABLED=true
+
+# Feature toggles - disable unused features
+export PG_CONSOLE_DASH_ENTERPRISE=false
+export PG_CONSOLE_DASH_DATA_CONTROL=false
+
+# Logging
+export PG_CONSOLE_LOG_FILE_ENABLED=true
+export PG_CONSOLE_LOG_FORMAT=json
+export PG_CONSOLE_LOG_REDACT=true
+----
+
+== Troubleshooting
+
+=== Configuration Not Applied
+
+Verify environment variables are set:
+
+[source,bash]
+----
+env | grep PG_CONSOLE
+env | grep POSTGRES
+----
+
+Check active configuration via Quarkus endpoints:
+
+[source,bash]
+----
+curl http://localhost:8080/q/dev/config
+----
+
+=== Database Connection Failed
+
+Test database connectivity:
+
+[source,bash]
+----
+psql "${POSTGRES_URL}" -U ${POSTGRES_USER}
+----
+
+Verify required extensions:
+
+[source,sql]
+----
+SELECT * FROM pg_available_extensions WHERE name = 'pg_stat_statements';
+----
+
+=== Feature Toggle Not Working
+
+Check that the parent section is enabled:
+
+[source,bash]
+----
+# This won't work because the section is disabled:
+export PG_CONSOLE_DASH_MONITORING=false
+export PG_CONSOLE_DASH_ACTIVITY=true  # Still hidden!
+
+# Correct approach - disable specific pages, not sections:
+export PG_CONSOLE_DASH_MONITORING=true
+export PG_CONSOLE_DASH_ACTIVITY=false
+----
+
+=== Logs Not Written to File
+
+Verify directory permissions:
+
+[source,bash]
+----
+sudo mkdir -p /var/log/pg-console
+sudo chown pg-console:pg-console /var/log/pg-console
+----
+
+Check file logging is enabled:
+
+[source,bash]
+----
+export PG_CONSOLE_LOG_FILE_ENABLED=true
+----
+
+== Next Steps
+
+* Review the xref:deployment.adoc[Deployment Guide] for production deployment
+* Configure xref:alerting.adoc[Alerting] with webhooks and email notifications
+* Set up xref:multi-instance.adoc[Multi-Instance Monitoring] for multiple PostgreSQL servers

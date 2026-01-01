@@ -1,0 +1,351 @@
+{#include base}
+{#title}Infrastructure - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/infrastructure?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Infrastructure Monitoring</h1>
+        <p class="text-muted">Vacuum progress, background processes, and storage insights</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Active Vacuums</span>
+                <h2 class="mb-0">{vacuumProgress.size}</h2>
+                <small class="text-muted">running operations</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if bgProcessStats.autovacuumEnabled}bg-success{#else}bg-warning text-dark{/if} mb-2">Autovacuum</span>
+                <h3 class="mb-0">{bgProcessStats.autovacuumWorkersRunning} / {bgProcessStats.maxAutovacuumWorkers}</h3>
+                <small class="text-muted">workers active</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Database Size</span>
+                <h3 class="mb-0">{storageStats.totalDatabaseSizeFormatted}</h3>
+                <small class="text-muted">total across all databases</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">WAL Files</span>
+                <h3 class="mb-0">{storageStats.walTotalSizeFormatted}</h3>
+                <small class="text-muted">{storageStats.walFileCount} segments</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Vacuum Operations -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Active Vacuum Operations</h5>
+                <span class="badge bg-info">{vacuumProgress.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if vacuumProgress.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <h4>No Active Vacuums</h4>
+                    <p class="mb-0">No vacuum operations are currently running</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Database</th>
+                                <th>Table</th>
+                                <th>Phase</th>
+                                <th class="text-end">Progress</th>
+                                <th class="text-end">Heap Scanned</th>
+                                <th class="text-end">Index Vacuums</th>
+                                <th class="text-end">Dead Tuples</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for vac in vacuumProgress}
+                            <tr>
+                                <td>
+                                    <strong>{vac.pid}</strong>
+                                    {#if vac.autovacuum}
+                                    <span class="badge bg-info ms-1">Auto</span>
+                                    {/if}
+                                </td>
+                                <td>{vac.database}</td>
+                                <td><code>{vac.fullTableName}</code></td>
+                                <td>
+                                    <span class="badge {vac.phaseCssClass}">{vac.phase.displayName}</span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="progress" style="width: 100px; height: 16px;">
+                                        <div class="progress-bar {vac.progressBarCssClass}"
+                                             role="progressbar"
+                                             style="width: {vac.progressPercent}%"
+                                             aria-valuenow="{vac.progressPercent}"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            {vac.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-end">{vac.heapBlksScannedFormatted} / {vac.heapBlksTotalFormatted}</td>
+                                <td class="text-end">{vac.indexVacuumCount}</td>
+                                <td class="text-end">{vac.numDeadTuples} / {vac.maxDeadTuples}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Background Processes -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Background Processes</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Process Type</th>
+                                <th class="text-end">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for proc in bgProcessStats.backgroundProcesses}
+                            <tr>
+                                <td>
+                                    <span class="badge {proc.typeCssClass}">{proc.type}</span>
+                                </td>
+                                <td class="text-end">{proc.count}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Checkpoint Statistics</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Timed Checkpoints</dt>
+                    <dd class="col-sm-6">{bgProcessStats.checkpointsTimed}</dd>
+
+                    <dt class="col-sm-6">Requested Checkpoints</dt>
+                    <dd class="col-sm-6">
+                        {bgProcessStats.checkpointsReq}
+                        {#if bgProcessStats.requestedCheckpointRatio > 20}
+                        <span class="badge bg-warning text-dark ms-1">High</span>
+                        {/if}
+                    </dd>
+
+                    <dt class="col-sm-6">Total Checkpoints</dt>
+                    <dd class="col-sm-6">{bgProcessStats.totalCheckpoints}</dd>
+
+                    <dt class="col-sm-6">Write Time</dt>
+                    <dd class="col-sm-6">{bgProcessStats.checkpointWriteTimeFormatted}</dd>
+
+                    <dt class="col-sm-6">Sync Time</dt>
+                    <dd class="col-sm-6">{bgProcessStats.checkpointSyncTimeFormatted}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Buffer Statistics -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Buffer Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-6 text-center mb-3">
+                        <h4 class="mb-0">{bgProcessStats.buffersCheckpoint}</h4>
+                        <small class="text-muted">Checkpoint Buffers</small>
+                    </div>
+                    <div class="col-md-3 col-6 text-center mb-3">
+                        <h4 class="mb-0">{bgProcessStats.buffersClean}</h4>
+                        <small class="text-muted">Bgwriter Cleaned</small>
+                    </div>
+                    <div class="col-md-3 col-6 text-center mb-3">
+                        <h4 class="mb-0">{bgProcessStats.buffersBackend}</h4>
+                        <small class="text-muted">Backend Written</small>
+                        {#if bgProcessStats.buffersBackend > 0}
+                        <br><small class="text-warning">Should be low</small>
+                        {/if}
+                    </div>
+                    <div class="col-md-3 col-6 text-center mb-3">
+                        <h4 class="mb-0">{bgProcessStats.buffersAlloc}</h4>
+                        <small class="text-muted">Buffers Allocated</small>
+                    </div>
+                </div>
+                {#if bgProcessStats.maxwrittenClean > 0}
+                <div class="alert alert-warning mb-0">
+                    <strong>Warning:</strong> Background writer stopped {bgProcessStats.maxwrittenClean} times
+                    because it had written too many buffers. Consider increasing <code>bgwriter_lru_maxpages</code>.
+                </div>
+                {/if}
+                {#if bgProcessStats.buffersBackendFsync > 0}
+                <div class="alert alert-danger mb-0 mt-2">
+                    <strong>Critical:</strong> Backend processes had to perform {bgProcessStats.buffersBackendFsync} fsync calls.
+                    This indicates I/O subsystem issues.
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Storage Insights -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Database Sizes</h5>
+                <span class="badge bg-primary">{storageStats.totalDatabaseSizeFormatted}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for db in storageStats.databases}
+                            <tr>
+                                <td>{db.name}</td>
+                                <td class="text-end">{db.sizeFormatted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Tablespaces</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Location</th>
+                                <th class="text-end">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for ts in storageStats.tablespaces}
+                            <tr>
+                                <td><strong>{ts.name}</strong></td>
+                                <td><code class="small">{ts.location ?: '(default)'}</code></td>
+                                <td class="text-end">{ts.sizeFormatted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WAL and Temp Files -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">WAL Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Data Directory</dt>
+                    <dd class="col-sm-6"><code class="small">{storageStats.dataDirectory ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">WAL Segment Count</dt>
+                    <dd class="col-sm-6">{storageStats.walFileCount}</dd>
+
+                    <dt class="col-sm-6">Total WAL Size</dt>
+                    <dd class="col-sm-6">{storageStats.walTotalSizeFormatted}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Temporary Files</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Temp Files Created</dt>
+                    <dd class="col-sm-6">
+                        {storageStats.tempFiles}
+                        {#if storageStats.tempFiles > 1000}
+                        <span class="badge bg-warning text-dark ms-1">High</span>
+                        {/if}
+                    </dd>
+
+                    <dt class="col-sm-6">Temp Bytes Written</dt>
+                    <dd class="col-sm-6">
+                        {storageStats.tempBytesFormatted}
+                        {#if storageStats.tempBytes > 1073741824}
+                        <span class="badge bg-warning text-dark ms-1">Consider increasing work_mem</span>
+                        {/if}
+                    </dd>
+                </dl>
+                {#if storageStats.tempFiles > 0}
+                <div class="mt-3">
+                    <small class="text-muted">
+                        High temp file usage may indicate <code>work_mem</code> is too low,
+                        causing sorts and hash operations to spill to disk.
+                    </small>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

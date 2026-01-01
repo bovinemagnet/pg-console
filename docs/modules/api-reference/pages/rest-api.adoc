@@ -1,0 +1,423 @@
+= REST API Overview
+Paul Snow
+0.0.0
+:description: REST API architecture, authentication, and usage patterns for pg-console
+:keywords: rest, api, json, authentication, http, swagger
+
+This page provides an overview of the pg-console REST API architecture, common patterns, and best practices for API integration.
+
+== API Architecture
+
+The pg-console REST API is built on JAX-RS (Jakarta RESTful Web Services) and follows RESTful design principles. All endpoints return JSON responses for easy consumption by external tools and applications.
+
+=== Base URL
+
+All API endpoints are accessed via the `/api/v1` path:
+
+[source,plaintext]
+----
+http://<host>:<port>/api/v1/<endpoint>
+----
+
+Default development URL:
+
+[source,plaintext]
+----
+http://localhost:8080/api/v1/<endpoint>
+----
+
+=== HTTP Methods
+
+The API primarily uses the following HTTP methods:
+
+GET::
+Retrieve data from the server. Most monitoring endpoints use GET requests.
+
+POST::
+Submit data to the server or trigger actions (e.g., cancel query, start runbook).
+
+DELETE::
+Remove resources (used in some administrative endpoints).
+
+=== Content Types
+
+Request content type (for POST requests)::
+* `application/x-www-form-urlencoded` - Form data
+* `application/json` - JSON payloads
+
+Response content type::
+* `application/json` - All API responses are JSON
+
+== Common Patterns
+
+=== Instance Selection
+
+Most endpoints accept an optional `instance` query parameter to specify which PostgreSQL instance to query:
+
+[source,bash]
+----
+GET /api/v1/overview?instance=production
+----
+
+If not specified, the default instance is used (`instance=default`).
+
+=== Pagination and Limiting
+
+Some endpoints support `limit` parameters to control the number of results returned:
+
+[source,bash]
+----
+GET /api/v1/slow-queries?limit=100
+----
+
+=== Sorting
+
+Endpoints that return lists often support `sortBy` and `order` parameters:
+
+[source,bash]
+----
+GET /api/v1/slow-queries?sortBy=totalTime&order=desc
+----
+
+Valid sort orders:
+* `asc` - Ascending order
+* `desc` - Descending order (default for most endpoints)
+
+=== Filtering
+
+Endpoints may support filtering parameters specific to their data:
+
+[source,bash]
+----
+GET /api/v1/query-regressions?window=24&threshold=50
+----
+
+== Response Structure
+
+=== Standard Response Format
+
+All API endpoints return a JSON object with common fields:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "count": 42,
+  "<dataField>": [ /* endpoint-specific data */ ]
+}
+----
+
+Common response fields:
+
+`timestamp`::
+ISO 8601 formatted timestamp when the response was generated.
+
+`instance`::
+The PostgreSQL instance identifier that was queried.
+
+`count`::
+Number of items in the response (for list endpoints).
+
+=== Nested Data Structures
+
+Complex endpoints may return nested summaries and detailed data:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "summary": {
+    "totalRoles": 15,
+    "privilegedRoles": 3,
+    "warnings": 2
+  },
+  "roles": [ /* detailed role data */ ]
+}
+----
+
+== Error Handling
+
+=== HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+`200 OK`::
+Successful request with data returned.
+
+`404 Not Found`::
+Endpoint is disabled via feature toggles, or resource does not exist.
+
+`500 Internal Server Error`::
+Server-side error occurred (e.g., database connection failure).
+
+=== Error Response Format
+
+When errors occur, the response includes error details:
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "default",
+  "status": "unhealthy",
+  "error": "Connection refused: could not connect to PostgreSQL instance"
+}
+----
+
+For feature-toggle disabled endpoints:
+
+[source,json]
+----
+{
+  "error": "Page 'slow-queries' is disabled",
+  "timestamp": "2025-12-28T10:30:00Z"
+}
+----
+
+== Authentication
+
+[#authentication]
+=== Overview
+
+When security is enabled in pg-console configuration, API endpoints require authentication. The authentication mechanism depends on your security configuration.
+
+=== Security Configuration
+
+To enable API security, configure the security settings in `application.properties`:
+
+[source,properties]
+----
+# Enable security
+pg-console.security.enabled=true
+
+# Configure authentication method (HTTP Basic, OIDC, etc.)
+quarkus.http.auth.basic=true
+----
+
+Refer to xref:admin-guide:security.adoc[Security Configuration] for detailed security setup.
+
+=== Authenticated Requests
+
+When security is enabled, include authentication credentials in your API requests:
+
+[source,bash]
+----
+# HTTP Basic Authentication
+curl -u username:password http://localhost:8080/api/v1/overview
+
+# Bearer token (if using OIDC)
+curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/overview
+----
+
+=== Role-Based Access
+
+Some administrative endpoints require specific roles:
+
+* *Admin role* - Required for destructive operations (cancel/terminate queries)
+* *Read-only role* - Sufficient for monitoring endpoints
+
+The required roles are enforced via Quarkus security annotations when security is enabled.
+
+== OpenAPI Documentation
+
+=== Accessing OpenAPI Specification
+
+The OpenAPI specification is available at:
+
+[source,plaintext]
+----
+http://localhost:8080/q/openapi
+----
+
+This returns the complete API specification in OpenAPI 3.0 format, suitable for generating client libraries or importing into API tools.
+
+=== Swagger UI
+
+Interactive API documentation is available via Swagger UI:
+
+[source,plaintext]
+----
+http://localhost:8080/q/swagger-ui
+----
+
+The Swagger UI provides:
+
+* Interactive endpoint exploration
+* Request/response schema documentation
+* Ability to test API calls directly
+* Authentication support for secured endpoints
+
+TIP: Use Swagger UI during development to explore the API and test queries interactively.
+
+== Feature Toggles
+
+Many API endpoints can be disabled via feature toggles in the configuration. When an endpoint is disabled, it returns HTTP 404 with an error message.
+
+Check which features are enabled:
+
+[source,bash]
+----
+GET /api/v1/instances
+----
+
+The response includes feature toggle status information.
+
+See xref:admin-guide:configuration.adoc#feature-toggles[Feature Toggle Configuration] for details on enabling/disabling API endpoints.
+
+== Rate Limiting
+
+Currently, pg-console does not implement rate limiting on API endpoints. For production deployments, consider implementing rate limiting at the reverse proxy or API gateway level.
+
+== CORS Configuration
+
+Cross-Origin Resource Sharing (CORS) can be configured in `application.properties` to allow API access from web applications:
+
+[source,properties]
+----
+quarkus.http.cors=true
+quarkus.http.cors.origins=https://your-dashboard.example.com
+quarkus.http.cors.methods=GET,POST
+----
+
+See xref:admin-guide:configuration.adoc#cors[CORS Configuration] for complete details.
+
+== Client Examples
+
+=== cURL
+
+Basic request using cURL:
+
+[source,bash]
+----
+curl -X GET http://localhost:8080/api/v1/overview \
+  -H "Accept: application/json"
+----
+
+With query parameters:
+
+[source,bash]
+----
+curl -X GET "http://localhost:8080/api/v1/slow-queries?instance=prod&limit=10&sortBy=totalTime&order=desc" \
+  -H "Accept: application/json"
+----
+
+=== Python
+
+Using Python's `requests` library:
+
+[source,python]
+----
+import requests
+
+# Basic GET request
+response = requests.get('http://localhost:8080/api/v1/overview')
+data = response.json()
+
+print(f"Active connections: {data['stats']['activeConnections']}")
+
+# With parameters
+params = {
+    'instance': 'production',
+    'limit': 50,
+    'sortBy': 'totalTime',
+    'order': 'desc'
+}
+response = requests.get('http://localhost:8080/api/v1/slow-queries', params=params)
+queries = response.json()['queries']
+
+for query in queries[:5]:
+    print(f"Query: {query['query'][:50]}... - Time: {query['totalTime']}ms")
+----
+
+=== JavaScript
+
+Using the Fetch API:
+
+[source,javascript]
+----
+// Basic GET request
+fetch('http://localhost:8080/api/v1/overview')
+  .then(response => response.json())
+  .then(data => {
+    console.log('Active connections:', data.stats.activeConnections);
+  });
+
+// With query parameters
+const params = new URLSearchParams({
+  instance: 'production',
+  limit: 50,
+  sortBy: 'totalTime',
+  order: 'desc'
+});
+
+fetch(`http://localhost:8080/api/v1/slow-queries?${params}`)
+  .then(response => response.json())
+  .then(data => {
+    data.queries.slice(0, 5).forEach(query => {
+      console.log(`${query.query.substring(0, 50)}... - ${query.totalTime}ms`);
+    });
+  });
+----
+
+== Best Practices
+
+=== Polling Intervals
+
+When polling API endpoints for monitoring data:
+
+* *Overview/Activity* - Poll every 5-30 seconds for real-time monitoring
+* *Slow Queries* - Poll every 30-60 seconds
+* *Historical Data* - Poll every 5-15 minutes
+
+Avoid polling more frequently than necessary to reduce server load.
+
+=== Error Handling
+
+Always implement proper error handling in client applications:
+
+[source,python]
+----
+try:
+    response = requests.get('http://localhost:8080/api/v1/overview', timeout=10)
+    response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+    data = response.json()
+except requests.exceptions.Timeout:
+    print("Request timed out")
+except requests.exceptions.HTTPError as e:
+    print(f"HTTP error: {e}")
+except requests.exceptions.RequestException as e:
+    print(f"Request failed: {e}")
+----
+
+=== Caching
+
+Consider caching API responses in your client application to reduce load:
+
+* Cache static data (instance list, database list) for several minutes
+* Cache metrics with short TTL (30-60 seconds) for dashboards
+* Invalidate cache on user-initiated refresh actions
+
+=== Connection Pooling
+
+For applications making frequent API calls, use connection pooling:
+
+[source,python]
+----
+from requests.adapters import HTTPAdapter
+from requests.sessions import Session
+
+session = Session()
+adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20)
+session.mount('http://', adapter)
+
+# Reuse session for multiple requests
+response = session.get('http://localhost:8080/api/v1/overview')
+----
+
+== Next Steps
+
+* xref:endpoints.adoc[API Endpoints] - Complete endpoint reference
+* xref:admin-guide:security.adoc[Security Configuration] - Secure your API
+* xref:admin-guide:configuration.adoc[Configuration] - Configure API behaviour

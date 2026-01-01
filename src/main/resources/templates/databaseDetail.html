@@ -1,0 +1,267 @@
+{#include base}
+{#title}{db.datname} - Database Metrics - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/databases/{db.datname}?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/?instance={currentInstance ?: 'default'}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/databases?instance={currentInstance ?: 'default'}">Databases</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{db.datname}</li>
+            </ol>
+        </nav>
+        <h1>Database: {db.datname} {#if db.pgStatStatementsEnabled}<span class="badge bg-success" title="pg_stat_statements enabled">📊 pg_stat_statements</span>{/if}</h1>
+        <p class="text-muted">Detailed metrics from pg_stat_database</p>
+    </div>
+</div>
+
+{#if db == null}
+<div class="alert alert-warning">
+    Database not found.
+</div>
+{#else}
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Size</h6>
+                <h2 class="mb-0">{db.databaseSize}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Active Connections</h6>
+                <h2 class="mb-0">{db.numBackends}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Cache Hit Ratio</h6>
+                <h2 class="mb-0 {#if db.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{db.cacheHitRatioFormatted}</h2>
+                <small class="text-muted">Target: &gt;99%</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Commit Ratio</h6>
+                <h2 class="mb-0 {#if db.commitRatio < 95}text-warning{#else}text-success{/if}">{db.commitRatioFormatted}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction Statistics -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Transaction Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Total Transactions</th>
+                            <td class="text-end">{db.totalTransactions}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Commits</th>
+                            <td class="text-end">{db.xactCommit}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Rollbacks</th>
+                            <td class="text-end {#if db.xactRollback > 0}text-warning{/if}">{db.xactRollback}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Deadlocks</th>
+                            <td class="text-end {#if db.deadlocks > 0}text-danger fw-bold{/if}">{db.deadlocks}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Conflicts</th>
+                            <td class="text-end {#if db.conflicts > 0}text-warning{/if}">{db.conflicts}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Block I/O Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Blocks Hit (cache)</th>
+                            <td class="text-end">{db.blksHit}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Blocks Read (disk)</th>
+                            <td class="text-end">{db.blksRead}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Block Read Time</th>
+                            <td class="text-end">{db.blkReadTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Block Write Time</th>
+                            <td class="text-end">{db.blkWriteTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Cache Hit Ratio</th>
+                            <td class="text-end {#if db.cacheHitRatio < 90}text-warning{#else}text-success{/if}">{db.cacheHitRatioFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tuple Statistics -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Tuple Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Returned</th>
+                            <td class="text-end">{db.tupReturned}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Fetched</th>
+                            <td class="text-end">{db.tupFetched}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Inserted</th>
+                            <td class="text-end">{db.tupInserted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Updated</th>
+                            <td class="text-end">{db.tupUpdated}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Deleted</th>
+                            <td class="text-end">{db.tupDeleted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Temp File Usage</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Temp Files Created</th>
+                            <td class="text-end">{db.tempFiles}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Temp Bytes Written</th>
+                            <td class="text-end">{db.tempBytesFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Session Statistics -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Session Statistics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Total Sessions</th>
+                            <td class="text-end">{db.sessions}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sessions Abandoned</th>
+                            <td class="text-end {#if db.sessionsAbandoned > 0}text-warning{/if}">{db.sessionsAbandoned}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sessions Fatal</th>
+                            <td class="text-end {#if db.sessionsFatal > 0}text-danger{/if}">{db.sessionsFatal}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sessions Killed</th>
+                            <td class="text-end {#if db.sessionsKilled > 0}text-danger{/if}">{db.sessionsKilled}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Session Time</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Total Session Time</th>
+                            <td class="text-end">{db.sessionTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Active Time</th>
+                            <td class="text-end">{db.activeTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Idle in Transaction Time</th>
+                            <td class="text-end">{db.idleInTransactionTimeFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metadata -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">
+                    <strong>Database OID:</strong> {db.datid} |
+                    <strong>Stats Reset:</strong> {db.statsReset ?: 'Never'}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{/if}
+
+</div>
+
+{/include}

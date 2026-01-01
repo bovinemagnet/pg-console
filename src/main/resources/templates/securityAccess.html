@@ -1,0 +1,253 @@
+{#include base}
+{#title}Data Access Patterns - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/security/access?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/security?instance={currentInstance}">Security</a></li>
+                <li class="breadcrumb-item active">Data Access</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-eye me-2"></i>Data Access Patterns</h1>
+        <p class="text-muted">Sensitive table detection, PII analysis, and row-level security policies</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Sensitive Tables</span>
+                <h2 class="mb-0">{summary.sensitiveTableCount}</h2>
+                <small class="text-muted">tables with potential PII</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">PII Columns</span>
+                <h2 class="mb-0">{summary.piiColumnCount}</h2>
+                <small class="text-muted">detected columns</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge bg-success mb-2">RLS Enabled</span>
+                <h2 class="mb-0">{summary.tablesWithRlsCount}</h2>
+                <small class="text-muted">protected tables</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body text-center">
+                <span class="badge {#if summary.tablesNeedingRls > 0}bg-danger{#else}bg-success{/if} mb-2">Needs RLS</span>
+                <h2 class="mb-0">{summary.tablesNeedingRls}</h2>
+                <small class="text-muted">unprotected sensitive tables</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sensitivity Breakdown -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm border-start border-4 border-danger">
+            <div class="card-body text-center">
+                <h6 class="text-muted">High Sensitivity</h6>
+                <h3 class="text-danger">{summary.highSensitivityCount}</h3>
+                <small class="text-muted">SSN, passwords, financial data</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm border-start border-4 border-warning">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Medium Sensitivity</h6>
+                <h3 class="text-warning">{summary.mediumSensitivityCount}</h3>
+                <small class="text-muted">Email, phone, names, addresses</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm border-start border-4 border-info">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Low Sensitivity</h6>
+                <h3 class="text-info">{summary.lowSensitivityCount}</h3>
+                <small class="text-muted">IP addresses, other potential PII</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sensitive Tables -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>Sensitive Tables</h5>
+                <span class="badge bg-warning text-dark">{sensitiveTables.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if sensitiveTables.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-shield-check fs-1 text-success mb-3 d-block"></i>
+                    <h5>No Sensitive Tables Detected</h5>
+                    <p class="mb-0">No tables with obvious PII column patterns were found</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th>Sensitivity</th>
+                                <th>PII Columns</th>
+                                <th>RLS Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for table in sensitiveTables}
+                            <tr>
+                                <td><code>{table.fullyQualifiedName}</code></td>
+                                <td><span class="badge {table.sensitivityBadgeCssClass}">{table.sensitivityDisplay}</span></td>
+                                <td>
+                                    <span class="badge bg-secondary">{table.piiColumnCount}</span>
+                                    <small class="text-muted ms-1">{table.piiColumnsDisplay}</small>
+                                </td>
+                                <td><span class="badge {table.rlsStatusCssClass}">{table.rlsStatusBadge}</span></td>
+                                <td>
+                                    {#if table.needsRlsProtection}
+                                    <span class="badge bg-danger">Needs RLS</span>
+                                    {#else}
+                                    <span class="text-success"><i class="bi bi-check-circle"></i></span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PII Columns -->
+{#if !piiColumns.isEmpty()}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-card-text me-2"></i>Detected PII Columns</h5>
+                <span class="badge bg-info">{piiColumns.size}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Table</th>
+                                <th>Data Type</th>
+                                <th>PII Type</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for col in piiColumns}
+                            <tr>
+                                <td><code>{col.columnName}</code></td>
+                                <td><code>{col.schemaName}.{col.tableName}</code></td>
+                                <td><span class="badge bg-secondary">{col.dataType}</span></td>
+                                <td>
+                                    <i class="bi {col.piiTypeIconClass} me-1"></i>
+                                    <span class="badge {col.piiTypeCssClass}">{col.piiTypeDisplay}</span>
+                                </td>
+                                <td><span class="{col.confidenceCssClass}">{col.confidenceDisplay}</span></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- RLS Policies -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-lock me-2"></i>Row-Level Security Policies</h5>
+                <span class="badge bg-success">{rlsPolicies.size}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if rlsPolicies.isEmpty()}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-shield-x fs-1 mb-3 d-block"></i>
+                    <h5>No RLS Policies</h5>
+                    <p class="mb-0">No row-level security policies are configured</p>
+                    <small>Consider implementing RLS for sensitive tables</small>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th>Policy Name</th>
+                                <th>Command</th>
+                                <th>Type</th>
+                                <th>Roles</th>
+                                <th>USING Expression</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for policy in rlsPolicies}
+                            <tr>
+                                <td><code>{policy.fullyQualifiedTableName}</code></td>
+                                <td><strong>{policy.policyName}</strong></td>
+                                <td><span class="badge {policy.commandCssClass}">{policy.commandDisplay}</span></td>
+                                <td><span class="badge {policy.policyTypeCssClass}">{policy.policyTypeDisplay}</span></td>
+                                <td>{policy.rolesDisplay}</td>
+                                <td>
+                                    <code class="text-truncate d-inline-block" style="max-width: 200px;" title="{policy.usingExpression}">
+                                        {policy.getUsingExpressionShort(50)}
+                                    </code>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Disclaimer -->
+<div class="row">
+    <div class="col">
+        <div class="alert alert-info border-0">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Note:</strong> PII detection is based on heuristic pattern matching of column names.
+            Review detected columns to confirm actual sensitivity. This tool does not examine data content.
+        </div>
+    </div>
+</div>
+
+</div>
+{/include}

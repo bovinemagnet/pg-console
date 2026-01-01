@@ -1,0 +1,172 @@
+{#include base}
+{#title}Runbooks - PostgreSQL Console{/title}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">
+            <i class="bi bi-journal-code text-success me-2" aria-hidden="true"></i>
+            Runbooks
+        </h1>
+        <p class="text-muted mb-0">Guided troubleshooting and maintenance procedures</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/insights?instance={instance}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            Back to Insights
+        </a>
+    </div>
+</div>
+
+<!-- In Progress Executions -->
+{#if !inProgressExecutions.isEmpty}
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning bg-opacity-10">
+        <i class="bi bi-play-circle me-2 text-warning" aria-hidden="true"></i>
+        <strong>In Progress</strong>
+        <span class="badge bg-warning text-dark ms-2">{inProgressExecutions.size}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {#for exec in inProgressExecutions}
+            <a href="/insights/runbooks/execution/{exec.id}?instance={instance}"
+               class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">{exec.runbook.name}</h6>
+                        <small class="text-muted">
+                            Started {exec.startedAt} by {exec.startedBy}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <div class="progress mb-1" style="width: 100px; height: 8px;">
+                            <div class="progress-bar bg-warning" role="progressbar"
+                                 style="width: {exec.progressPercent}%"
+                                 aria-valuenow="{exec.progressPercent}" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                        <small>Step {exec.currentStep} of {exec.runbook.steps.size}</small>
+                    </div>
+                </div>
+            </a>
+            {/for}
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Available Runbooks by Category -->
+<div class="row mb-4">
+    {#for category in categories}
+    <div class="col-12 mb-4">
+        <h5 class="mb-3">
+            {#if category.name == 'INCIDENT'}
+            <i class="bi bi-exclamation-triangle text-danger me-2" aria-hidden="true"></i>
+            {#else if category.name == 'MAINTENANCE'}
+            <i class="bi bi-wrench text-primary me-2" aria-hidden="true"></i>
+            {#else if category.name == 'TROUBLESHOOTING'}
+            <i class="bi bi-search text-warning me-2" aria-hidden="true"></i>
+            {#else}
+            <i class="bi bi-arrow-counterclockwise text-success me-2" aria-hidden="true"></i>
+            {/if}
+            {category}
+        </h5>
+        <div class="row">
+            {#for runbook in runbooks}
+            {#if runbook.category.name == category.name}
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{runbook.name}</h6>
+                        <p class="card-text small text-muted">{runbook.description}</p>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-secondary">
+                                {runbook.steps.size} steps
+                            </span>
+                            <small class="text-muted">
+                                ~{runbook.estimatedDurationMinutes} min
+                            </small>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-3">
+                            {#if runbook.triggerType != null}
+                            <span class="badge bg-light text-dark">{runbook.triggerType.displayName}</span>
+                            {/if}
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <button class="btn btn-sm btn-primary w-100"
+                                hx-post="/insights/runbooks/{runbook.id}/start?instance={instance}"
+                                hx-swap="none"
+                                hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; }">
+                            <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                            Start Runbook
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {/if}
+            {/for}
+        </div>
+    </div>
+    {/for}
+</div>
+
+<!-- Recent Executions -->
+{#if !recentExecutions.isEmpty}
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-clock-history me-2" aria-hidden="true"></i>
+        Recent Executions
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Runbook</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Started By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for exec in recentExecutions}
+                    <tr>
+                        <td>
+                            <strong>{exec.runbook.name}</strong>
+                        </td>
+                        <td>
+                            <small>{exec.startedAt}</small>
+                        </td>
+                        <td>
+                            {#if exec.completedAt}
+                            <small>{exec.durationMinutes} min</small>
+                            {#else}
+                            <small class="text-muted">-</small>
+                            {/if}
+                        </td>
+                        <td>
+                            <span class="badge {#if exec.status.name == 'COMPLETED'}bg-success{#else if exec.status.name == 'FAILED'}bg-danger{#else if exec.status.name == 'CANCELLED'}bg-secondary{#else}bg-warning text-dark{/if}">
+                                {exec.status}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{exec.startedBy}</small>
+                        </td>
+                        <td>
+                            <a href="/insights/runbooks/execution/{exec.id}?instance={instance}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye" aria-hidden="true"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{/if}
+
+{/include}

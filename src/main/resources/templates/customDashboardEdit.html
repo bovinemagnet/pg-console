@@ -1,0 +1,193 @@
+{#include base}
+{#title}{#if isNew}New{#else}Edit{/if} Custom Dashboard{/title}
+
+<div id="refreshable-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item">
+                        <a href="/dashboards/custom?instance={instance}">Custom Dashboards</a>
+                    </li>
+                    {#if !isNew}
+                    <li class="breadcrumb-item">
+                        <a href="/dashboards/custom/{dashboard.id}?instance={instance}">{dashboard.name}</a>
+                    </li>
+                    {/if}
+                    <li class="breadcrumb-item active" aria-current="page">{#if isNew}New{#else}Edit{/if}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-1">
+                <i class="bi bi-{#if isNew}plus-lg{#else}pencil{/if} me-2"></i>
+                {#if isNew}Create New Dashboard{#else}Edit Dashboard{/if}
+            </h1>
+        </div>
+    </div>
+
+    <form action="{#if isNew}/dashboards/custom{#else}/dashboards/custom/{dashboard.id}{/if}" method="post">
+        <input type="hidden" name="instance" value="{instance}">
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Dashboard Details
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   value="{dashboard.name}" required
+                                   placeholder="My Custom Dashboard">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"
+                                      placeholder="Optional description of this dashboard">{dashboard.description}</textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="isDefault" name="isDefault"
+                                           value="true" {#if dashboard.default}checked{/if}>
+                                    <label class="form-check-label" for="isDefault">
+                                        <i class="bi bi-star me-1"></i>Set as default dashboard
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="isShared" name="isShared"
+                                           value="true" {#if dashboard.shared}checked{/if}>
+                                    <label class="form-check-label" for="isShared">
+                                        <i class="bi bi-people me-1"></i>Share with other users
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="tags" class="form-label">Tags</label>
+                            <input type="text" class="form-control" id="tags" name="tags"
+                                   value="{#for tag in dashboard.tags}{tag}{#if !hasNext}, {/if}{/for}"
+                                   placeholder="monitoring, production, performance">
+                            <div class="form-text">Comma-separated list of tags</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-grid-3x3 me-2"></i>Widgets
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Select the widgets to display on this dashboard. Widgets will be arranged in a responsive grid.
+                        </p>
+
+                        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                            {#for wt in widgetTypes}
+                            <div class="col">
+                                <div class="form-check card h-100">
+                                    <div class="card-body">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="widget-{wt.get('code')}"
+                                               name="widgetTypes"
+                                               value="{wt.get('code')}"
+                                               {#if dashboard.widgets != null}
+                                                   {#for w in dashboard.widgets}
+                                                       {#if w.widgetType == wt.get('code')}checked{/if}
+                                                   {/for}
+                                               {/if}>
+                                        <label class="form-check-label d-block" for="widget-{wt.get('code')}">
+                                            <i class="bi {wt.get('icon')} me-1"></i>{wt.get('label')}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            {/for}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>{#if isNew}Create Dashboard{#else}Save Changes{/if}
+                    </button>
+                    <a href="{#if isNew}/dashboards/custom?instance={instance}{#else}/dashboards/custom/{dashboard.id}?instance={instance}{/if}"
+                       class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                    {#if !isNew}
+                    <button type="button" class="btn btn-outline-danger ms-auto"
+                            hx-delete="/dashboards/custom/{dashboard.id}?instance={instance}"
+                            hx-confirm="Are you sure you want to delete this dashboard?">
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                    {/if}
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightbulb me-2"></i>Tips
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            <li class="mb-2">Choose widgets that help you monitor the most important metrics for your use case.</li>
+                            <li class="mb-2">Set a dashboard as default to see it automatically when you visit the custom dashboards section.</li>
+                            <li class="mb-2">Share dashboards with your team for consistent monitoring views.</li>
+                            <li class="mb-2">Use tags to organise and find dashboards quickly.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-grid me-2"></i>Widget Types
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt><i class="bi bi-plug me-1"></i>Connections</dt>
+                            <dd class="text-muted small">Current connection count vs maximum</dd>
+
+                            <dt><i class="bi bi-speedometer me-1"></i>Cache Hit Ratio</dt>
+                            <dd class="text-muted small">Database cache efficiency percentage</dd>
+
+                            <dt><i class="bi bi-play-circle me-1"></i>Active Queries</dt>
+                            <dd class="text-muted small">Currently running queries</dd>
+
+                            <dt><i class="bi bi-exclamation-triangle me-1"></i>Blocked Queries</dt>
+                            <dd class="text-muted small">Queries waiting on locks</dd>
+
+                            <dt><i class="bi bi-hdd me-1"></i>Database Size</dt>
+                            <dd class="text-muted small">Total database storage used</dd>
+
+                            <dt><i class="bi bi-clock-history me-1"></i>Longest Query</dt>
+                            <dd class="text-muted small">Duration of longest running query</dd>
+
+                            <dt><i class="bi bi-graph-up me-1"></i>Sparklines</dt>
+                            <dd class="text-muted small">24-hour trend charts for connections and queries</dd>
+
+                            <dt><i class="bi bi-code-square me-1"></i>Custom SQL</dt>
+                            <dd class="text-muted small mb-0">Run custom SELECT queries (advanced)</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+{/include}

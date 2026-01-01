@@ -1,0 +1,73 @@
+{#include base}
+{#title}Column Correlation - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/diagnostics/correlation?instance={instance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Column Correlation Statistics</h1>
+        <p class="text-muted">Physical vs logical ordering for CLUSTER recommendations</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        {#if correlations.isEmpty()}
+        <div class="alert alert-success">
+            All columns have good correlation (> 0.9). No CLUSTER recommendations.
+        </div>
+        {#else}
+        <div class="alert alert-info mb-3">
+            Showing columns with correlation below 0.9 that may benefit from CLUSTER.
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Schema</th>
+                        <th>Table</th>
+                        <th>Column</th>
+                        <th>Correlation</th>
+                        <th>Index</th>
+                        <th>Table Size</th>
+                        <th>Index Scans</th>
+                        <th>Benefit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for c in correlations}
+                    <tr>
+                        <td>{c.schemaName}</td>
+                        <td><code>{c.tableName}</code></td>
+                        <td><code>{c.columnName}</code></td>
+                        <td>
+                            <span class="{c.correlationClass}">{c.correlationPercent}%</span>
+                        </td>
+                        <td>
+                            {#if c.indexName}
+                                <code>{c.indexName}</code>
+                            {#else}
+                                <span class="text-muted">-</span>
+                            {/if}
+                        </td>
+                        <td>{c.tableSizeDisplay}</td>
+                        <td>{c.idxScan}</td>
+                        <td>
+                            {#if c.clusterRecommended}
+                                <span class="badge bg-warning text-dark">{c.clusterBenefit}</span>
+                            {#else}
+                                <span class="badge bg-secondary">Low</span>
+                            {/if}
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+        {/if}
+    </div>
+</div>
+
+</div>
+
+{/include}

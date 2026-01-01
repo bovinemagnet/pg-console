@@ -1,0 +1,517 @@
+= Deployment
+Paul Snow
+0.0.0
+:description: Deploying pg-console in production environments
+:keywords: deployment, systemd, docker, nginx, production, native executable
+
+This guide covers deploying pg-console in production environments using various deployment methods.
+
+== Prerequisites
+
+Before deploying pg-console, ensure you have:
+
+* PostgreSQL 12 or later with `pg_stat_statements` extension enabled
+* Network connectivity to PostgreSQL server(s)
+* Java 21 or later (for JAR deployment)
+* Sufficient system resources (minimum 512MB RAM recommended)
+
+== Building pg-console
+
+Build the production JAR:
+
+[source,bash]
+----
+gradle21w clean build
+----
+
+The built JAR will be located at `build/quarkus-app/quarkus-run.jar`.
+
+== Systemd Service Deployment
+
+Running pg-console as a systemd service provides automatic startup, restart on failure, and integration with system logging.
+
+=== Create Service User
+
+Create a dedicated user for running pg-console:
+
+[source,bash]
+----
+sudo useradd -r -s /bin/false pgconsole
+----
+
+=== Install Application
+
+Copy the Quarkus application directory to `/opt`:
+
+[source,bash]
+----
+sudo mkdir -p /opt/pgconsole
+sudo cp -r build/quarkus-app/* /opt/pgconsole/
+sudo chown -R pgconsole:pgconsole /opt/pgconsole
+----
+
+=== Create Environment File
+
+Create `/etc/pgconsole/pgconsole.env` with your configuration:
+
+[source,properties]
+----
+POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres
+POSTGRES_USER=pgconsole_monitor
+POSTGRES_PASSWORD=secure_password_here
+PG_CONSOLE_DATABASES=production_db,analytics_db
+PG_CONSOLE_HISTORY_ENABLED=true
+PG_CONSOLE_HISTORY_INTERVAL=60
+PG_CONSOLE_HISTORY_RETENTION=30
+QUARKUS_HTTP_HOST=127.0.0.1
+QUARKUS_HTTP_PORT=8080
+----
+
+IMPORTANT: Ensure the environment file has restricted permissions: `sudo chmod 600 /etc/pgconsole/pgconsole.env`
+
+=== Create Systemd Unit File
+
+Create `/etc/systemd/system/pgconsole.service`:
+
+[source,systemd]
+----
+[Unit]
+Description=pg-console PostgreSQL Monitoring Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=pgconsole
+Group=pgconsole
+WorkingDirectory=/opt/pgconsole
+EnvironmentFile=/etc/pgconsole/pgconsole.env
+ExecStart=/usr/bin/java -jar /opt/pgconsole/quarkus-run.jar
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pgconsole
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target
+----
+
+=== Enable and Start Service
+
+[source,bash]
+----
+sudo systemctl daemon-reload
+sudo systemctl enable pgconsole
+sudo systemctl start pgconsole
+----
+
+=== Verify Service Status
+
+[source,bash]
+----
+sudo systemctl status pgconsole
+sudo journalctl -u pgconsole -f
+----
+
+== Docker Deployment
+
+Running pg-console in a Docker container provides isolation and simplified deployment.
+
+=== Create Dockerfile
+
+Create a `Dockerfile` in your project root:
+
+[source,dockerfile]
+----
+FROM eclipse-temurin:21-jre-alpine
+
+RUN addgroup -S pgconsole && adduser -S pgconsole -G pgconsole
+
+WORKDIR /opt/pgconsole
+
+COPY build/quarkus-app/lib/ /opt/pgconsole/lib/
+COPY build/quarkus-app/*.jar /opt/pgconsole/
+COPY build/quarkus-app/app/ /opt/pgconsole/app/
+COPY build/quarkus-app/quarkus/ /opt/pgconsole/quarkus/
+
+RUN chown -R pgconsole:pgconsole /opt/pgconsole
+
+USER pgconsole
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "/opt/pgconsole/quarkus-run.jar"]
+----
+
+=== Build Docker Image
+
+[source,bash]
+----
+gradle21w clean build
+docker build -t pgconsole:latest .
+----
+
+=== Run Container
+
+[source,bash]
+----
+docker run -d \
+  --name pgconsole \
+  -p 8080:8080 \
+  -e POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres \
+  -e POSTGRES_USER=pgconsole_monitor \
+  -e POSTGRES_PASSWORD=secure_password_here \
+  -e PG_CONSOLE_DATABASES=production_db \
+  -e PG_CONSOLE_HISTORY_ENABLED=true \
+  --restart unless-stopped \
+  pgconsole:latest
+----
+
+=== Docker Compose
+
+Create a `docker-compose.yml` for easier management:
+
+[source,yaml]
+----
+version: '3.8'
+
+services:
+  pgconsole:
+    image: pgconsole:latest
+    container_name: pgconsole
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      POSTGRES_URL: jdbc:postgresql://db.example.com:5432/postgres
+      POSTGRES_USER: pgconsole_monitor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_CONSOLE_DATABASES: production_db,analytics_db
+      PG_CONSOLE_HISTORY_ENABLED: "true"
+      PG_CONSOLE_HISTORY_INTERVAL: "60"
+      PG_CONSOLE_HISTORY_RETENTION: "30"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+----
+
+Start with:
+
+[source,bash]
+----
+docker-compose up -d
+----
+
+== Reverse Proxy Configuration
+
+For production deployments, place pg-console behind a reverse proxy for SSL termination and authentication.
+
+=== Nginx Configuration
+
+Create `/etc/nginx/sites-available/pgconsole`:
+
+[source,nginx]
+----
+upstream pgconsole {
+    server 127.0.0.1:8080;
+}
+
+server {
+    listen 80;
+    server_name pgconsole.example.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name pgconsole.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/pgconsole.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pgconsole.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Basic authentication
+    auth_basic "pg-console Monitoring";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        proxy_pass http://pgconsole;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for htmx
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Timeouts for long-running queries
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Health check endpoint (no auth required)
+    location /q/health {
+        proxy_pass http://pgconsole;
+        auth_basic off;
+        access_log off;
+    }
+}
+----
+
+Enable the site:
+
+[source,bash]
+----
+sudo ln -s /etc/nginx/sites-available/pgconsole /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+----
+
+Create basic auth credentials:
+
+[source,bash]
+----
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+----
+
+== Production Settings
+
+=== JVM Configuration
+
+For production deployments, tune JVM settings for optimal performance:
+
+[source,bash]
+----
+JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
+----
+
+Add to systemd service file:
+
+[source,systemd]
+----
+[Service]
+Environment="JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC"
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/pgconsole/quarkus-run.jar
+----
+
+=== Application Properties
+
+Configure production settings in `application.properties` or via environment variables:
+
+[source,properties]
+----
+# Bind to localhost only (use reverse proxy)
+quarkus.http.host=127.0.0.1
+quarkus.http.port=8080
+
+# Access logging
+quarkus.http.access-log.enabled=true
+quarkus.http.access-log.pattern=combined
+
+# Connection pool sizing
+quarkus.datasource.jdbc.min-size=2
+quarkus.datasource.jdbc.max-size=10
+quarkus.datasource.jdbc.acquisition-timeout=10
+
+# History sampling optimisation
+pg-console.history.enabled=true
+pg-console.history.interval=60
+pg-console.history.retention=30
+pg-console.history.top-queries=100
+----
+
+=== Security Hardening
+
+1. **Database User Permissions**: Create a dedicated monitoring user with minimal privileges:
++
+[source,sql]
+----
+CREATE USER pgconsole_monitor WITH PASSWORD 'secure_password';
+GRANT pg_monitor TO pgconsole_monitor;
+GRANT CONNECT ON DATABASE postgres TO pgconsole_monitor;
+----
+
+2. **SSL Connections**: Enable SSL for PostgreSQL connections:
++
+[source,properties]
+----
+POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres?sslmode=require
+----
+
+3. **Firewall Rules**: Restrict access to pg-console and PostgreSQL ports:
++
+[source,bash]
+----
+sudo ufw allow from 10.0.0.0/8 to any port 8080
+sudo ufw allow from 10.0.0.0/8 to any port 5432
+----
+
+== Health Check Endpoint
+
+pg-console provides a health check endpoint for monitoring and load balancer integration.
+
+=== Endpoint
+
+[source,bash]
+----
+GET /q/health
+----
+
+=== Response
+
+Healthy response (HTTP 200):
+
+[source,json]
+----
+{
+  "status": "UP",
+  "checks": [
+    {
+      "name": "Database connection health check",
+      "status": "UP"
+    }
+  ]
+}
+----
+
+Unhealthy response (HTTP 503):
+
+[source,json]
+----
+{
+  "status": "DOWN",
+  "checks": [
+    {
+      "name": "Database connection health check",
+      "status": "DOWN",
+      "data": {
+        "error": "Connection refused"
+      }
+    }
+  ]
+}
+----
+
+=== Kubernetes Liveness and Readiness Probes
+
+[source,yaml]
+----
+livenessProbe:
+  httpGet:
+    path: /q/health/live
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /q/health/ready
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+----
+
+== Native Executable Deployment
+
+For reduced memory footprint and faster startup times, build and deploy a native executable.
+
+=== Prerequisites
+
+* GraalVM 21 or later with `native-image` installed
+* Additional build time and resources (requires 4GB+ RAM for compilation)
+
+=== Build Native Executable
+
+[source,bash]
+----
+gradle21w build -Dquarkus.package.type=native
+----
+
+The native executable will be located at `build/pgconsole-1.0.0-runner`.
+
+=== Systemd Service for Native Executable
+
+Modify the systemd unit file:
+
+[source,systemd]
+----
+[Service]
+ExecStart=/opt/pgconsole/pgconsole-runner
+----
+
+=== Benefits
+
+* Reduced memory usage (typically 50-70% less than JVM)
+* Faster startup times (milliseconds vs. seconds)
+* Smaller container images when combined with distroless base images
+
+=== Limitations
+
+* Longer build times (5-10 minutes vs. seconds)
+* Limited runtime reflection and dynamic class loading
+* Platform-specific binaries (must build on target architecture)
+
+== Monitoring pg-console
+
+Monitor pg-console itself using:
+
+* **System Metrics**: CPU, memory, disk I/O via `systemctl status pgconsole` or container stats
+* **Application Logs**: Review logs for errors and warnings via `journalctl -u pgconsole`
+* **Health Checks**: Automated monitoring of the `/q/health` endpoint
+* **Database Load**: Monitor the impact of pg-console queries on PostgreSQL using `pg_stat_statements`
+
+== Troubleshooting
+
+=== Service Won't Start
+
+Check logs for errors:
+
+[source,bash]
+----
+sudo journalctl -u pgconsole -n 50 --no-pager
+----
+
+Common issues:
+
+* PostgreSQL connection refused: Verify `POSTGRES_URL`, firewall rules, and `pg_hba.conf`
+* Permission denied: Check file ownership and systemd user configuration
+* Port already in use: Verify no other service is using port 8080
+
+=== High Memory Usage
+
+Reduce JVM heap size or switch to native executable deployment:
+
+[source,bash]
+----
+JAVA_OPTS="-Xmx512m"
+----
+
+=== Slow Query Performance
+
+Adjust history sampling parameters:
+
+[source,properties]
+----
+PG_CONSOLE_HISTORY_INTERVAL=300
+PG_CONSOLE_HISTORY_TOP_QUERIES=25
+----
+
+== Next Steps
+
+* Configure xref:multi-instance.adoc[Multi-Instance Monitoring] for multiple databases
+* Set up xref:alerting.adoc[Alerting] for critical conditions
+* Review the xref:cli-reference.adoc[CLI Reference] for automated reporting

@@ -1,0 +1,474 @@
+= Schema-Free Mode (Read-Only Operation)
+Paul Snow
+0.0.0
+:description: Operating pg-console in read-only mode without creating database schema or objects
+:keywords: schema-free, read-only, non-invasive, in-memory, monitoring
+
+pg-console can operate in a completely read-only mode without creating any database objects. This schema-free mode is ideal for non-invasive monitoring of production databases where schema changes are restricted.
+
+== Overview
+
+By default, pg-console creates a `pgconsole` schema in the monitored database to store historical metrics, bookmarks, audit logs, and alert history. Schema-free mode disables this behaviour, allowing pg-console to monitor PostgreSQL without making any database changes.
+
+=== When to Use Schema-Free Mode
+
+Schema-free mode is particularly useful for:
+
+**Production Database Monitoring**::
+Monitor production databases without requiring schema creation privileges or making any structural changes.
+
+**Quick Inspections**::
+Perform ad-hoc monitoring of new databases without leaving any artefacts behind.
+
+**Read-Only Credentials**::
+Use database credentials that have only read access to system views (e.g., `pg_monitor` role).
+
+**Temporary Monitoring**::
+Set up temporary monitoring where long-term history is not needed.
+
+**Compliance Requirements**::
+Meet strict compliance requirements that prohibit application-created schemas or objects.
+
+**Multi-Tenant Databases**::
+Monitor shared databases where schema creation might conflict with tenant isolation policies.
+
+== Enabling Schema-Free Mode
+
+Configure schema-free mode using environment variables:
+
+[source,bash]
+----
+export PG_CONSOLE_SCHEMA_ENABLED=false
+export PG_CONSOLE_IN_MEMORY_MINUTES=30
+----
+
+Or in `application.properties`:
+
+[source,properties]
+----
+pg-console.schema.enabled=false
+pg-console.history.in-memory-minutes=30
+----
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_SCHEMA_ENABLED`
+|`true`
+|When `false`, disables schema creation and operates in read-only mode
+
+|`PG_CONSOLE_IN_MEMORY_MINUTES`
+|`30`
+|Minutes of trend data to retain in memory for sparklines
+|===
+
+== What Works in Schema-Free Mode
+
+All core monitoring features remain fully functional:
+
+=== Real-Time Monitoring
+
+**Dashboard (Overview)**::
+Active connections, blocked queries, cache hit ratio, database size, transactions per second.
+
+**Activity Page**::
+Current database connections, active queries, idle sessions, query duration.
+
+**Slow Queries**::
+Query performance metrics from `pg_stat_statements`, sortable by execution time, calls, and I/O.
+
+**Locks Page**::
+Lock contention, blocking tree, idle-in-transaction sessions, deadlock detection.
+
+**Tables Page**::
+Table statistics, bloat indicators, sequential vs. index scans, vacuum status.
+
+**Databases Page**::
+Per-database metrics, connection counts, transaction rates, cache statistics.
+
+**Diagnostics**::
+All diagnostic tools including pipeline risk, TOAST bloat, index redundancy, XID wraparound monitoring.
+
+**Security**::
+Role permissions, connection security analysis, compliance checks.
+
+=== Short-Term Trends
+
+**In-Memory Sparklines**::
+Sparkline graphs continue to work using in-memory data retention. Historical data is kept in memory for the configured retention period (default: 30 minutes).
+
+**Rolling Window**::
+As new samples arrive, old samples beyond the retention window are automatically discarded from memory.
+
+**No Persistence**::
+In-memory data is lost on application restart, but monitoring resumes immediately.
+
+== What Doesn't Work in Schema-Free Mode
+
+Features requiring persistent storage are unavailable:
+
+=== Disabled Features
+
+**Long-Term History**::
+Historical metrics beyond the in-memory retention period are not available. Database restarts clear all history.
+
+**Query Bookmarks**::
+Cannot save favourite queries or custom views for later reference.
+
+**Audit Logging**::
+User actions (query cancellations, configuration changes) are not logged to the database.
+
+**Alert History**::
+Alert notifications cannot be persisted. Alerts are still detected and displayed, but historical alert data is not retained.
+
+**Anomaly Detection Baselines**::
+Features requiring baseline calculations over historical data (e.g., query regression detection) are unavailable.
+
+**Scheduled Reports**::
+Features that depend on historical data for trend analysis or comparative reporting.
+
+== User Interface Indicators
+
+When operating in schema-free mode, pg-console provides clear visual indicators:
+
+=== Warning Banner
+
+A yellow warning banner appears at the top of all dashboard pages:
+
+[source,html]
+----
+⚠️ Read-Only Mode — Running without pgconsole schema.
+History, bookmarks, and audit logging unavailable.
+In-memory retention: 30 minutes.
+----
+
+**Dismissible**::
+Users can dismiss the banner. The dismissal state is stored in `localStorage` and persists across sessions.
+
+**Per-Browser**::
+Banner dismissal is browser-specific. Each user/browser combination can independently dismiss the warning.
+
+**Reappears on Clear**::
+Clearing browser data resets the dismissal state, causing the banner to reappear.
+
+=== Startup Logging
+
+pg-console logs its operating mode clearly on startup:
+
+[source,log]
+----
+INFO  [pgconsole.STARTUP] Schema Mode: DISABLED (Read-Only / In-Memory)
+INFO  [pgconsole.STARTUP] In-Memory Retention: 30 minutes
+INFO  [pgconsole.STARTUP] Features Working: Real-time monitoring, short-term trends
+INFO  [pgconsole.STARTUP] Features Disabled: Persistent history, bookmarks, audit logging, alerts
+----
+
+== Configuration Examples
+
+=== Basic Read-Only Setup
+
+Minimal configuration for read-only monitoring:
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres
+export POSTGRES_USER=pg_monitor_user
+export POSTGRES_PASSWORD=${DB_PASSWORD}
+export PG_CONSOLE_SCHEMA_ENABLED=false
+----
+
+=== Extended In-Memory Retention
+
+Keep longer in-memory trends for better short-term analysis:
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres
+export POSTGRES_USER=pg_monitor_user
+export POSTGRES_PASSWORD=${DB_PASSWORD}
+export PG_CONSOLE_SCHEMA_ENABLED=false
+export PG_CONSOLE_IN_MEMORY_MINUTES=120  # 2 hours of in-memory data
+----
+
+=== Multi-Database Read-Only Monitoring
+
+Monitor multiple databases without creating schemas:
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres
+export POSTGRES_USER=pg_monitor_user
+export POSTGRES_PASSWORD=${DB_PASSWORD}
+export PG_CONSOLE_DATABASES=app_db,analytics_db,reporting_db
+export PG_CONSOLE_SCHEMA_ENABLED=false
+export PG_CONSOLE_IN_MEMORY_MINUTES=60
+----
+
+=== Docker Deployment
+
+Run pg-console in read-only mode using Docker:
+
+[source,bash]
+----
+docker run -d \
+  --name pgconsole-readonly \
+  -p 8080:8080 \
+  -e POSTGRES_URL=jdbc:postgresql://db.example.com:5432/postgres \
+  -e POSTGRES_USER=pg_monitor_user \
+  -e POSTGRES_PASSWORD=${DB_PASSWORD} \
+  -e PG_CONSOLE_SCHEMA_ENABLED=false \
+  -e PG_CONSOLE_IN_MEMORY_MINUTES=60 \
+  --restart unless-stopped \
+  pgconsole:latest
+----
+
+== Database Permissions
+
+Schema-free mode requires minimal PostgreSQL permissions:
+
+=== Required Permissions
+
+[source,sql]
+----
+-- Create monitoring user (if not exists)
+CREATE USER pg_monitor_user WITH PASSWORD 'secure_password';
+
+-- Grant system view access (PostgreSQL 10+)
+GRANT pg_monitor TO pg_monitor_user;
+
+-- For PostgreSQL 9.6 (grant individual permissions)
+GRANT CONNECT ON DATABASE postgres TO pg_monitor_user;
+GRANT pg_read_all_stats TO pg_monitor_user;
+----
+
+=== No Additional Permissions Needed
+
+Schema-free mode does **not** require:
+
+* `CREATE` privilege on the database
+* `CREATE SCHEMA` privilege
+* Write access to any tables
+* Sequence usage permissions
+* Any DDL permissions
+
+== Performance Considerations
+
+=== Memory Usage
+
+In-memory trend storage uses heap memory proportional to:
+
+* Retention period (`PG_CONSOLE_IN_MEMORY_MINUTES`)
+* Sampling frequency (typically 10-60 seconds)
+* Number of monitored databases and queries
+
+Typical memory overhead: 10-50 MB for 30 minutes retention.
+
+=== Sampling Frequency
+
+pg-console continues to sample metrics in-memory at the same frequency as persistent mode. Configure via:
+
+[source,properties]
+----
+pg-console.history.interval-seconds=60  # Sample every 60 seconds
+----
+
+Shorter intervals provide smoother sparklines but increase memory usage.
+
+=== Memory Management
+
+**Automatic Cleanup**::
+Old samples beyond the retention window are automatically removed from memory.
+
+**Bounded Growth**::
+Memory usage reaches a steady state based on the retention window and does not grow unbounded.
+
+**Garbage Collection**::
+JVM garbage collection reclaims memory from expired samples.
+
+== Switching Between Modes
+
+=== Enabling Schema After Read-Only Use
+
+To enable persistent storage after running in schema-free mode:
+
+1. Stop pg-console
+2. Set `PG_CONSOLE_SCHEMA_ENABLED=true`
+3. Ensure database user has `CREATE` privileges
+4. Restart pg-console
+5. Flyway migrations will create the `pgconsole` schema automatically
+
+No data migration is needed. Historical data collection starts from the time schema is enabled.
+
+=== Disabling Schema (Existing Schema Present)
+
+To switch to read-only mode when a `pgconsole` schema already exists:
+
+1. Stop pg-console
+2. Set `PG_CONSOLE_SCHEMA_ENABLED=false`
+3. Restart pg-console
+4. Existing `pgconsole` schema and data remain in the database but are not used
+5. Optionally drop the schema manually if no longer needed:
+
+[source,sql]
+----
+DROP SCHEMA IF EXISTS pgconsole CASCADE;
+----
+
+WARNING: Dropping the `pgconsole` schema permanently deletes all historical data, bookmarks, and alert history.
+
+== Troubleshooting
+
+=== Verifying Schema-Free Mode
+
+Check application logs on startup:
+
+[source,bash]
+----
+grep "Schema Mode" /var/log/pg-console/pg-console.log
+----
+
+Expected output:
+
+[source,log]
+----
+Schema Mode: DISABLED (Read-Only / In-Memory)
+----
+
+=== Sparklines Not Displaying
+
+If sparklines appear empty:
+
+1. **Check Retention Window**: Ensure `PG_CONSOLE_IN_MEMORY_MINUTES` is set appropriately
+2. **Wait for Samples**: Allow time for in-memory samples to accumulate (typically 2-3 sample intervals)
+3. **Verify Sampling**: Check logs for sampling activity
+4. **Browser Cache**: Clear browser cache and reload the dashboard
+
+=== Memory Pressure
+
+If memory usage is higher than expected:
+
+1. **Reduce Retention**: Lower `PG_CONSOLE_IN_MEMORY_MINUTES`
+2. **Increase Sample Interval**: Use longer `pg-console.history.interval-seconds`
+3. **Limit Databases**: Use `PG_CONSOLE_DATABASES` to monitor fewer databases
+4. **Adjust JVM Heap**: Increase heap size if needed
+
+[source,bash]
+----
+JAVA_OPTS="-Xmx512m"
+----
+
+=== Permission Denied Errors
+
+If errors occur despite schema being disabled:
+
+1. **Verify Configuration**: Confirm `PG_CONSOLE_SCHEMA_ENABLED=false` is set
+2. **Check Flyway**: Ensure Flyway migrations are not running (check logs)
+3. **Database User**: Verify user has `pg_monitor` or equivalent read permissions
+4. **Connection String**: Test database connectivity manually
+
+== Comparison: Schema-Free vs. Full Persistence
+
+[cols="2,2,2"]
+|===
+|Feature |Schema-Free Mode |Full Persistence Mode
+
+|Real-time monitoring
+|✓ Full support
+|✓ Full support
+
+|Short-term trends (sparklines)
+|✓ In-memory (30-120 min)
+|✓ Persistent (days/weeks)
+
+|Long-term history
+|✗ Not available
+|✓ Configurable retention
+
+|Database changes
+|✗ None (read-only)
+|✓ Creates `pgconsole` schema
+
+|Permissions required
+|`pg_monitor` (read-only)
+|`CREATE SCHEMA` + `pg_monitor`
+
+|Bookmarks
+|✗ Not available
+|✓ Persistent bookmarks
+
+|Audit logging
+|✗ Not available
+|✓ Full audit trail
+
+|Alert history
+|✗ Not persisted
+|✓ Full alert history
+
+|Memory usage
+|10-50 MB (trends)
+|Minimal (disk-based)
+
+|Disk usage
+|None
+|100-500 MB/week (typical)
+
+|Restart behaviour
+|Trend data lost
+|Trend data persists
+
+|Suitable for
+|Quick inspections, read-only access
+|Long-term monitoring, analysis
+|===
+
+== Use Case Examples
+
+=== Scenario 1: Production Database Inspection
+
+**Requirement**: Investigate production database performance without approval for schema changes.
+
+**Solution**:
+[source,bash]
+----
+export PG_CONSOLE_SCHEMA_ENABLED=false
+export POSTGRES_USER=readonly_dba
+export PG_CONSOLE_IN_MEMORY_MINUTES=60
+----
+
+**Result**: Full real-time monitoring with 1 hour of in-memory trends. No database changes required.
+
+=== Scenario 2: Compliance-Restricted Environment
+
+**Requirement**: Monitor database in environment where application-created schemas violate compliance policies.
+
+**Solution**:
+[source,bash]
+----
+export PG_CONSOLE_SCHEMA_ENABLED=false
+export PG_CONSOLE_IN_MEMORY_MINUTES=30
+----
+
+**Result**: Zero database modifications. All compliance requirements met whilst maintaining monitoring capability.
+
+=== Scenario 3: Temporary Monitoring
+
+**Requirement**: Monitor database during a deployment or migration, then remove monitoring afterwards.
+
+**Solution**:
+[source,bash]
+----
+docker run -d --rm \
+  -e PG_CONSOLE_SCHEMA_ENABLED=false \
+  -e POSTGRES_URL=... \
+  pgconsole:latest
+----
+
+**Result**: Temporary monitoring with automatic cleanup on container removal. No database artefacts left behind.
+
+== Next Steps
+
+* Review xref:configuration.adoc[Configuration Reference] for all schema-free mode settings
+* See xref:deployment.adoc[Deployment Guide] for production deployment options
+* Understand xref:developer-guide:database-schema.adoc[Database Schema] used in full persistence mode
+* Configure xref:security.adoc[Security] for read-only database users

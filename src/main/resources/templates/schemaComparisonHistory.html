@@ -1,0 +1,225 @@
+{#include base}
+{#title}Comparison History - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/schema-comparison">Schema Comparison</a></li>
+                <li class="breadcrumb-item active">History</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-clock-history me-2"></i>Comparison History</h1>
+        <p class="text-muted">View past schema comparisons and track drift over time</p>
+    </div>
+</div>
+
+{#if error??}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{error}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{/if}
+
+<!-- History Detail Modal -->
+{#if detail??}
+<div class="modal fade show" id="detailModal" tabindex="-1" style="display: block;" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-diff me-2"></i>Comparison Detail
+                </h5>
+                <a href="/schema-comparison/history" class="btn-close"></a>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <strong>Source:</strong>
+                        <code>{detail.sourceInstance}.{detail.sourceSchema}</code>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Destination:</strong>
+                        <code>{detail.destinationInstance}.{detail.destinationSchema}</code>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Compared at:</strong>
+                        {detail.comparedAtFormatted}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Performed by:</strong>
+                        {detail.performedBy ?: 'system'}
+                    </div>
+                    {#if detail.profileName}
+                    <div class="col-12">
+                        <strong>Profile:</strong>
+                        <span class="badge bg-secondary">{detail.profileName}</span>
+                    </div>
+                    {/if}
+                </div>
+
+                <h6>Summary</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-3">
+                        <div class="card text-center bg-warning-subtle">
+                            <div class="card-body py-2">
+                                <h4 class="mb-0">{detail.missingCount}</h4>
+                                <small>Missing</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="card text-center bg-info-subtle">
+                            <div class="card-body py-2">
+                                <h4 class="mb-0">{detail.extraCount}</h4>
+                                <small>Extra</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="card text-center bg-primary-subtle">
+                            <div class="card-body py-2">
+                                <h4 class="mb-0">{detail.modifiedCount}</h4>
+                                <small>Modified</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="card text-center bg-success-subtle">
+                            <div class="card-body py-2">
+                                <h4 class="mb-0">{detail.matchingCount}</h4>
+                                <small>Matching</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="/schema-comparison/history" class="btn btn-secondary">Close</a>
+                <form action="/schema-comparison/compare" method="post" class="d-inline">
+                    <input type="hidden" name="sourceInstance" value="{detail.sourceInstance}">
+                    <input type="hidden" name="destInstance" value="{detail.destinationInstance}">
+                    <input type="hidden" name="sourceSchema" value="{detail.sourceSchema}">
+                    <input type="hidden" name="destSchema" value="{detail.destinationSchema}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-arrow-repeat me-1"></i>Re-run Comparison
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-backdrop fade show"></div>
+{/if}
+
+<!-- Stats Row -->
+<div class="row mb-4">
+    <div class="col-auto">
+        <span class="badge bg-secondary fs-6">
+            <i class="bi bi-database me-1"></i>{totalCount} total comparisons
+        </span>
+    </div>
+</div>
+
+<!-- History Table -->
+<div class="card">
+    <div class="card-body p-0">
+        {#if history.isEmpty()}
+        <div class="p-4 text-center text-muted">
+            <i class="bi bi-clock-history display-4"></i>
+            <p class="mt-3">No comparison history yet. Run a comparison to see results here.</p>
+            <a href="/schema-comparison" class="btn btn-primary">
+                <i class="bi bi-play-fill me-1"></i>New Comparison
+            </a>
+        </div>
+        {#else}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Comparison</th>
+                        <th>Profile</th>
+                        <th class="text-center">Missing</th>
+                        <th class="text-center">Extra</th>
+                        <th class="text-center">Modified</th>
+                        <th class="text-center">Matching</th>
+                        <th>Result</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for h in history}
+                    <tr>
+                        <td>
+                            <small>{h.comparedAtFormatted}</small>
+                            <br><span class="text-muted small">{h.performedBy ?: 'system'}</span>
+                        </td>
+                        <td>
+                            <code class="small">{h.sourceInstance}.{h.sourceSchema}</code>
+                            <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                            <code class="small">{h.destinationInstance}.{h.destinationSchema}</code>
+                        </td>
+                        <td>
+                            {#if h.profileName}
+                            <span class="badge bg-secondary">{h.profileName}</span>
+                            {#else}
+                            <span class="text-muted">-</span>
+                            {/if}
+                        </td>
+                        <td class="text-center">
+                            {#if h.missingCount > 0}
+                            <span class="badge bg-warning text-dark">{h.missingCount}</span>
+                            {#else}
+                            <span class="text-muted">0</span>
+                            {/if}
+                        </td>
+                        <td class="text-center">
+                            {#if h.extraCount > 0}
+                            <span class="badge bg-info">{h.extraCount}</span>
+                            {#else}
+                            <span class="text-muted">0</span>
+                            {/if}
+                        </td>
+                        <td class="text-center">
+                            {#if h.modifiedCount > 0}
+                            <span class="badge bg-primary">{h.modifiedCount}</span>
+                            {#else}
+                            <span class="text-muted">0</span>
+                            {/if}
+                        </td>
+                        <td class="text-center text-success">{h.matchingCount}</td>
+                        <td>
+                            <span class="badge {h.summaryCssClass}">{h.summaryText}</span>
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="/schema-comparison/history/{h.id}" class="btn btn-outline-secondary"
+                                   title="View details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <form action="/schema-comparison/compare" method="post" class="d-inline">
+                                    <input type="hidden" name="sourceInstance" value="{h.sourceInstance}">
+                                    <input type="hidden" name="destInstance" value="{h.destinationInstance}">
+                                    <input type="hidden" name="sourceSchema" value="{h.sourceSchema}">
+                                    <input type="hidden" name="destSchema" value="{h.destinationSchema}">
+                                    <button type="submit" class="btn btn-outline-primary" title="Re-run">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+        {/if}
+    </div>
+</div>
+
+</div>
+
+{/include}

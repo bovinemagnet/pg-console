@@ -40,3 +40,8 @@ build/
 
 # Quarkus
 .quarkus/
+build/**
+bin/*
+target/**
+# Ignore a local java languave server.
+.jdtls/**

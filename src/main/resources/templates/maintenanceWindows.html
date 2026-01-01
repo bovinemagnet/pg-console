@@ -1,0 +1,195 @@
+{#include base}
+{#title}Maintenance Windows{/title}
+
+{#content}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-tools me-2"></i>Maintenance Windows
+        </h1>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createWindowModal">
+            <i class="bi bi-plus-lg me-1"></i>Schedule Window
+        </button>
+    </div>
+
+    <!-- Active Windows -->
+    {#if !activeWindows.isEmpty}
+    <div class="alert alert-warning mb-4">
+        <i class="bi bi-tools me-2"></i>
+        <strong>{activeWindows.size} maintenance window(s) currently active</strong> - alerts are being suppressed.
+    </div>
+    {/if}
+
+    <!-- Upcoming Windows -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-calendar-event me-2"></i>Upcoming Windows
+        </div>
+        <div class="card-body p-0">
+            {#if upcomingWindows.isEmpty}
+            <div class="p-4 text-center text-muted">
+                No upcoming maintenance windows scheduled
+            </div>
+            {#else}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Duration</th>
+                            <th>Instances</th>
+                            <th>Alert Types</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for window in upcomingWindows}
+                        <tr>
+                            <td><strong>{window.name}</strong></td>
+                            <td>{window.startTimeFormatted}</td>
+                            <td>{window.endTimeFormatted}</td>
+                            <td>{window.durationMinutes}m</td>
+                            <td>
+                                {#if window.instanceFilter != null && !window.instanceFilter.isEmpty}
+                                {#for inst in window.instanceFilter}
+                                <code class="small">{inst}</code>
+                                {/for}
+                                {#else}
+                                <span class="text-muted">All</span>
+                                {/if}
+                            </td>
+                            <td>
+                                {#if window.alertTypeFilter != null && !window.alertTypeFilter.isEmpty}
+                                {#for type in window.alertTypeFilter}
+                                <span class="badge bg-secondary">{type}</span>
+                                {/for}
+                                {#else}
+                                <span class="text-muted">All</span>
+                                {/if}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        hx-delete="/notifications/api/maintenance/{window.id}"
+                                        hx-confirm="Delete this maintenance window?"
+                                        title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+            {/if}
+        </div>
+    </div>
+
+    <!-- All Windows -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>All Maintenance Windows
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Recurring</th>
+                            <th>Created By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for window in windows}
+                        <tr class="{window.activeNow ? 'table-warning' : ''}">
+                            <td><span class="badge {window.statusCssClass}">{window.statusText}</span></td>
+                            <td><strong>{window.name}</strong></td>
+                            <td class="small text-muted">{window.description ?: '-'}</td>
+                            <td class="small">{window.startTimeFormatted}</td>
+                            <td class="small">{window.endTimeFormatted}</td>
+                            <td>
+                                {#if window.recurring}
+                                <span class="badge bg-info">{window.recurrencePattern}</span>
+                                {#else}
+                                <span class="text-muted">One-time</span>
+                                {/if}
+                            </td>
+                            <td class="small">{window.createdBy ?: '-'}</td>
+                        </tr>
+                        {#else}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                No maintenance windows configured
+                            </td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Navigation -->
+    <div class="mt-4">
+        <a href="/notifications" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Create Window Modal -->
+<div class="modal fade" id="createWindowModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Schedule Maintenance Window</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form hx-post="/notifications/api/maintenance" hx-ext="json-enc">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="datetime-local" class="form-control" name="startTime" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">End Time</label>
+                            <input type="datetime-local" class="form-control" name="endTime" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Instance Filter (comma-separated, leave empty for all)</label>
+                        <input type="text" class="form-control" name="instanceFilter" placeholder="e.g., prod-db-1, prod-db-2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Alert Type Filter (comma-separated, leave empty for all)</label>
+                        <input type="text" class="form-control" name="alertTypeFilter" placeholder="e.g., SLOW_QUERY, HIGH_CPU">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Schedule Window</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{/content}
+{/include}
