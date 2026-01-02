@@ -23,7 +23,7 @@
         <a href="/insights/recommendations?instance={instance}&severity=CRITICAL" class="text-decoration-none">
             <div class="card border-danger h-100 hover-card">
                 <div class="card-body text-center">
-                    <h3 class="text-danger mb-0">{summary.get('CRITICAL') ?: 0}</h3>
+                    <h3 class="text-danger mb-0">{criticalCount}</h3>
                     <small class="text-muted">Critical</small>
                 </div>
             </div>
@@ -33,7 +33,7 @@
         <a href="/insights/recommendations?instance={instance}&severity=HIGH" class="text-decoration-none">
             <div class="card border-warning h-100 hover-card">
                 <div class="card-body text-center">
-                    <h3 class="text-warning mb-0">{summary.get('HIGH') ?: 0}</h3>
+                    <h3 class="text-warning mb-0">{highCount}</h3>
                     <small class="text-muted">High</small>
                 </div>
             </div>
@@ -43,7 +43,7 @@
         <a href="/insights/recommendations?instance={instance}&severity=MEDIUM" class="text-decoration-none">
             <div class="card border-info h-100 hover-card">
                 <div class="card-body text-center">
-                    <h3 class="text-info mb-0">{summary.get('MEDIUM') ?: 0}</h3>
+                    <h3 class="text-info mb-0">{mediumCount}</h3>
                     <small class="text-muted">Medium</small>
                 </div>
             </div>
@@ -53,7 +53,7 @@
         <a href="/insights/recommendations?instance={instance}&severity=LOW" class="text-decoration-none">
             <div class="card border-secondary h-100 hover-card">
                 <div class="card-body text-center">
-                    <h3 class="text-secondary mb-0">{summary.get('LOW') ?: 0}</h3>
+                    <h3 class="text-secondary mb-0">{lowCount}</h3>
                     <small class="text-muted">Low</small>
                 </div>
             </div>
@@ -106,8 +106,8 @@
             <div class="accordion-item">
                 <h2 class="accordion-header">
                     <button class="accordion-button collapsed" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#rec{rec.id}"
-                            aria-expanded="false" aria-controls="rec{rec.id}">
+                            data-bs-toggle="collapse" data-bs-target="#rec{rec_index}"
+                            aria-expanded="false" aria-controls="rec{rec_index}">
                         <div class="d-flex align-items-center flex-grow-1 me-3">
                             <span class="badge me-2 {#if rec.severity.name == 'CRITICAL'}bg-danger{#else if rec.severity.name == 'HIGH'}bg-warning text-dark{#else if rec.severity.name == 'MEDIUM'}bg-info{#else}bg-secondary{/if}">
                                 {rec.severity}
@@ -118,16 +118,16 @@
                         </div>
                     </button>
                 </h2>
-                <div id="rec{rec.id}" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
+                <div id="rec{rec_index}" class="accordion-collapse collapse" data-bs-parent="#recommendationsAccordion">
                     <div class="accordion-body">
                         <div class="row">
                             <div class="col-md-8">
                                 <h6>Description</h6>
                                 <p>{rec.description}</p>
 
-                                {#if rec.actionSql}
+                                {#if rec.suggestedSql}
                                 <h6>Recommended Action</h6>
-                                <pre class="bg-dark text-light p-3 rounded"><code>{rec.actionSql}</code></pre>
+                                <pre class="bg-dark text-light p-3 rounded"><code>{rec.suggestedSql}</code></pre>
                                 <button class="btn btn-sm btn-outline-secondary mb-3"
                                         onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim())">
                                     <i class="bi bi-clipboard me-1" aria-hidden="true"></i>
@@ -135,9 +135,9 @@
                                 </button>
                                 {/if}
 
-                                {#if rec.relatedObject}
-                                <h6>Related Object</h6>
-                                <p class="text-muted">{rec.relatedObject}</p>
+                                {#if rec.rationale}
+                                <h6>Rationale</h6>
+                                <p class="text-muted">{rec.rationale}</p>
                                 {/if}
                             </div>
                             <div class="col-md-4">
@@ -147,14 +147,14 @@
                                         <ul class="list-unstyled mb-0">
                                             <li class="mb-2">
                                                 <strong>Impact:</strong>
-                                                <span class="badge {#if rec.impact.name == 'HIGH'}bg-success{#else if rec.impact.name == 'MEDIUM'}bg-info{#else}bg-secondary{/if}">
-                                                    {rec.impact}
+                                                <span class="badge {#if rec.estimatedImpact != null && rec.estimatedImpact.name == 'HIGH'}bg-success{#else if rec.estimatedImpact != null && rec.estimatedImpact.name == 'MEDIUM'}bg-info{#else}bg-secondary{/if}">
+                                                    {rec.estimatedImpact ?: 'N/A'}
                                                 </span>
                                             </li>
                                             <li class="mb-2">
                                                 <strong>Effort:</strong>
-                                                <span class="badge {#if rec.effort.name == 'LOW'}bg-success{#else if rec.effort.name == 'MEDIUM'}bg-warning text-dark{#else}bg-danger{/if}">
-                                                    {rec.effort}
+                                                <span class="badge {#if rec.estimatedEffort != null && rec.estimatedEffort.name == 'LOW'}bg-success{#else if rec.estimatedEffort != null && rec.estimatedEffort.name == 'MEDIUM'}bg-warning text-dark{#else}bg-danger{/if}">
+                                                    {rec.estimatedEffort ?: 'N/A'}
                                                 </span>
                                             </li>
                                             <li class="mb-2">
@@ -171,14 +171,14 @@
 
                                 <div class="d-grid gap-2 mt-3">
                                     <button class="btn btn-success"
-                                            hx-post="/insights/recommendations/{rec.id}/apply?instance={instance}"
+                                            hx-post="/insights/recommendations/{rec_index}/apply?instance={instance}"
                                             hx-swap="none"
                                             hx-on::after-request="location.reload()">
                                         <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
                                         Mark as Applied
                                     </button>
                                     <button class="btn btn-outline-secondary" data-bs-toggle="modal"
-                                            data-bs-target="#dismissModal{rec.id}">
+                                            data-bs-target="#dismissModal{rec_index}">
                                         <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
                                         Dismiss
                                     </button>
@@ -190,14 +190,14 @@
             </div>
 
             <!-- Dismiss Modal -->
-            <div class="modal fade" id="dismissModal{rec.id}" tabindex="-1" aria-hidden="true">
+            <div class="modal fade" id="dismissModal{rec_index}" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Dismiss Recommendation</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <form hx-post="/insights/recommendations/{rec.id}/dismiss?instance={instance}" hx-swap="none"
+                        <form hx-post="/insights/recommendations/{rec_index}/dismiss?instance={instance}" hx-swap="none"
                               hx-on::after-request="location.reload()">
                             <div class="modal-body">
                                 <div class="mb-3">
