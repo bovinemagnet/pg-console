@@ -241,8 +241,8 @@
                                 <p class="mb-1 text-muted small">{rec.description}</p>
                                 <div class="d-flex gap-2">
                                     <span class="badge bg-secondary">{rec.source}</span>
-                                    <span class="badge {#if rec.impact.name == 'HIGH'}bg-danger{#else if rec.impact.name == 'MEDIUM'}bg-warning text-dark{#else}bg-info{/if}">
-                                        {rec.impact} impact
+                                    <span class="badge {#if rec.estimatedImpact != null && rec.estimatedImpact.name == 'HIGH'}bg-danger{#else if rec.estimatedImpact != null && rec.estimatedImpact.name == 'MEDIUM'}bg-warning text-dark{#else}bg-info{/if}">
+                                        {rec.estimatedImpact ?: 'N/A'} impact
                                     </span>
                                 </div>
                             </div>

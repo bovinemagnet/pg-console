@@ -212,7 +212,10 @@ public class InsightsResource {
         return recommendations
                 .data("instance", instance)
                 .data("recommendations", allRecommendations)
-                .data("summary", summary)
+                .data("criticalCount", summary.getOrDefault(UnifiedRecommendation.Severity.CRITICAL, 0))
+                .data("highCount", summary.getOrDefault(UnifiedRecommendation.Severity.HIGH, 0))
+                .data("mediumCount", summary.getOrDefault(UnifiedRecommendation.Severity.MEDIUM, 0))
+                .data("lowCount", summary.getOrDefault(UnifiedRecommendation.Severity.LOW, 0))
                 .data("sourceFilter", source)
                 .data("severityFilter", severity)
                 .data("sources", UnifiedRecommendation.Source.values())
