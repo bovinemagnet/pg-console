@@ -18,6 +18,81 @@ pg-console follows a comprehensive testing strategy to ensure reliability and ma
 
 The test suite is designed to run quickly, provide fast feedback, and catch regressions early.
 
+== Test Database Strategy
+
+pg-console uses different database strategies for different types of tests to balance speed, compatibility, and developer convenience.
+
+=== Current Approach
+
+* *Unit tests* use H2 in-memory database for fast execution without requiring Docker
+* *Integration tests* requiring PostgreSQL-specific features use Testcontainers with real PostgreSQL instances
+* *Integration tests* that don't require PostgreSQL system catalogs can run on H2 for speed
+
+This hybrid approach optimises test execution time whilst ensuring PostgreSQL-specific functionality is properly validated.
+
+=== H2 Limitations
+
+H2 is a fast, lightweight in-memory database, but it doesn't support PostgreSQL-specific features:
+
+* *System catalogues* - `pg_stat_activity`, `pg_stat_statements`, `pg_settings`, `pg_locks`, `pg_stat_database` are not available
+* *PostgreSQL functions* - PostgreSQL-specific functions and operators may behave differently or fail
+* *Extensions* - `pg_stat_statements` and other extensions cannot be loaded
+* *Data types* - Some PostgreSQL data types and type behaviours differ in H2
+
+Tests that require these features will fail with H2 and should use Testcontainers with the `@QuarkusTestResource(PostgresTestResource.class)` annotation.
+
+=== When to Use Each Strategy
+
+.Database Strategy Decision Matrix
+[cols="1,2,1"]
+|===
+|Test Type |Database Choice |Rationale
+
+|Service layer unit tests
+|H2 in-memory
+|Fast, no external dependencies needed
+
+|Repository tests (CRUD only)
+|H2 in-memory
+|Simple SQL works fine on H2
+
+|Repository tests (pg_stat_*)
+|Testcontainers PostgreSQL
+|Requires PostgreSQL system catalogues
+
+|REST endpoint tests (basic)
+|H2 in-memory
+|Faster feedback, no Docker required
+
+|REST endpoint tests (full features)
+|Testcontainers PostgreSQL
+|Full PostgreSQL compatibility
+
+|E2E tests
+|Testcontainers PostgreSQL
+|Tests production-like environment
+|===
+
+=== Future Improvements
+
+The following improvements are under investigation to enhance the test database strategy:
+
+*Testcontainers for All Integration Tests*::
+Migrate all integration tests (including `ApiResourceIT`) to use the existing `IntegrationTestProfile` with Testcontainers. This would provide full PostgreSQL compatibility across all tests but requires Docker to be running for all test executions. This trade-off between speed and compatibility may be worth it for consistent behaviour.
+
+*Embedded PostgreSQL*::
+Investigate using embedded PostgreSQL libraries (e.g., `io.zonky.test:embedded-postgres`) for in-process PostgreSQL without Docker. This could provide:
++
+* Better PostgreSQL compatibility than H2
+* Faster startup than Testcontainers
+* No Docker dependency for developers
+* Support for PostgreSQL system catalogues and extensions
++
+This approach would combine the speed benefits of in-memory databases with the compatibility benefits of real PostgreSQL.
+
+*Selective Test Execution*::
+Consider adding test tags (e.g., `@RequiresPostgreSQL`, `@RequiresDocker`) to enable developers to run fast tests without Docker during development, whilst CI/CD pipelines run the full test suite with Testcontainers.
+
 == Test Structure
 
 Tests are organised in `src/test/java/` following the same package structure as the main codebase:
