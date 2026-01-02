@@ -1,0 +1,66 @@
+sequenceDiagram
+    participant Scheduler
+    participant AlertService
+    participant PostgresService
+    participant DB as PostgreSQL
+    participant AlertHistoryRepo as AlertHistoryRepository
+    participant WebhookService
+    participant MailerService
+    participant History as alert_history table
+
+    %% Periodic check trigger
+    Note over Scheduler: Every 60 seconds
+    Scheduler->>AlertService: checkThresholds()
+
+    %% Fetch current metrics
+    AlertService->>PostgresService: getCurrentMetrics()
+    PostgresService->>DB: Query pg_stat_database,<br/>pg_stat_activity,<br/>pg_stat_statements
+    DB-->>PostgresService: Current metrics
+    PostgresService-->>AlertService: Metrics (connections, blocked,<br/>long-running, cache hit ratio)
+
+    %% Evaluate conditions
+    Note over AlertService: Evaluate thresholds
+    AlertService->>AlertService: connectionUsage > threshold?
+    AlertService->>AlertService: blockedQueries > threshold?
+    AlertService->>AlertService: longRunningQueries > threshold?
+    AlertService->>AlertService: cacheHitRatio < threshold?
+
+    %% Happy path - threshold breached
+    alt Threshold breached
+        Note over AlertService: Threshold exceeded
+        AlertService->>AlertService: Check cooldown period
+
+        alt Not in cooldown
+            Note over AlertService: Create Alert record
+            AlertService->>AlertService: buildAlert(metric, value, threshold)
+
+            %% Send webhook notification
+            AlertService->>WebhookService: sendNotification(alert)
+            WebhookService->>WebhookService: POST to webhook URL
+            WebhookService-->>AlertService: Webhook sent
+
+            %% Optional email notification
+            opt Email configured
+                AlertService->>MailerService: sendEmail(alert)
+                MailerService->>MailerService: Send email via SMTP
+                MailerService-->>AlertService: Email sent
+            end
+
+            %% Persist alert record
+            AlertService->>AlertHistoryRepo: save(alert)
+            AlertHistoryRepo->>History: INSERT INTO alert_history
+            History-->>AlertHistoryRepo: Record saved
+            AlertHistoryRepo-->>AlertService: Alert persisted
+
+            Note over AlertService: Set cooldown timestamp
+            AlertService-->>Scheduler: Check complete (alert sent)
+
+        else In cooldown period
+            Note over AlertService: Cooldown active,<br/>skip notification
+            AlertService-->>Scheduler: Check complete (suppressed)
+        end
+
+    else No threshold breached
+        Note over AlertService: All metrics normal
+        AlertService-->>Scheduler: Check complete (no alerts)
+    end
