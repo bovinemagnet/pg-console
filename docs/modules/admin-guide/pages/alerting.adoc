@@ -14,6 +14,15 @@ pg-console's alerting system monitors key database metrics and sends notificatio
 * **Email** - SMTP-based email notifications
 * **Custom integrations** - Extensible webhook format for third-party systems
 
+=== Alerting Workflow
+
+The following diagram shows how alerts are processed:
+
+[source,mermaid]
+----
+include::example$workflow-alerting.mmd[]
+----
+
 == Enabling Alerting
 
 Alerting is disabled by default. Enable it via environment variable or configuration property:
