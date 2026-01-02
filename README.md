@@ -72,6 +72,7 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 - **htmx** for dynamic interactions (no Node.js required)
 - **Bootstrap 5** for CSS styling (CDN)
 - **Plain JDBC** for database connectivity
+- **AsciiDoc** + **Antora** for documentation
 
 ## Prerequisites
 
@@ -332,6 +333,41 @@ java -jar build/quarkus-app/quarkus-run.jar
 - **Deadlocks** - Red highlighting when deadlocks detected
 - **Blocking Queries** - Red highlighting in activity view
 - **pg_stat_statements Badge** - Green icon indicates the extension is available
+
+## Documentation
+
+Comprehensive documentation is available in [AsciiDoc](https://asciidoc.org/) format, built with [Antora](https://antora.org/).
+
+### Documentation Modules
+
+| Module | Description | Location |
+|--------|-------------|----------|
+| **User Guide** | Installation, configuration, and dashboard usage | [docs/modules/user-guide](docs/modules/user-guide/pages/) |
+| **Admin Guide** | Deployment, security, alerting, and multi-instance setup | [docs/modules/admin-guide](docs/modules/admin-guide/pages/) |
+| **Developer Guide** | Architecture, database schema, and testing | [docs/modules/developer-guide](docs/modules/developer-guide/pages/) |
+| **API Reference** | REST API endpoints and response formats | [docs/modules/api-reference](docs/modules/api-reference/pages/) |
+
+### Key Documentation Pages
+
+- [Installation Guide](docs/modules/user-guide/pages/installation.adoc) - Getting started with pg-console
+- [Configuration](docs/modules/user-guide/pages/configuration.adoc) - Environment variables and settings
+- [Using Dashboards](docs/modules/user-guide/pages/dashboards.adoc) - Dashboard features, keyboard shortcuts, and custom dashboards
+- [Advanced Diagnostics](docs/modules/user-guide/pages/diagnostics.adoc) - Diagnostic tools and analysis
+- [Deployment Guide](docs/modules/admin-guide/pages/deployment.adoc) - Production deployment options
+- [Alerting Configuration](docs/modules/admin-guide/pages/alerting.adoc) - Webhook and email notifications
+- [Multi-Instance Setup](docs/modules/admin-guide/pages/multi-instance.adoc) - Monitoring multiple PostgreSQL instances
+- [REST API Endpoints](docs/modules/api-reference/pages/endpoints.adoc) - Complete API reference
+- [Architecture Overview](docs/modules/developer-guide/pages/architecture.adoc) - System design and components
+
+### Building Documentation
+
+Generate the documentation site locally:
+
+```bash
+./gradlew antora
+```
+
+The generated site is available at `build/site/index.html`.
 
 ## Contributing
 
