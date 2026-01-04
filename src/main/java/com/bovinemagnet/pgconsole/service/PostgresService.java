@@ -2016,34 +2016,45 @@ public class PostgresService {
             LOG.warnf("Failed to query XID wraparound on %s: %s", instanceName, e.getMessage());
         }
 
-        // Get oldest unfrozen table per database
-        for (XidWraparound xid : results) {
-            String oldestTableSql = """
-                SELECT
-                    n.nspname as schema_name,
-                    c.relname as table_name,
-                    c.relfrozenxid::text::bigint as relfrozenxid,
-                    age(c.relfrozenxid) as rel_xid_age
-                FROM pg_class c
-                JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE c.relkind = 'r'
-                  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-                ORDER BY age(c.relfrozenxid) DESC
-                LIMIT 1
-                """;
+        // Get oldest unfrozen table for the CURRENT database only
+        // (We can only query pg_class for the database we're connected to)
+        String oldestTableSql = """
+            SELECT
+                current_database() as current_db,
+                n.nspname as schema_name,
+                c.relname as table_name,
+                c.relfrozenxid::text::bigint as relfrozenxid,
+                age(c.relfrozenxid) as rel_xid_age
+            FROM pg_class c
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            WHERE c.relkind = 'r'
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY age(c.relfrozenxid) DESC
+            LIMIT 1
+            """;
 
-            try (Connection conn = getDataSource(instanceName).getConnection();
-                 Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(oldestTableSql)) {
+        try (Connection conn = getDataSource(instanceName).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(oldestTableSql)) {
 
-                if (rs.next()) {
-                    xid.setOldestXidSchema(rs.getString("schema_name"));
-                    xid.setOldestXidTable(rs.getString("table_name"));
-                    xid.setOldestRelFrozenXid(rs.getLong("rel_xid_age"));
+            if (rs.next()) {
+                String currentDb = rs.getString("current_db");
+                String schemaName = rs.getString("schema_name");
+                String tableName = rs.getString("table_name");
+                long relXidAge = rs.getLong("rel_xid_age");
+
+                // Only assign to the matching database record
+                for (XidWraparound xid : results) {
+                    if (currentDb.equals(xid.getDatabaseName())) {
+                        xid.setOldestXidSchema(schemaName);
+                        xid.setOldestXidTable(tableName);
+                        xid.setOldestRelFrozenXid(relXidAge);
+                        break;
+                    }
                 }
-            } catch (SQLException e) {
-                LOG.debugf("Could not get oldest table for XID on %s: %s", instanceName, e.getMessage());
             }
+        } catch (SQLException e) {
+            LOG.debugf("Could not get oldest table for XID on %s: %s", instanceName, e.getMessage());
         }
 
         return results;

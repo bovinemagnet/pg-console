@@ -1,5 +1,7 @@
 package com.bovinemagnet.pgconsole.resource;
 
+import com.bovinemagnet.pgconsole.model.ComparisonFilter;
+import com.bovinemagnet.pgconsole.service.CrossDatabaseConnectionService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.SchemaDocumentationService;
@@ -44,6 +46,9 @@ public class SchemaDocResource {
     @Inject
     DataSourceManager dataSourceManager;
 
+    @Inject
+    CrossDatabaseConnectionService crossDbService;
+
     /**
      * Display the schema documentation generation page.
      */
@@ -52,16 +57,69 @@ public class SchemaDocResource {
     public TemplateInstance showPage(@QueryParam("instance") @DefaultValue("default") String instance) {
         toggleService.requirePageEnabled("schema-docs");
 
-        List<String> schemas = schemaDocService.getSchemas(instance);
+        List<String> instances = dataSourceManager.getAvailableInstances();
+        String currentInstance = instances.isEmpty() ? "default" :
+                (instances.contains(instance) ? instance : instances.get(0));
 
-        return schemaDocs.data("instance", instance)
-                .data("instances", dataSourceManager.getInstanceInfoList())
-                .data("currentInstance", instance)
+        List<String> databases = crossDbService.listDatabases(currentInstance);
+        String currentDatabase = databases.isEmpty() ? "" : databases.get(0);
+
+        List<String> schemas = currentDatabase.isEmpty() ? List.of("public") :
+                schemaDocService.getSchemas(currentInstance, currentDatabase);
+
+        return schemaDocs.data("instance", currentInstance)
+                .data("instances", instances)
+                .data("currentInstance", currentInstance)
+                .data("databases", databases)
+                .data("currentDatabase", currentDatabase)
                 .data("schemas", schemas)
                 .data("formats", OutputFormat.values())
                 .data("toggles", toggleService.getAllToggles())
                 .data("schemaEnabled", toggleService.isSchemaEnabled())
                 .data("inMemoryMinutes", toggleService.getInMemoryMinutes());
+    }
+
+    /**
+     * HTMX endpoint: Get databases for selected instance.
+     */
+    @GET
+    @Path("/databases")
+    @Produces(MediaType.TEXT_HTML)
+    public String getDatabases(@QueryParam("instance") String instance) {
+        toggleService.requirePageEnabled("schema-docs");
+
+        List<String> databases = crossDbService.listDatabases(instance);
+
+        StringBuilder sb = new StringBuilder();
+        for (String db : databases) {
+            sb.append(String.format("<option value=\"%s\">%s</option>", db, db));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * HTMX endpoint: Get schemas for selected instance and database.
+     */
+    @GET
+    @Path("/schemas")
+    @Produces(MediaType.TEXT_HTML)
+    public String getSchemas(
+            @QueryParam("instance") String instance,
+            @QueryParam("database") String database) {
+        toggleService.requirePageEnabled("schema-docs");
+
+        if (database == null || database.isEmpty()) {
+            return "<option value=\"public\" selected>public</option>";
+        }
+
+        List<String> schemas = schemaDocService.getSchemas(instance, database);
+
+        StringBuilder sb = new StringBuilder();
+        for (String schema : schemas) {
+            String selected = "public".equals(schema) ? " selected" : "";
+            sb.append(String.format("<option value=\"%s\"%s>%s</option>", schema, selected, schema));
+        }
+        return sb.toString();
     }
 
     /**
@@ -72,8 +130,11 @@ public class SchemaDocResource {
     @Produces(MediaType.TEXT_HTML)
     public Response generateDocumentation(
             @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") String database,
             @QueryParam("schema") @DefaultValue("public") String schemaName,
             @QueryParam("format") @DefaultValue("HTML") String formatStr,
+            @QueryParam("filterPreset") @DefaultValue("NONE") String filterPresetStr,
+            @QueryParam("excludePatterns") String excludePatterns,
             @QueryParam("includeTables") @DefaultValue("true") boolean includeTables,
             @QueryParam("includeViews") @DefaultValue("true") boolean includeViews,
             @QueryParam("includeFunctions") @DefaultValue("true") boolean includeFunctions,
@@ -95,6 +156,9 @@ public class SchemaDocResource {
             format = OutputFormat.HTML;
         }
 
+        // Build filter from preset and custom patterns
+        ComparisonFilter filter = buildFilter(filterPresetStr, excludePatterns);
+
         DocumentationOptions options = new DocumentationOptions();
         options.includeTables = includeTables;
         options.includeViews = includeViews;
@@ -107,7 +171,13 @@ public class SchemaDocResource {
         options.includeComments = includeComments;
         options.includeExtensions = includeExtensions;
 
-        String documentation = schemaDocService.generateDocumentation(instance, schemaName, format, options);
+        // Use cross-database connection if database is specified
+        String documentation;
+        if (database != null && !database.isEmpty()) {
+            documentation = schemaDocService.generateDocumentation(instance, database, schemaName, format, options, filter);
+        } else {
+            documentation = schemaDocService.generateDocumentation(instance, schemaName, format, options, filter);
+        }
 
         String contentType;
         String extension;
@@ -128,7 +198,8 @@ public class SchemaDocResource {
 
         if (download) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-            String filename = String.format("schema-doc-%s-%s-%s.%s", instance, schemaName, timestamp, extension);
+            String dbPart = (database != null && !database.isEmpty()) ? database + "-" : "";
+            String filename = String.format("schema-doc-%s-%s%s-%s.%s", instance, dbPart, schemaName, timestamp, extension);
 
             return Response.ok(documentation)
                     .type(contentType)
@@ -140,20 +211,55 @@ public class SchemaDocResource {
     }
 
     /**
+     * Build a ComparisonFilter from preset and custom patterns.
+     */
+    private ComparisonFilter buildFilter(String filterPresetStr, String excludePatterns) {
+        ComparisonFilter filter;
+
+        // Start with preset
+        try {
+            ComparisonFilter.FilterPreset preset = ComparisonFilter.FilterPreset.valueOf(filterPresetStr);
+            filter = ComparisonFilter.fromPreset(preset);
+        } catch (IllegalArgumentException e) {
+            filter = new ComparisonFilter();
+        }
+
+        // Add custom exclude patterns
+        if (excludePatterns != null && !excludePatterns.isBlank()) {
+            for (String pattern : excludePatterns.split(",")) {
+                String trimmed = pattern.trim();
+                if (!trimmed.isEmpty()) {
+                    filter.addExcludeTablePattern(trimmed);
+                }
+            }
+        }
+
+        return filter;
+    }
+
+    /**
      * API endpoint for schema documentation (JSON metadata).
      */
     @GET
     @Path("/api")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getSchemaInfo(
-            @QueryParam("instance") @DefaultValue("default") String instance) {
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") String database) {
 
         toggleService.requirePageEnabled("schema-docs");
 
-        List<String> schemas = schemaDocService.getSchemas(instance);
+        List<String> databases = crossDbService.listDatabases(instance);
+        String currentDatabase = (database != null && !database.isEmpty()) ? database :
+                (databases.isEmpty() ? "" : databases.get(0));
+
+        List<String> schemas = currentDatabase.isEmpty() ? List.of("public") :
+                schemaDocService.getSchemas(instance, currentDatabase);
 
         return Response.ok(Map.of(
                 "instance", instance,
+                "databases", databases,
+                "currentDatabase", currentDatabase,
                 "schemas", schemas,
                 "formats", List.of("HTML", "MARKDOWN", "ASCIIDOC")
         )).build();

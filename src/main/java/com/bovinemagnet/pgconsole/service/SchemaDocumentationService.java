@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.model.ComparisonFilter;
 import com.bovinemagnet.pgconsole.model.FunctionSchema;
 import com.bovinemagnet.pgconsole.model.SequenceSchema;
 import com.bovinemagnet.pgconsole.model.TableSchema;
@@ -7,11 +8,15 @@ import com.bovinemagnet.pgconsole.model.TypeSchema;
 import com.bovinemagnet.pgconsole.model.ViewSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for generating schema documentation in multiple formats.
@@ -24,8 +29,13 @@ import java.util.Map;
 @ApplicationScoped
 public class SchemaDocumentationService {
 
+    private static final Logger LOG = Logger.getLogger(SchemaDocumentationService.class);
+
     @Inject
     SchemaExtractorService schemaExtractor;
+
+    @Inject
+    CrossDatabaseConnectionService crossDbService;
 
     /**
      * Supported output formats for schema documentation.
@@ -65,17 +75,33 @@ public class SchemaDocumentationService {
      */
     public String generateDocumentation(String instanceId, String schemaName,
                                         OutputFormat format, DocumentationOptions options) {
+        return generateDocumentation(instanceId, schemaName, format, options, new ComparisonFilter());
+    }
+
+    /**
+     * Generate schema documentation in the specified format with filtering.
+     *
+     * @param instanceId the database instance identifier
+     * @param schemaName the schema to document (e.g., "public")
+     * @param format     the output format (HTML, MARKDOWN, ASCIIDOC)
+     * @param options    options controlling what to include
+     * @param filter     filter for excluding objects by pattern
+     * @return the generated documentation as a string
+     */
+    public String generateDocumentation(String instanceId, String schemaName,
+                                        OutputFormat format, DocumentationOptions options,
+                                        ComparisonFilter filter) {
         // Gather all schema metadata
         List<TableSchema> tables = options.includeTables ?
-                schemaExtractor.extractTables(instanceId, schemaName) : List.of();
+                filterTables(schemaExtractor.extractTables(instanceId, schemaName), filter) : List.of();
         List<ViewSchema> views = options.includeViews ?
-                schemaExtractor.extractViews(instanceId, schemaName) : List.of();
+                filterViews(schemaExtractor.extractViews(instanceId, schemaName), filter) : List.of();
         List<FunctionSchema> functions = options.includeFunctions ?
-                schemaExtractor.extractFunctions(instanceId, schemaName) : List.of();
+                filterFunctions(schemaExtractor.extractFunctions(instanceId, schemaName), filter) : List.of();
         List<SequenceSchema> sequences = options.includeSequences ?
-                schemaExtractor.extractSequences(instanceId, schemaName) : List.of();
+                filterSequences(schemaExtractor.extractSequences(instanceId, schemaName), filter) : List.of();
         List<TypeSchema> types = options.includeTypes ?
-                schemaExtractor.extractTypes(instanceId, schemaName) : List.of();
+                filterTypes(schemaExtractor.extractTypes(instanceId, schemaName), filter) : List.of();
         Map<String, String> extensions = options.includeExtensions ?
                 schemaExtractor.extractExtensions(instanceId) : Map.of();
         Map<String, Integer> summary = schemaExtractor.getSchemaSummary(instanceId, schemaName);
@@ -92,10 +118,159 @@ public class SchemaDocumentationService {
     }
 
     /**
+     * Generate schema documentation for a specific database in the specified format.
+     * <p>
+     * Uses a cross-database connection to access the target database.
+     *
+     * @param instanceId the database instance identifier
+     * @param database   the target database name
+     * @param schemaName the schema to document (e.g., "public")
+     * @param format     the output format (HTML, MARKDOWN, ASCIIDOC)
+     * @param options    options controlling what to include
+     * @return the generated documentation as a string
+     */
+    public String generateDocumentation(String instanceId, String database,
+                                        String schemaName, OutputFormat format,
+                                        DocumentationOptions options) {
+        return generateDocumentation(instanceId, database, schemaName, format, options, new ComparisonFilter());
+    }
+
+    /**
+     * Generate schema documentation for a specific database with filtering.
+     * <p>
+     * Uses a cross-database connection to access the target database.
+     *
+     * @param instanceId the database instance identifier
+     * @param database   the target database name
+     * @param schemaName the schema to document (e.g., "public")
+     * @param format     the output format (HTML, MARKDOWN, ASCIIDOC)
+     * @param options    options controlling what to include
+     * @param filter     filter for excluding objects by pattern
+     * @return the generated documentation as a string
+     */
+    public String generateDocumentation(String instanceId, String database,
+                                        String schemaName, OutputFormat format,
+                                        DocumentationOptions options, ComparisonFilter filter) {
+        try (Connection conn = crossDbService.getConnectionToDatabase(instanceId, database)) {
+            // Gather all schema metadata using the cross-database connection
+            List<TableSchema> tables = options.includeTables ?
+                    filterTables(schemaExtractor.extractTables(conn, schemaName), filter) : List.of();
+            List<ViewSchema> views = options.includeViews ?
+                    filterViews(schemaExtractor.extractViews(conn, schemaName), filter) : List.of();
+            List<FunctionSchema> functions = options.includeFunctions ?
+                    filterFunctions(schemaExtractor.extractFunctions(conn, schemaName), filter) : List.of();
+            List<SequenceSchema> sequences = options.includeSequences ?
+                    filterSequences(schemaExtractor.extractSequences(conn, schemaName), filter) : List.of();
+            List<TypeSchema> types = options.includeTypes ?
+                    filterTypes(schemaExtractor.extractTypes(conn, schemaName), filter) : List.of();
+            Map<String, String> extensions = options.includeExtensions ?
+                    schemaExtractor.extractExtensions(conn) : Map.of();
+            Map<String, Integer> summary = schemaExtractor.getSchemaSummary(conn, schemaName);
+
+            // Generate in requested format
+            String instanceLabel = instanceId + "/" + database;
+            return switch (format) {
+                case HTML -> generateHtml(instanceLabel, schemaName, tables, views, functions,
+                        sequences, types, extensions, summary, options);
+                case MARKDOWN -> generateMarkdown(instanceLabel, schemaName, tables, views, functions,
+                        sequences, types, extensions, summary, options);
+                case ASCIIDOC -> generateAsciiDoc(instanceLabel, schemaName, tables, views, functions,
+                        sequences, types, extensions, summary, options);
+            };
+        } catch (SQLException e) {
+            LOG.errorf("Failed to generate documentation for %s.%s.%s: %s",
+                    instanceId, database, schemaName, e.getMessage());
+            return "Error generating documentation: " + e.getMessage();
+        }
+    }
+
+    // ========================================
+    // Filtering Methods
+    // ========================================
+
+    /**
+     * Filter tables based on the comparison filter patterns.
+     */
+    private List<TableSchema> filterTables(List<TableSchema> tables, ComparisonFilter filter) {
+        if (!filter.hasFilters()) {
+            return tables;
+        }
+        return tables.stream()
+                .filter(t -> filter.matchesTable(t.getSchemaName(), t.getTableName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Filter views based on the comparison filter patterns.
+     */
+    private List<ViewSchema> filterViews(List<ViewSchema> views, ComparisonFilter filter) {
+        if (!filter.hasFilters()) {
+            return views;
+        }
+        return views.stream()
+                .filter(v -> filter.matchesTable(v.getSchemaName(), v.getViewName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Filter functions based on the comparison filter patterns.
+     */
+    private List<FunctionSchema> filterFunctions(List<FunctionSchema> functions, ComparisonFilter filter) {
+        if (!filter.hasFilters()) {
+            return functions;
+        }
+        return functions.stream()
+                .filter(f -> filter.matchesTable(f.getSchemaName(), f.getFunctionName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Filter sequences based on the comparison filter patterns.
+     */
+    private List<SequenceSchema> filterSequences(List<SequenceSchema> sequences, ComparisonFilter filter) {
+        if (!filter.hasFilters()) {
+            return sequences;
+        }
+        return sequences.stream()
+                .filter(s -> filter.matchesTable(s.getSchemaName(), s.getSequenceName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Filter types based on the comparison filter patterns.
+     */
+    private List<TypeSchema> filterTypes(List<TypeSchema> types, ComparisonFilter filter) {
+        if (!filter.hasFilters()) {
+            return types;
+        }
+        return types.stream()
+                .filter(t -> filter.matchesTable(t.getSchemaName(), t.getTypeName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Get list of available schemas for an instance.
      */
     public List<String> getSchemas(String instanceId) {
         return schemaExtractor.getSchemas(instanceId);
+    }
+
+    /**
+     * Get list of available schemas for a specific database on an instance.
+     * <p>
+     * Uses a cross-database connection to access the target database.
+     *
+     * @param instanceId the database instance identifier
+     * @param database   the target database name
+     * @return list of schema names
+     */
+    public List<String> getSchemas(String instanceId, String database) {
+        try (Connection conn = crossDbService.getConnectionToDatabase(instanceId, database)) {
+            return schemaExtractor.getSchemas(conn);
+        } catch (SQLException e) {
+            LOG.errorf("Failed to get schemas for %s.%s: %s", instanceId, database, e.getMessage());
+            return List.of("public");
+        }
     }
 
     // ========================================

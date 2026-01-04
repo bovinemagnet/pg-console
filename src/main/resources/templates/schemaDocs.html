@@ -21,24 +21,75 @@
                 </div>
                 <div class="card-body">
                     <form action="/schema-docs/generate" method="get" target="_blank">
-                        <input type="hidden" name="instance" value="{instance}">
-
+                        <!-- Instance / Database / Schema Selection -->
                         <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="schema" class="form-label">Schema</label>
-                                <select name="schema" id="schema" class="form-select">
-                                    {#for s in schemas}
-                                    <option value="{s}" {#if s == 'public'}selected{/if}>{s}</option>
+                            <div class="col-md-4">
+                                <label for="instance" class="form-label">Instance</label>
+                                <select name="instance" id="instance" class="form-select"
+                                        hx-get="/schema-docs/databases"
+                                        hx-target="#databaseContainer"
+                                        hx-trigger="change">
+                                    {#for inst in instances}
+                                    <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
                                     {/for}
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <label for="database" class="form-label">Database</label>
+                                <div id="databaseContainer">
+                                    <select name="database" id="database" class="form-select"
+                                            hx-get="/schema-docs/schemas"
+                                            hx-target="#schemaContainer"
+                                            hx-trigger="change"
+                                            hx-include="#instance">
+                                        {#for db in databases}
+                                        <option value="{db}" {#if db == currentDatabase}selected{/if}>{db}</option>
+                                        {/for}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="schema" class="form-label">Schema</label>
+                                <div id="schemaContainer">
+                                    <select name="schema" id="schema" class="form-select">
+                                        {#for s in schemas}
+                                        <option value="{s}" {#if s == 'public'}selected{/if}>{s}</option>
+                                        {/for}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
                                 <label for="format" class="form-label">Output Format</label>
                                 <select name="format" id="format" class="form-select">
                                     <option value="HTML" selected>HTML (styled, printable)</option>
                                     <option value="MARKDOWN">Markdown (for Git/docs)</option>
                                     <option value="ASCIIDOC">AsciiDoc (for Antora)</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h6 class="mb-3"><i class="bi bi-funnel me-2"></i>Filter Options</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="filterPreset" class="form-label">Filter Preset</label>
+                                <select name="filterPreset" id="filterPreset" class="form-select">
+                                    <option value="NONE" selected>No filters</option>
+                                    <option value="EXCLUDE_TEMP_TABLES">Exclude temp/backup tables</option>
+                                    <option value="EXCLUDE_SYSTEM_SCHEMAS">Exclude system schemas</option>
+                                    <option value="PRODUCTION_SAFE">Production-safe defaults</option>
+                                </select>
+                                <div class="form-text">Predefined patterns to exclude common non-essential objects</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="excludePatterns" class="form-label">Exclude Patterns</label>
+                                <textarea name="excludePatterns" id="excludePatterns" class="form-control" rows="2"
+                                          placeholder="temp_*, *_backup, zz_*"></textarea>
+                                <div class="form-text">Comma-separated wildcard patterns (e.g., temp_*, *_bak)</div>
                             </div>
                         </div>
 

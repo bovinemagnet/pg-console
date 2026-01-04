@@ -123,52 +123,62 @@ By default, all object types are included in the comparison.
 
 Database Diff provides convenient preset filters for common comparison scenarios:
 
-==== Schema Structure Only
+[cols="1,2,2"]
+|===
+|Preset |Description |Excluded Patterns
 
-Compares the structural elements without data-dependent objects:
+|*No filters*
+|Include all objects without any filtering
+|None
 
-* *Includes*: Tables, types, extensions
-* *Excludes*: Views, functions, sequences, indexes, triggers, constraints
+|*Exclude temp/backup tables*
+|Excludes temporary and backup tables commonly used during development
+|`temp_*`, `tmp_*`, `*_backup`, `*_bak`, `zz_*`
 
-Use this preset for:
+|*Exclude system schemas*
+|Excludes PostgreSQL system schemas and pg-console internal schema
+|`pg_catalog`, `information_schema`, `pgconsole`
 
-* High-level schema overview
-* Initial schema comparison
-* Comparing core structure between significantly different databases
+|*Production-safe defaults*
+|Combines temp/backup exclusion with system schema exclusion for clean production comparisons
+|All patterns from both presets above
+|===
 
-==== Code & Logic
+==== When to Use Each Preset
 
-Compares programmatic elements and business logic:
+*No filters*::
+Use when you need a complete comparison of all objects, including temporary tables and system schemas. Suitable for comprehensive audits.
 
-* *Includes*: Views, functions, triggers
-* *Excludes*: Tables, sequences, types, extensions, indexes, constraints
+*Exclude temp/backup tables*::
+Use when comparing schemas that may contain development artefacts like temporary tables or backup copies. This focuses the comparison on production-relevant objects.
 
-Use this preset for:
+*Exclude system schemas*::
+Use when you want to compare only user-defined objects, excluding PostgreSQL system catalogues and pg-console's internal schema.
 
-* Reviewing code-level changes
-* Validating stored procedure migrations
-* Comparing business logic between versions
+*Production-safe defaults*::
+Recommended for most production comparisons. Excludes both temporary/backup tables and system schemas, providing a clean comparison of actual application objects.
 
-==== Performance Objects
+=== Custom Exclude Patterns
 
-Compares performance-related schema elements:
+In addition to presets, you can specify custom exclusion patterns using wildcard syntax:
 
-* *Includes*: Indexes, constraints, sequences
-* *Excludes*: Tables, views, functions, types, extensions, triggers
+[source,text]
+----
+audit_*, log_*, *_archive, staging_*
+----
 
-Use this preset for:
+*Wildcard syntax*:
 
-* Performance tuning validation
-* Index migration verification
-* Constraint consistency checking
+* `*` - Matches any number of characters
+* `?` - Matches a single character
 
-==== Custom Filter
+*Examples*:
 
-Select individual object types to create a custom filter:
+* `temp_*` - Excludes all tables starting with `temp_`
+* `*_backup` - Excludes all tables ending with `_backup`
+* `zz_*` - Excludes tables prefixed with `zz_` (common for deprecated objects)
 
-1. Click *Custom Filter*
-2. Toggle individual object types on/off
-3. Click *Apply Custom Filter*
+Enter patterns as a comma-separated list in the *Exclude Patterns* field.
 
 == Understanding Comparison Results
 

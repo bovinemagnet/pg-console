@@ -1,0 +1,745 @@
+= Transaction ID Wraparound Monitoring
+Paul Snow
+0.0.0
+:description: Guide to monitoring and preventing PostgreSQL XID wraparound using pg-console's dedicated dashboard
+:keywords: xid wraparound, transaction id, vacuum freeze, datfrozenxid, autovacuum, database maintenance
+
+[abstract]
+This guide explains PostgreSQL's transaction ID (XID) wraparound problem and how to use pg-console's XID Wraparound dashboard to monitor and prevent wraparound emergencies that can cause database shutdowns.
+
+== What Is XID Wraparound?
+
+PostgreSQL uses 32-bit transaction IDs (XIDs) to implement multi-version concurrency control (MVCC). Every transaction gets a unique XID, but with only 32 bits available, there are approximately 2 billion (2^31^) possible transaction IDs.
+
+=== The Wraparound Problem
+
+After approximately 2 billion transactions, PostgreSQL's transaction IDs "wrap around" back to zero. Without proper maintenance:
+
+* Old transactions would appear to be "in the future"
+* Data visibility would be corrupted
+* PostgreSQL would be unable to determine which rows are visible to which transactions
+
+=== PostgreSQL's Protection Mechanism
+
+To prevent wraparound catastrophe, PostgreSQL:
+
+1. *Freezes old transactions* - VACUUM converts old XIDs to a special "frozen" value that is always visible
+2. *Tracks the oldest XID* - Each database records its oldest unfrozen transaction ID (`datfrozenxid`)
+3. *Forces emergency shutdown* - If XID age reaches critical levels (~2 billion), PostgreSQL stops accepting writes to prevent data loss
+
+[IMPORTANT]
+====
+If XID wraparound reaches 100%, PostgreSQL will **shut down** to prevent data corruption. This is a database-wide emergency requiring immediate DBA intervention.
+====
+
+== The XID Wraparound Dashboard
+
+Access the XID Wraparound dashboard from the main navigation menu: *Diagnostics* → *XID Wraparound*.
+
+The dashboard URL is: `/diagnostics/xid-wraparound`
+
+=== Dashboard Metrics
+
+The dashboard displays wraparound risk metrics for every database on the PostgreSQL instance:
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Database
+|Database name
+
+|XID Age
+|Current transaction ID age (displayed in millions for readability) +
+Example: "150M" means 150 million transactions
+
+|Progress to Wraparound
+|Visual progress bar showing percentage towards the wraparound limit +
+Colour-coded: Green (safe), Amber (warning), Red (critical)
+
+|Oldest Table
+|Schema-qualified name of the table with the oldest unfrozen transaction ID +
+**Note**: Only available for the connected database (see xref:#cross-database-limitation[Cross-Database Limitation])
+
+|Recommendation
+|Suggested action based on current XID age and severity level
+|===
+
+=== Risk Levels
+
+The dashboard uses configurable thresholds to classify wraparound risk:
+
+[cols="1,1,3"]
+|===
+|Status |Threshold |Meaning
+
+|OK (Green)
+|< 50%
+|Normal operation - autovacuum is working effectively
+
+|WARNING (Amber)
+|50-75%
+|Monitor closely - verify autovacuum is running and making progress
+
+|CRITICAL (Red)
+|> 75%
+|Immediate action required - manual VACUUM FREEZE needed
+|===
+
+[TIP]
+====
+The warning and critical thresholds are configurable. See xref:#configuration[Configuration] for details.
+====
+
+=== Progress Bar
+
+Each database has a colour-coded progress bar showing its advancement towards wraparound:
+
+* *Green bar*: XID age is within safe limits
+* *Amber bar*: Approaching warning threshold - attention recommended
+* *Red bar*: Critical threshold exceeded - immediate action required
+
+The percentage displayed is calculated as:
+
+[source]
+----
+percentage = (current_xid_age / max_xid_age) × 100
+----
+
+Where `max_xid_age` is 2,147,483,647 (2^31^ - 1).
+
+=== Recommendations Section
+
+The dashboard provides context-specific recommendations based on each database's XID age:
+
+*When XID age < 50%*::
+"XID age is within safe limits."
+
+*When XID age 50-75%*::
+"WARNING: Schedule aggressive vacuuming. Consider running VACUUM FREEZE on oldest tables."
+
+*When XID age > 75%*::
+"CRITICAL: Immediate manual VACUUM FREEZE required! Database at risk of shutdown to prevent wraparound."
+
+*When vacuum is running*::
+"Vacuum in progress. Monitoring recommended."
+
+=== VACUUM FREEZE Commands
+
+At the bottom of the dashboard, you'll find ready-to-use `VACUUM FREEZE` commands for each database. These commands can be copied and executed directly in a database client:
+
+[source,sql]
+----
+-- Example for a specific table
+VACUUM FREEZE public.large_events_table;
+
+-- Example for entire database
+VACUUM FREEZE;
+----
+
+[TIP]
+====
+For targeted vacuuming, the dashboard shows the table with the oldest unfrozen XID. Start with that table for maximum impact.
+====
+
+[[cross-database-limitation]]
+== Cross-Database Querying Limitation
+
+PostgreSQL's security model prevents queries from accessing system catalogs in other databases. This creates a limitation in the XID Wraparound dashboard:
+
+=== What This Means
+
+* *XID Age per Database*: pg-console can query `pg_database` to get XID age for **all databases** on the instance
+* *Oldest Table Identification*: pg-console can only query `pg_class` for the **currently connected database**
+
+=== Dashboard Behaviour
+
+When viewing the XID Wraparound dashboard:
+
+* All databases on the instance are listed with their XID ages
+* The *Oldest Table* column shows:
+** The actual oldest table for the database pg-console is connected to (typically `postgres`)
+** A dash (`-`) for all other databases
+
+.Example Dashboard Display
+[cols="1,1,1,1"]
+|===
+|Database |XID Age |Oldest Table |Status
+
+|postgres
+|150M
+|`public.events`
+|OK
+
+|production_db
+|320M
+|`-`
+|WARNING
+
+|staging_db
+|80M
+|`-`
+|OK
+|===
+
+In this example, pg-console is connected to the `postgres` database, so only that database shows the oldest table.
+
+=== Workaround: Multiple Instance Connections
+
+To see oldest tables for all databases, configure multiple instance connections in `application.properties`, with each connection pointing to a different database:
+
+[source,properties]
+----
+# Instance for 'postgres' database
+pg-console.instances.postgres.url=jdbc:postgresql://localhost:5432/postgres
+pg-console.instances.postgres.user=postgres
+pg-console.instances.postgres.password=secret
+
+# Instance for 'production_db' database
+pg-console.instances.production.url=jdbc:postgresql://localhost:5432/production_db
+pg-console.instances.production.user=postgres
+pg-console.instances.production.password=secret
+
+# Instance for 'staging_db' database
+pg-console.instances.staging.url=jdbc:postgresql://localhost:5432/staging_db
+pg-console.instances.staging.user=postgres
+pg-console.instances.staging.password=secret
+----
+
+With this configuration, you can switch between instances using the instance selector dropdown to view oldest tables for each database.
+
+[NOTE]
+====
+This limitation is a fundamental PostgreSQL constraint, not a pg-console limitation. No PostgreSQL monitoring tool can query `pg_class` across databases without separate connections.
+====
+
+[[configuration]]
+== Configuration
+
+=== Enabling/Disabling the Dashboard
+
+The XID Wraparound dashboard is enabled by default. To disable it:
+
+[source,bash]
+----
+# Disable XID Wraparound dashboard
+export PG_CONSOLE_DASH_XID_WRAPAROUND=false
+----
+
+To disable the entire diagnostics section (including XID Wraparound):
+
+[source,bash]
+----
+# Disable all diagnostics dashboards
+export PG_CONSOLE_DASH_DIAGNOSTICS=false
+----
+
+=== Threshold Configuration
+
+Customise the warning and critical thresholds:
+
+[source,bash]
+----
+# Set warning threshold to 40% (default: 50%)
+export PG_CONSOLE_XID_WARN=40
+
+# Set critical threshold to 80% (default: 75%)
+export PG_CONSOLE_XID_CRITICAL=80
+----
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`PG_CONSOLE_DASH_XID_WRAPAROUND`
+|Enable/disable XID Wraparound dashboard
+|`true`
+
+|`PG_CONSOLE_XID_WARN`
+|Warning threshold percentage (0-100)
+|`50`
+
+|`PG_CONSOLE_XID_CRITICAL`
+|Critical threshold percentage (0-100)
+|`75`
+|===
+
+[TIP]
+====
+For high-transaction databases (millions of transactions per day), consider lowering thresholds to 40% warning and 70% critical to allow more time for proactive vacuum operations.
+====
+
+== Preventing XID Wraparound
+
+=== Verify Autovacuum Is Enabled
+
+Autovacuum is PostgreSQL's primary defence against wraparound. Verify it's running:
+
+[source,sql]
+----
+-- Check autovacuum is enabled globally
+SHOW autovacuum;
+
+-- Check autovacuum launcher process is running
+SELECT pid, backend_type, backend_start
+FROM pg_stat_activity
+WHERE backend_type = 'autovacuum launcher';
+
+-- Check autovacuum worker processes
+SELECT pid, datname, query, state
+FROM pg_stat_activity
+WHERE backend_type = 'autovacuum worker';
+----
+
+[WARNING]
+====
+**Never** disable autovacuum in production. If you must disable it for a specific table (e.g., during bulk loading), remember to re-enable it immediately afterwards.
+====
+
+=== Monitor Vacuum Activity
+
+Check when tables were last vacuumed:
+
+[source,sql]
+----
+-- Tables that have never been auto-vacuumed
+SELECT schemaname, relname, n_tup_ins, n_tup_upd, n_tup_del,
+       last_vacuum, last_autovacuum
+FROM pg_stat_user_tables
+WHERE last_autovacuum IS NULL
+ORDER BY n_tup_ins + n_tup_upd + n_tup_del DESC
+LIMIT 20;
+
+-- Tables with oldest autovacuum
+SELECT schemaname, relname, last_autovacuum,
+       age(relfrozenxid) as xid_age
+FROM pg_stat_user_tables t
+JOIN pg_class c ON c.oid = t.relid
+ORDER BY last_autovacuum NULLS FIRST
+LIMIT 20;
+----
+
+=== Manual VACUUM FREEZE
+
+When XID age is high (>50%), run `VACUUM FREEZE` to aggressively freeze old transaction IDs:
+
+[source,sql]
+----
+-- Freeze entire database (recommended for emergency situations)
+VACUUM FREEZE;
+
+-- Freeze specific table
+VACUUM FREEZE schema_name.table_name;
+
+-- Freeze with verbose output (shows progress)
+VACUUM FREEZE VERBOSE schema_name.table_name;
+----
+
+=== Monitor VACUUM Progress
+
+PostgreSQL provides real-time vacuum progress information:
+
+[source,sql]
+----
+-- Monitor active VACUUM operations
+SELECT
+    p.pid,
+    p.datname,
+    p.phase,
+    p.heap_blks_total,
+    p.heap_blks_scanned,
+    p.heap_blks_vacuumed,
+    ROUND(100.0 * p.heap_blks_scanned / NULLIF(p.heap_blks_total, 0), 2) as percent_complete,
+    now() - a.xact_start as duration
+FROM pg_stat_progress_vacuum p
+JOIN pg_stat_activity a ON a.pid = p.pid;
+----
+
+This query shows:
+
+* Which database and table is being vacuumed
+* Current phase (scanning heap, vacuuming indexes, etc.)
+* Percentage complete
+* Time elapsed
+
+== Emergency Wraparound Response
+
+If XID age exceeds 75%, follow this emergency procedure:
+
+=== Step 1: Assess the Situation
+
+[source,sql]
+----
+-- Check XID age for all databases
+SELECT
+    datname,
+    age(datfrozenxid) as xid_age,
+    ROUND(100.0 * age(datfrozenxid) / 2147483647, 2) as percent_to_wraparound
+FROM pg_database
+ORDER BY age(datfrozenxid) DESC;
+
+-- Find tables with oldest XIDs in current database
+SELECT
+    schemaname,
+    relname,
+    age(relfrozenxid) as xid_age
+FROM pg_stat_user_tables t
+JOIN pg_class c ON c.oid = t.relid
+ORDER BY age(relfrozenxid) DESC
+LIMIT 20;
+----
+
+=== Step 2: Identify Long-Running Transactions
+
+Long-running transactions prevent VACUUM from advancing `datfrozenxid`:
+
+[source,sql]
+----
+-- Find long-running transactions
+SELECT
+    pid,
+    usename,
+    datname,
+    state,
+    backend_type,
+    xact_start,
+    now() - xact_start as transaction_duration,
+    query
+FROM pg_stat_activity
+WHERE xact_start IS NOT NULL
+  AND state != 'idle'
+ORDER BY xact_start
+LIMIT 20;
+----
+
+Consider terminating blocking transactions if safe:
+
+[source,sql]
+----
+-- Terminate a specific backend (use with caution!)
+SELECT pg_terminate_backend(12345);  -- Replace 12345 with actual PID
+----
+
+=== Step 3: Run Emergency VACUUM FREEZE
+
+Execute `VACUUM FREEZE` on all affected databases:
+
+[source,bash]
+----
+#!/bin/bash
+# Emergency vacuum all databases
+
+for db in $(psql -Atc "SELECT datname FROM pg_database WHERE datallowconn"); do
+    echo "=== Vacuuming database: $db ==="
+    psql -d "$db" -c "VACUUM FREEZE VERBOSE;" &
+done
+
+# Wait for all vacuum operations to complete
+wait
+echo "All databases vacuumed."
+----
+
+[WARNING]
+====
+`VACUUM FREEZE` is I/O-intensive and can impact database performance. On production systems:
+
+* Run during maintenance windows if possible
+* Monitor system resources (CPU, I/O, memory)
+* Consider vacuuming tables individually to spread the load
+====
+
+=== Step 4: Monitor Progress
+
+While vacuum is running, monitor XID age every few minutes:
+
+[source,sql]
+----
+-- Watch XID age decrease (run repeatedly)
+SELECT
+    datname,
+    age(datfrozenxid) as xid_age,
+    ROUND(100.0 * age(datfrozenxid) / 2147483647, 2) as percent_to_wraparound
+FROM pg_database
+ORDER BY age(datfrozenxid) DESC;
+----
+
+=== Step 5: Prevent Recurrence
+
+Once the emergency is resolved, increase autovacuum resources to prevent future occurrences:
+
+Edit `postgresql.conf`:
+
+[source,conf]
+----
+# Increase autovacuum workers (default: 3)
+autovacuum_max_workers = 5
+
+# Check more frequently (default: 1min)
+autovacuum_naptime = 30s
+
+# Allow more I/O for autovacuum (default: 200)
+autovacuum_vacuum_cost_limit = 1000
+
+# More aggressive freeze settings
+vacuum_freeze_min_age = 50000000           # Default: 50 million
+vacuum_freeze_table_age = 150000000        # Default: 150 million
+autovacuum_freeze_max_age = 200000000      # Default: 200 million (DO NOT increase!)
+----
+
+Reload configuration:
+
+[source,sql]
+----
+SELECT pg_reload_conf();
+----
+
+[CAUTION]
+====
+**Never** increase `autovacuum_freeze_max_age` beyond 2 billion. This is a hard safety limit that triggers aggressive autovacuum to prevent wraparound.
+====
+
+== Tuning Autovacuum for High-Activity Tables
+
+For tables with very high transaction rates, tune autovacuum settings per-table:
+
+[source,sql]
+----
+-- More aggressive autovacuum for high-activity table
+ALTER TABLE high_activity_events SET (
+    autovacuum_vacuum_scale_factor = 0.01,      -- Trigger vacuum at 1% changes (default: 20%)
+    autovacuum_vacuum_threshold = 1000,         -- Plus 1000 row changes
+    autovacuum_vacuum_cost_delay = 5,           -- Faster vacuum (default: 20ms)
+    autovacuum_vacuum_cost_limit = 2000,        -- More I/O budget (default: 200)
+    autovacuum_freeze_min_age = 10000000,       -- Freeze sooner (default: 50 million)
+    autovacuum_freeze_max_age = 100000000       -- Force freeze earlier (default: 200 million)
+);
+----
+
+Verify settings:
+
+[source,sql]
+----
+-- Check table-specific autovacuum settings
+SELECT
+    schemaname,
+    tablename,
+    reloptions
+FROM pg_tables
+WHERE reloptions IS NOT NULL;
+----
+
+== Monitoring Best Practices
+
+=== Daily Monitoring
+
+Check the XID Wraparound dashboard at least once daily in production environments. Set up automated monitoring:
+
+[source,bash]
+----
+#!/bin/bash
+# Daily XID age check script
+
+THRESHOLD=50  # Percentage
+
+psql -Atc "
+SELECT
+    datname,
+    age(datfrozenxid),
+    ROUND(100.0 * age(datfrozenxid) / 2147483647, 2)
+FROM pg_database
+WHERE age(datfrozenxid) * 100.0 / 2147483647 > $THRESHOLD
+" | while IFS='|' read db age pct; do
+    echo "WARNING: Database $db XID age: $age ($pct%)"
+done
+----
+
+=== Alerting
+
+Set up automated alerts at critical thresholds:
+
+* *50% threshold*: Email notification to DBA team
+* *60% threshold*: SMS/pager alert
+* *75% threshold*: Critical emergency alert
+
+See xref:admin-guide:alerting.adoc[Alerting Configuration] for details on setting up automated alerts.
+
+=== Regular Audits
+
+Schedule monthly reviews:
+
+1. Review vacuum frequency for all tables
+2. Check for tables that have never been auto-vacuumed
+3. Verify autovacuum is running regularly
+4. Review and tune per-table autovacuum settings
+5. Test emergency vacuum procedures in staging
+
+== API Access
+
+The XID Wraparound dashboard data is available via REST API for programmatic access and integration with external monitoring systems.
+
+=== Endpoint
+
+[source,bash]
+----
+GET /api/diagnostics/xid-wraparound
+----
+
+=== Example Request
+
+[source,bash]
+----
+# Get XID wraparound data as JSON
+curl http://localhost:8080/api/diagnostics/xid-wraparound
+
+# Pretty-print with jq
+curl -s http://localhost:8080/api/diagnostics/xid-wraparound | jq
+----
+
+=== Example Response
+
+[source,json]
+----
+[
+  {
+    "databaseName": "postgres",
+    "datfrozenxid": 1234567,
+    "xidAge": 150000000,
+    "percentToWraparound": 6.98,
+    "oldestXidTable": "events",
+    "oldestXidSchema": "public",
+    "oldestRelFrozenXid": 1200000,
+    "autovacuumFreezeMaxAge": 200000000,
+    "vacuumRunning": false,
+    "recommendation": "XID age is within safe limits."
+  },
+  {
+    "databaseName": "production_db",
+    "datfrozenxid": 890123456,
+    "xidAge": 320000000,
+    "percentToWraparound": 14.90,
+    "oldestXidTable": null,
+    "oldestXidSchema": null,
+    "oldestRelFrozenXid": 0,
+    "autovacuumFreezeMaxAge": 200000000,
+    "vacuumRunning": false,
+    "recommendation": "XID age is within safe limits."
+  }
+]
+----
+
+=== Integration Example
+
+[source,python]
+----
+#!/usr/bin/env python3
+# Monitor XID wraparound and send alerts
+
+import requests
+import smtplib
+from email.message import EmailMessage
+
+PG_CONSOLE_URL = "http://localhost:8080"
+WARN_THRESHOLD = 50
+CRITICAL_THRESHOLD = 75
+
+response = requests.get(f"{PG_CONSOLE_URL}/api/diagnostics/xid-wraparound")
+databases = response.json()
+
+for db in databases:
+    pct = db['percentToWraparound']
+
+    if pct >= CRITICAL_THRESHOLD:
+        send_alert(f"CRITICAL: {db['databaseName']} XID age at {pct}%")
+    elif pct >= WARN_THRESHOLD:
+        send_alert(f"WARNING: {db['databaseName']} XID age at {pct}%")
+----
+
+== Troubleshooting
+
+=== Dashboard Shows No Data
+
+*Possible causes:*
+
+* No databases exist on the instance
+* Connection to PostgreSQL failed
+* Insufficient permissions to query `pg_database`
+
+*Resolution:*
+
+[source,sql]
+----
+-- Verify you can query pg_database
+SELECT datname, age(datfrozenxid) FROM pg_database;
+
+-- Check pg-console user permissions
+SELECT rolname, rolsuper FROM pg_roles WHERE rolname = current_user;
+----
+
+=== Oldest Table Always Shows Dash (-)
+
+This is expected behaviour for databases other than the one pg-console is connected to. See xref:#cross-database-limitation[Cross-Database Limitation] for details.
+
+To see oldest tables for other databases, configure separate instance connections.
+
+=== XID Age Not Decreasing After VACUUM
+
+*Possible causes:*
+
+* Long-running transaction preventing freeze
+* Autovacuum is disabled
+* VACUUM is running but not yet complete
+
+*Resolution:*
+
+[source,sql]
+----
+-- Find long-running transactions
+SELECT pid, usename, state, xact_start, now() - xact_start as duration
+FROM pg_stat_activity
+WHERE xact_start IS NOT NULL
+ORDER BY xact_start
+LIMIT 10;
+
+-- Check if vacuum is in progress
+SELECT * FROM pg_stat_progress_vacuum;
+
+-- Verify autovacuum is enabled
+SHOW autovacuum;
+----
+
+=== Autovacuum Is Running But XID Age Still Increasing
+
+If autovacuum can't keep up with transaction volume:
+
+1. *Increase autovacuum resources* (more workers, higher cost limit)
+2. *Run manual VACUUM FREEZE* on largest/oldest tables
+3. *Identify and optimise high-transaction-rate queries*
+4. *Consider partitioning* extremely large tables
+
+[source,sql]
+----
+-- Find tables generating most dead tuples
+SELECT
+    schemaname,
+    relname,
+    n_tup_ins + n_tup_upd + n_tup_del as total_changes,
+    n_dead_tup,
+    last_autovacuum
+FROM pg_stat_user_tables
+ORDER BY n_dead_tup DESC
+LIMIT 20;
+----
+
+== Related Topics
+
+* xref:diagnostics.adoc[Advanced Diagnostics] - Overview of all diagnostic dashboards
+* xref:dashboards.adoc#auto-refresh[Auto-Refresh] - Configure automatic dashboard refresh
+* xref:admin-guide:configuration.adoc#diagnostics-configuration[Diagnostics Configuration] - Complete configuration reference
+* xref:admin-guide:alerting.adoc[Alerting] - Set up automated alerts for wraparound thresholds
+* xref:troubleshooting.adoc[Troubleshooting] - General troubleshooting guide
+
+== Further Reading
+
+* https://www.postgresql.org/docs/current/routine-vacuuming.html#VACUUM-FOR-WRAPAROUND[PostgreSQL Documentation: Preventing Transaction ID Wraparound Failures]
+* https://www.postgresql.org/docs/current/runtime-config-autovacuum.html[PostgreSQL Documentation: Autovacuum Configuration]
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-PROGRESS-VACUUM[PostgreSQL Documentation: VACUUM Progress Monitoring]
