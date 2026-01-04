@@ -1,0 +1,345 @@
+= Runbooks
+Paul Snow
+0.0.0
+:description: Guided troubleshooting and incident response workflows in pg-console
+:keywords: runbooks, troubleshooting, incident response, automation, diagnostics
+
+Runbooks provide structured, step-by-step workflows for troubleshooting common PostgreSQL issues and performing routine maintenance tasks. They guide operators through diagnostic steps, queries, and actions in a consistent, repeatable manner.
+
+== Overview
+
+Runbooks in pg-console are executable workflows that combine:
+
+* **Navigation steps** - Direct links to relevant dashboards
+* **Diagnostic queries** - Pre-built SQL queries that gather information
+* **Manual steps** - Instructions for human decision-making
+* **Action templates** - Parameterised SQL for remediation actions
+
+Each runbook is designed for a specific scenario, such as investigating high connection usage or diagnosing cache performance issues.
+
+=== Benefits
+
+Consistent response::
+Runbooks ensure all team members follow the same diagnostic process, reducing errors and improving incident response times.
+
+Knowledge capture::
+Best practices and tribal knowledge are codified into executable steps that can be shared across the team.
+
+Audit trail::
+Every runbook execution is logged, providing a record of what was investigated and what actions were taken.
+
+Automation::
+Safe, read-only runbooks can be auto-executed to gather diagnostic information without manual intervention.
+
+== Available Runbooks
+
+pg-console includes several built-in runbooks for common scenarios:
+
+=== High Connection Usage Response
+
+[cols="1,3"]
+|===
+|Name |`high_connection_usage`
+|Category |Incident
+|Trigger |Connection threshold alerts (CRITICAL, HIGH)
+|Auto-executable |No (contains destructive steps)
+|Duration |~15 minutes
+|===
+
+This runbook guides you through diagnosing and resolving high connection usage:
+
+1. Check current active connections on the Activity dashboard
+2. Identify long-running queries that may be holding connections
+3. Find idle-in-transaction connections older than 5 minutes
+4. Review connection pooling options (PgBouncer documentation)
+5. Optionally terminate long-idle connections (requires confirmation)
+
+WARNING: Step 5 uses `pg_terminate_backend()` which forcibly closes connections. Use with caution.
+
+=== High Connection Usage Diagnostic
+
+[cols="1,3"]
+|===
+|Name |`high_connection_usage_diagnostic`
+|Category |Incident
+|Trigger |Connection threshold alerts (CRITICAL, HIGH)
+|Auto-executable |Yes
+|Duration |~5 minutes
+|===
+
+A read-only version of the connection usage runbook that gathers diagnostic information without any destructive actions:
+
+1. View current active connections and their states
+2. Identify long-running queries holding connections
+3. List idle-in-transaction connections with duration details
+4. Show connection distribution by application
+
+TIP: Use this runbook for initial investigation. If connection termination is needed, switch to the full `high_connection_usage` runbook.
+
+=== Blocked Queries Investigation
+
+[cols="1,3"]
+|===
+|Name |`blocked_queries`
+|Category |Troubleshooting
+|Trigger |Blocked queries alerts
+|Auto-executable |No (contains destructive steps)
+|Duration |~10 minutes
+|===
+
+Diagnose and resolve query blocking issues:
+
+1. View the blocking tree on the Locks dashboard
+2. Identify the root blocker query
+3. Assess whether the blocking query can be safely terminated
+4. Optionally cancel the blocking query (requires confirmation)
+
+WARNING: Step 4 uses `pg_cancel_backend()` which cancels running queries. The blocked queries will retry automatically.
+
+=== Low Cache Hit Ratio Investigation
+
+[cols="1,3"]
+|===
+|Name |`low_cache_hit`
+|Category |Troubleshooting
+|Trigger |Cache hit ratio alerts (below 90%)
+|Auto-executable |Yes
+|Duration |~20 minutes
+|===
+
+Diagnose poor cache hit ratio:
+
+1. Check current cache statistics on the Overview dashboard
+2. Review the `shared_buffers` configuration setting
+3. Identify tables with the lowest cache hit rates
+4. Review recommendations for increasing `shared_buffers`
+
+This runbook is entirely read-only and safe for auto-execution.
+
+=== Vacuum Maintenance
+
+[cols="1,3"]
+|===
+|Name |`vacuum_maintenance`
+|Category |Maintenance
+|Trigger |Scheduled (Sundays at 3am)
+|Auto-executable |Yes
+|Duration |~30 minutes
+|===
+
+Perform routine vacuum maintenance:
+
+1. Check tables needing vacuum on the Table Maintenance dashboard
+2. Review current autovacuum configuration settings
+3. Run `VACUUM ANALYZE` on priority tables (manual step)
+
+NOTE: While this runbook is marked as auto-executable, the final step requires manual execution of the VACUUM command.
+
+== Using Runbooks
+
+=== Starting a Runbook
+
+To start a runbook manually:
+
+1. Navigate to **Insights** > **Runbooks** in the main menu
+2. Browse the available runbooks by category
+3. Click **Start** on the runbook you want to execute
+4. Follow the step-by-step instructions
+
+=== Navigating Steps
+
+Each runbook step displays:
+
+* **Title** - Brief description of the step
+* **Description** - Detailed explanation of what to do
+* **Action** - A link, query, or instruction to execute
+* **Expected outcome** - What you should observe (for diagnostic runbooks)
+
+Use the controls at the bottom of each step:
+
+* **Complete & Next** - Mark the step as done and advance
+* **Skip** - Skip this step and move to the next
+* **Cancel** - Abort the runbook execution
+
+=== Auto-Executable Runbooks
+
+Some runbooks are marked as **auto-executable**, meaning all their steps can run automatically without manual intervention. These runbooks contain only:
+
+* Navigation steps (view dashboards)
+* Read-only SQL queries (SELECT, SHOW)
+* Documentation links
+
+To auto-execute a runbook:
+
+1. Navigate to **Insights** > **Runbooks**
+2. Look for runbooks with the **Auto** badge
+3. Click **Auto-Execute** instead of **Start**
+4. Review the results when complete
+
+Auto-executable runbooks are ideal for:
+
+* Initial incident triage
+* Gathering diagnostic information quickly
+* Scheduled health checks
+* Situations where manual step-by-step progression is too slow
+
+=== Database-Scoped Execution
+
+Runbooks can be executed against a specific database within an instance, rather than at the instance level. This is useful when:
+
+* Investigating issues specific to one database
+* Running diagnostics on a multi-tenant system
+* Comparing behaviour between databases
+
+To scope a runbook to a specific database:
+
+1. Start the runbook as normal
+2. Select the target database from the database dropdown
+3. Queries will be executed in the context of that database
+
+The execution history records which database was targeted, enabling filtering and comparison of results.
+
+== Execution History
+
+All runbook executions are logged for audit and review purposes.
+
+=== Viewing History
+
+Navigate to **Insights** > **Runbook History** to see:
+
+* Recent executions across all runbooks
+* Status (In Progress, Completed, Failed, Cancelled)
+* Who triggered the execution
+* When it started and completed
+* Which instance and database were targeted
+
+=== Execution Details
+
+Click on any execution to view:
+
+* Step-by-step progress
+* Results from each completed step
+* Query outputs and observations
+* Any notes added during execution
+
+This history is invaluable for:
+
+* Post-incident reviews
+* Knowledge sharing between team members
+* Identifying patterns in recurring issues
+* Compliance and audit requirements
+
+== Runbook Triggers
+
+Runbooks can be triggered in several ways:
+
+=== Manual Trigger
+
+Start a runbook manually from the Runbooks page when investigating an issue.
+
+=== Alert Trigger
+
+Runbooks can be automatically suggested or started when specific alerts fire. For example:
+
+* Connection threshold alerts suggest the `high_connection_usage` runbook
+* Blocked query alerts suggest the `blocked_queries` runbook
+* Cache hit ratio alerts suggest the `low_cache_hit` runbook
+
+Configure alert-triggered runbooks in the alerting settings. See xref:admin-guide:alerting.adoc[Alerting Configuration] for details.
+
+=== Scheduled Trigger
+
+Maintenance runbooks can be scheduled to run at specific times:
+
+* `vacuum_maintenance` is configured to run Sundays at 3am
+* Custom schedules use cron expressions
+
+Scheduled runbooks appear in the execution history with trigger type "SCHEDULED".
+
+=== Anomaly Trigger
+
+When the anomaly detection system identifies unusual behaviour, it can suggest relevant runbooks for investigation.
+
+== Best Practices
+
+=== Choosing the Right Runbook
+
+[cols="2,3"]
+|===
+|Scenario |Recommended Runbook
+
+|High connection count alert
+|Start with `high_connection_usage_diagnostic` for safe investigation
+
+|Need to terminate connections
+|Use `high_connection_usage` (full version with termination step)
+
+|Queries waiting on locks
+|`blocked_queries`
+
+|Cache hit ratio dropped
+|`low_cache_hit`
+
+|Weekly maintenance window
+|`vacuum_maintenance`
+|===
+
+=== When to Use Auto-Execute
+
+Use auto-execution when:
+
+* You need quick diagnostic information
+* The runbook contains only read-only operations
+* Time is critical during an incident
+* You want to gather baseline information
+
+Use manual step-by-step execution when:
+
+* The runbook contains potentially destructive steps
+* You need to make decisions at each step
+* You want to add notes and observations
+* Training new team members
+
+=== Documenting Findings
+
+During runbook execution:
+
+1. Add notes at each step describing what you observe
+2. Record any anomalies or unexpected results
+3. Note any deviations from the standard procedure
+4. Document the resolution if the issue is fixed
+
+These notes become part of the execution history and help with future investigations.
+
+== API Access
+
+Runbooks can also be managed via the REST API:
+
+[source,bash]
+----
+# List available runbooks
+curl http://localhost:8080/insights/runbooks?instance=default
+
+# Start a runbook execution
+curl -X POST "http://localhost:8080/insights/runbooks/1/start?instance=default"
+
+# Auto-execute a runbook
+curl -X POST "http://localhost:8080/insights/runbooks/1/auto-execute?instance=default"
+
+# View execution details
+curl http://localhost:8080/insights/runbooks/execution/15?instance=default
+
+# Advance to next step
+curl -X POST "http://localhost:8080/insights/runbooks/execution/15/advance?instance=default"
+
+# Cancel execution
+curl -X POST "http://localhost:8080/insights/runbooks/execution/15/cancel?instance=default"
+----
+
+See xref:api-reference:endpoints.adoc#_get_insightsrunbooks[Runbook API Endpoints] for complete documentation.
+
+== Next Steps
+
+* xref:diagnostics.adoc[Advanced Diagnostics] - Other diagnostic tools in pg-console
+* xref:admin-guide:alerting.adoc[Alerting Configuration] - Configure alerts that trigger runbooks
+* xref:api-reference:endpoints.adoc[API Reference] - Programmatic access to runbooks
