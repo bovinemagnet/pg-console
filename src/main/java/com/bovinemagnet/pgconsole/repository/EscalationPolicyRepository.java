@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.EscalationPolicy;
 import com.bovinemagnet.pgconsole.model.EscalationPolicy.EscalationTier;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,6 +24,7 @@ import java.util.Optional;
 public class EscalationPolicyRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     @Inject

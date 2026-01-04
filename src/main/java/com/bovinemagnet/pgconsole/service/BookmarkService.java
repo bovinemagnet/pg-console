@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.QueryBookmark;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -29,6 +30,7 @@ public class BookmarkService {
     private static final Logger LOG = Logger.getLogger(BookmarkService.class);
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     /**

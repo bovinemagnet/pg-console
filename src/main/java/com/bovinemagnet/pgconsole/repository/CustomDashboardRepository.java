@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.CustomDashboard;
 import com.bovinemagnet.pgconsole.model.CustomWidget;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,6 +25,7 @@ import java.util.Optional;
 public class CustomDashboardRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     // ========================================

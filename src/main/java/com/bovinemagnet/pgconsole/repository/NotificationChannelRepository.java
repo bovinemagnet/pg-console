@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.NotificationChannel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,6 +27,7 @@ import java.util.Optional;
 public class NotificationChannelRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     private final ObjectMapper objectMapper = new ObjectMapper();

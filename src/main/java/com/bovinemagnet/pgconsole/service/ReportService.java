@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.OverviewStats;
 import com.bovinemagnet.pgconsole.model.SlowQuery;
 import io.quarkus.mailer.Mail;
@@ -44,6 +45,7 @@ public class ReportService {
     private static final Logger LOG = Logger.getLogger(ReportService.class);
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     @Inject

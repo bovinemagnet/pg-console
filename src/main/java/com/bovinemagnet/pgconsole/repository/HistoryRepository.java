@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
 import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
@@ -24,6 +25,7 @@ import java.util.List;
 public class HistoryRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     /**
