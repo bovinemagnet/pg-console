@@ -316,6 +316,18 @@ public class FeatureToggleService {
     }
 
     /**
+     * Checks if the Database Diff page is enabled.
+     * <p>
+     * Cross-database schema comparison allowing comparison of schemas
+     * across different databases on the same or different instances.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isDatabaseDiffEnabled() {
+        return isEnterpriseSectionEnabled() && dashboardConfig.enterprise().databaseDiffEnabled();
+    }
+
+    /**
      * Checks if the Bookmarks page is enabled.
      *
      * @return true if page is enabled
@@ -601,6 +613,7 @@ public class FeatureToggleService {
             // Enterprise
             case "comparison" -> isComparisonEnabled();
             case "schema-comparison" -> isSchemaComparisonEnabled();
+            case "database-diff" -> isDatabaseDiffEnabled();
             case "bookmarks" -> isBookmarksEnabled();
             case "audit-log" -> isAuditLogEnabled();
             case "schema-docs" -> isSchemaDocsEnabled();
@@ -679,6 +692,7 @@ public class FeatureToggleService {
         // Enterprise pages
         toggles.put("comparison", isComparisonEnabled());
         toggles.put("schemaComparison", isSchemaComparisonEnabled());
+        toggles.put("databaseDiff", isDatabaseDiffEnabled());
         toggles.put("bookmarks", isBookmarksEnabled());
         toggles.put("auditLog", isAuditLogEnabled());
         toggles.put("schemaDocs", isSchemaDocsEnabled());

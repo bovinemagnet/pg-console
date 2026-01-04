@@ -990,6 +990,406 @@ public class SchemaExtractorService {
     }
 
     /**
+     * Gets list of available schemas using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @return list of schema names
+     * @throws SQLException if query fails
+     */
+    public List<String> getSchemas(Connection conn) throws SQLException {
+        String sql = """
+            SELECT nspname
+            FROM pg_namespace
+            WHERE nspname NOT LIKE 'pg_%'
+              AND nspname != 'information_schema'
+            ORDER BY nspname
+            """;
+
+        List<String> schemas = new ArrayList<>();
+
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                schemas.add(rs.getString("nspname"));
+            }
+        }
+
+        return schemas;
+    }
+
+    /**
+     * Extracts all tables from a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema to extract from
+     * @return list of table definitions
+     * @throws SQLException if query fails
+     */
+    public List<TableSchema> extractTables(Connection conn, String schemaName) throws SQLException {
+        String sql = """
+            SELECT c.relname AS table_name,
+                   pg_get_userbyid(c.relowner) AS owner,
+                   d.description AS comment,
+                   c.relispartition AS is_partition,
+                   c.relhassubclass AS has_subclass,
+                   c.relrowsecurity AS row_security,
+                   pg_get_partkeydef(c.oid) AS partition_key
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_description d ON d.objoid = c.oid AND d.objsubid = 0
+            WHERE n.nspname = ? AND c.relkind IN ('r', 'p')
+            ORDER BY c.relname
+            """;
+
+        List<TableSchema> tables = new ArrayList<>();
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, schemaName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    TableSchema table = new TableSchema();
+                    table.setSchemaName(schemaName);
+                    table.setTableName(rs.getString("table_name"));
+                    table.setOwner(rs.getString("owner"));
+                    table.setComment(rs.getString("comment"));
+                    table.setPartition(rs.getBoolean("is_partition"));
+                    table.setPartitionKey(rs.getString("partition_key"));
+
+                    // Extract related objects
+                    table.setColumns(extractColumns(conn, schemaName, table.getTableName()));
+                    table.setPrimaryKey(extractPrimaryKey(conn, schemaName, table.getTableName()));
+                    table.setForeignKeys(extractForeignKeys(conn, schemaName, table.getTableName()));
+                    table.setUniqueConstraints(extractUniqueConstraints(conn, schemaName, table.getTableName()));
+                    table.setCheckConstraints(extractCheckConstraints(conn, schemaName, table.getTableName()));
+                    table.setIndexes(extractIndexes(conn, schemaName, table.getTableName()));
+                    table.setTriggers(extractTableTriggers(conn, schemaName, table.getTableName()));
+
+                    tables.add(table);
+                }
+            }
+        }
+
+        return tables;
+    }
+
+    /**
+     * Extracts all views from a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema to extract from
+     * @return list of view definitions
+     * @throws SQLException if query fails
+     */
+    public List<ViewSchema> extractViews(Connection conn, String schemaName) throws SQLException {
+        String sql = """
+            SELECT c.relname AS view_name,
+                   pg_get_viewdef(c.oid, true) AS definition,
+                   c.relkind = 'm' AS is_materialised,
+                   pg_get_userbyid(c.relowner) AS owner,
+                   d.description AS comment
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_description d ON d.objoid = c.oid AND d.objsubid = 0
+            WHERE n.nspname = ? AND c.relkind IN ('v', 'm')
+            ORDER BY c.relname
+            """;
+
+        List<ViewSchema> views = new ArrayList<>();
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, schemaName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    ViewSchema view = ViewSchema.builder()
+                            .schemaName(schemaName)
+                            .viewName(rs.getString("view_name"))
+                            .definition(rs.getString("definition"))
+                            .materialised(rs.getBoolean("is_materialised"))
+                            .owner(rs.getString("owner"))
+                            .comment(rs.getString("comment"))
+                            .build();
+
+                    // Extract columns for the view
+                    view.setViewColumns(extractViewColumns(conn, schemaName, view.getViewName()));
+
+                    // For materialised views, extract indexes
+                    if (view.isMaterialised()) {
+                        view.setIndexes(extractMaterialisedViewIndexes(conn, schemaName, view.getViewName()));
+                    }
+
+                    views.add(view);
+                }
+            }
+        }
+
+        return views;
+    }
+
+    /**
+     * Extracts all functions and procedures from a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema to extract from
+     * @return list of function definitions
+     * @throws SQLException if query fails
+     */
+    public List<FunctionSchema> extractFunctions(Connection conn, String schemaName) throws SQLException {
+        String sql = """
+            SELECT p.proname AS function_name,
+                   pg_get_function_identity_arguments(p.oid) AS arguments,
+                   pg_get_functiondef(p.oid) AS definition,
+                   pg_get_function_result(p.oid) AS return_type,
+                   l.lanname AS language,
+                   p.prokind AS kind,
+                   p.provolatile AS volatility,
+                   p.proisstrict AS is_strict,
+                   p.prosecdef AS security_definer,
+                   pg_get_userbyid(p.proowner) AS owner,
+                   d.description AS comment
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            JOIN pg_language l ON l.oid = p.prolang
+            LEFT JOIN pg_description d ON d.objoid = p.oid
+            WHERE n.nspname = ? AND p.prokind IN ('f', 'p', 'a', 'w')
+            ORDER BY p.proname, pg_get_function_identity_arguments(p.oid)
+            """;
+
+        List<FunctionSchema> functions = new ArrayList<>();
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, schemaName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    FunctionSchema func = FunctionSchema.builder()
+                            .schemaName(schemaName)
+                            .functionName(rs.getString("function_name"))
+                            .arguments(rs.getString("arguments"))
+                            .definition(rs.getString("definition"))
+                            .returnType(rs.getString("return_type"))
+                            .language(rs.getString("language"))
+                            .kind(parseCallableKind(rs.getString("kind")))
+                            .volatility(parseVolatility(rs.getString("volatility")))
+                            .strict(rs.getBoolean("is_strict"))
+                            .securityDefiner(rs.getBoolean("security_definer"))
+                            .owner(rs.getString("owner"))
+                            .comment(rs.getString("comment"))
+                            .build();
+                    functions.add(func);
+                }
+            }
+        }
+
+        return functions;
+    }
+
+    /**
+     * Extracts all sequences from a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema to extract from
+     * @return list of sequence definitions
+     * @throws SQLException if query fails
+     */
+    public List<SequenceSchema> extractSequences(Connection conn, String schemaName) throws SQLException {
+        String sql = """
+            SELECT c.relname AS sequence_name,
+                   s.seqstart AS start_value,
+                   s.seqincrement AS increment,
+                   s.seqmin AS min_value,
+                   s.seqmax AS max_value,
+                   s.seqcache AS cache_size,
+                   s.seqcycle AS is_cycle,
+                   pg_get_userbyid(c.relowner) AS owner,
+                   d.description AS comment,
+                   pg_catalog.format_type(s.seqtypid, NULL) AS data_type
+            FROM pg_sequence s
+            JOIN pg_class c ON c.oid = s.seqrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_description d ON d.objoid = c.oid AND d.objsubid = 0
+            WHERE n.nspname = ?
+            ORDER BY c.relname
+            """;
+
+        List<SequenceSchema> sequences = new ArrayList<>();
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, schemaName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    SequenceSchema seq = SequenceSchema.builder()
+                            .schemaName(schemaName)
+                            .sequenceName(rs.getString("sequence_name"))
+                            .startValue(rs.getLong("start_value"))
+                            .increment(rs.getLong("increment"))
+                            .minValue(rs.getLong("min_value"))
+                            .maxValue(rs.getLong("max_value"))
+                            .cacheSize(rs.getLong("cache_size"))
+                            .cycle(rs.getBoolean("is_cycle"))
+                            .owner(rs.getString("owner"))
+                            .comment(rs.getString("comment"))
+                            .dataType(rs.getString("data_type"))
+                            .build();
+
+                    // Check if sequence is owned by a column (serial/identity)
+                    String owned = getSequenceOwner(conn, schemaName, seq.getSequenceName());
+                    if (owned != null && owned.contains(".")) {
+                        String[] parts = owned.split("\\.", 2);
+                        seq.setOwnedBy(parts[0], parts[1]);
+                    }
+
+                    sequences.add(seq);
+                }
+            }
+        }
+
+        return sequences;
+    }
+
+    /**
+     * Extracts all custom types from a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema to extract from
+     * @return list of type definitions
+     * @throws SQLException if query fails
+     */
+    public List<TypeSchema> extractTypes(Connection conn, String schemaName) throws SQLException {
+        List<TypeSchema> types = new ArrayList<>();
+        types.addAll(extractEnumTypes(conn, schemaName));
+        types.addAll(extractCompositeTypes(conn, schemaName));
+        types.addAll(extractDomainTypes(conn, schemaName));
+        types.addAll(extractRangeTypes(conn, schemaName));
+        return types;
+    }
+
+    /**
+     * Extracts all extensions from a database using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @return map of extension names to versions
+     * @throws SQLException if query fails
+     */
+    public Map<String, String> extractExtensions(Connection conn) throws SQLException {
+        String sql = """
+            SELECT e.extname AS name,
+                   e.extversion AS version
+            FROM pg_extension e
+            ORDER BY e.extname
+            """;
+
+        Map<String, String> extensions = new LinkedHashMap<>();
+
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                extensions.put(rs.getString("name"), rs.getString("version"));
+            }
+        }
+
+        return extensions;
+    }
+
+    /**
+     * Gets summary statistics for a schema using a provided connection.
+     * <p>
+     * Used for cross-database comparisons where a custom connection is needed.
+     *
+     * @param conn database connection
+     * @param schemaName schema name
+     * @return map of object type to count
+     * @throws SQLException if query fails
+     */
+    public Map<String, Integer> getSchemaSummary(Connection conn, String schemaName) throws SQLException {
+        Map<String, Integer> summary = new LinkedHashMap<>();
+
+        String sql = """
+            SELECT
+                COUNT(*) FILTER (WHERE c.relkind IN ('r', 'p')) AS tables,
+                COUNT(*) FILTER (WHERE c.relkind = 'v') AS views,
+                COUNT(*) FILTER (WHERE c.relkind = 'm') AS matviews,
+                COUNT(*) FILTER (WHERE c.relkind = 'S') AS sequences,
+                COUNT(*) FILTER (WHERE c.relkind = 'i') AS indexes
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = ?
+            """;
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, schemaName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    summary.put("Tables", rs.getInt("tables"));
+                    summary.put("Views", rs.getInt("views"));
+                    summary.put("Materialised Views", rs.getInt("matviews"));
+                    summary.put("Sequences", rs.getInt("sequences"));
+                    summary.put("Indexes", rs.getInt("indexes"));
+                }
+            }
+        }
+
+        // Count functions separately
+        String funcSql = """
+            SELECT COUNT(*) AS count
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = ?
+            """;
+
+        try (PreparedStatement funcStmt = conn.prepareStatement(funcSql)) {
+            funcStmt.setString(1, schemaName);
+            try (ResultSet rs = funcStmt.executeQuery()) {
+                if (rs.next()) {
+                    summary.put("Functions", rs.getInt("count"));
+                }
+            }
+        }
+
+        // Count types separately
+        String typeSql = """
+            SELECT COUNT(*) AS count
+            FROM pg_type t
+            JOIN pg_namespace n ON t.typnamespace = n.oid
+            WHERE n.nspname = ? AND t.typtype IN ('e', 'c', 'd')
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_class c
+                  WHERE c.reltype = t.oid AND c.relkind IN ('r', 'v', 'm', 'f', 'p')
+              )
+            """;
+
+        try (PreparedStatement typeStmt = conn.prepareStatement(typeSql)) {
+            typeStmt.setString(1, schemaName);
+            try (ResultSet rs = typeStmt.executeQuery()) {
+                if (rs.next()) {
+                    summary.put("Types", rs.getInt("count"));
+                }
+            }
+        }
+
+        return summary;
+    }
+
+    /**
      * Gets summary statistics for a schema.
      *
      * @param instanceName database instance

@@ -405,6 +405,7 @@ pg-console.dashboards.data-control.partitions=${PG_CONSOLE_DASH_PARTITIONS:true}
 ----
 export PG_CONSOLE_DASH_COMPARISON=true          # Instance comparison
 export PG_CONSOLE_DASH_SCHEMA_COMPARISON=true   # Schema comparison
+export PG_CONSOLE_DASH_DATABASE_DIFF=true       # Database diff (cross-database schema comparison)
 export PG_CONSOLE_DASH_BOOKMARKS=true           # Saved queries/views
 export PG_CONSOLE_DASH_AUDIT_LOG=true           # Audit logging
 ----
@@ -413,6 +414,7 @@ export PG_CONSOLE_DASH_AUDIT_LOG=true           # Audit logging
 ----
 pg-console.dashboards.enterprise.comparison=${PG_CONSOLE_DASH_COMPARISON:true}
 pg-console.dashboards.enterprise.schema-comparison=${PG_CONSOLE_DASH_SCHEMA_COMPARISON:true}
+pg-console.dashboards.enterprise.database-diff=${PG_CONSOLE_DASH_DATABASE_DIFF:true}
 pg-console.dashboards.enterprise.bookmarks=${PG_CONSOLE_DASH_BOOKMARKS:true}
 pg-console.dashboards.enterprise.audit-log=${PG_CONSOLE_DASH_AUDIT_LOG:true}
 ----

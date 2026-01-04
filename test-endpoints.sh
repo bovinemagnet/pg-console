@@ -116,6 +116,20 @@ test_endpoint "/schema-comparison/schemas?instance=${INSTANCE}"
 test_endpoint "/schema-comparison/schema-summary?instance=${INSTANCE}"
 
 echo ""
+echo -e "${YELLOW}=== Database Diff (Phase 25) ===${NC}"
+test_endpoint "/database-diff?instance=${INSTANCE}"
+test_endpoint "/database-diff/databases?instance=${INSTANCE}"
+test_endpoint "/database-diff/schemas?instance=${INSTANCE}&database=postgres"
+test_endpoint "/database-diff/schema-summary?instance=${INSTANCE}&database=postgres&schema=public"
+
+echo ""
+echo -e "${YELLOW}=== Database Diff Export ===${NC}"
+# Note: These require valid database params to generate actual content
+test_endpoint "/database-diff/export/html?sourceInstance=${INSTANCE}&sourceDatabase=postgres&sourceSchema=public&destInstance=${INSTANCE}&destDatabase=postgres&destSchema=public"
+test_endpoint "/database-diff/export/markdown?sourceInstance=${INSTANCE}&sourceDatabase=postgres&sourceSchema=public&destInstance=${INSTANCE}&destDatabase=postgres&destSchema=public"
+test_endpoint "/database-diff/export/pdf?sourceInstance=${INSTANCE}&sourceDatabase=postgres&sourceSchema=public&destInstance=${INSTANCE}&destDatabase=postgres&destSchema=public"
+
+echo ""
 echo -e "${YELLOW}=== Security Section ===${NC}"
 test_endpoint "/security?instance=${INSTANCE}"
 test_endpoint "/security/roles?instance=${INSTANCE}"

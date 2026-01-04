@@ -1,0 +1,325 @@
+{#include base}
+{#title}Database Diff - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-database-gear me-2"></i>Database Diff</h1>
+        <p class="text-muted">Compare schemas across different databases within the same or different PostgreSQL instances</p>
+    </div>
+</div>
+
+{#if error??}
+<div class="alert alert-danger" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{error}
+</div>
+{/if}
+
+<!-- Comparison Form -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-diff me-2"></i>Cross-Database Comparison</h5>
+            </div>
+            <div class="card-body">
+                <form action="/database-diff/compare" method="post" id="diffForm">
+                    <div class="row g-3">
+                        <!-- Source Side -->
+                        <div class="col-md-6">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-database me-2"></i>Source</h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Source Instance -->
+                                    <div class="mb-3">
+                                        <label for="sourceInstance" class="form-label">Instance</label>
+                                        <select class="form-select" id="sourceInstance" name="sourceInstance" required
+                                                hx-get="/database-diff/databases"
+                                                hx-target="#sourceDatabaseContainer"
+                                                hx-trigger="change"
+                                                hx-vals='{"side": "source"}'>
+                                            {#for inst in instances}
+                                            <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+
+                                    <!-- Source Database -->
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label for="sourceDatabase" class="form-label mb-0">Database</label>
+                                            <button type="button" class="btn btn-sm btn-link p-0"
+                                                    onclick="toggleManualEntry('source')"
+                                                    title="Toggle manual entry">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                        </div>
+                                        <div id="sourceDatabaseContainer">
+                                            <select class="form-select" id="sourceDatabaseSelect" name="sourceDatabase" required
+                                                    hx-get="/database-diff/schemas"
+                                                    hx-target="#sourceSchemaContainer"
+                                                    hx-trigger="change"
+                                                    hx-vals='{"side": "source"}'
+                                                    hx-include="#sourceInstance">
+                                                {#for db in databases}
+                                                <option value="{db}" {#if db == currentDatabase}selected{/if}>{db}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                        <input type="text" class="form-control d-none" id="sourceDatabaseManual"
+                                               placeholder="Enter database name"
+                                               hx-get="/database-diff/schemas"
+                                               hx-target="#sourceSchemaContainer"
+                                               hx-trigger="change changed delay:500ms"
+                                               hx-vals='{"side": "source"}'
+                                               hx-include="#sourceInstance">
+                                    </div>
+
+                                    <!-- Source Schema -->
+                                    <div class="mb-0">
+                                        <label for="sourceSchema" class="form-label">Schema</label>
+                                        <div id="sourceSchemaContainer">
+                                            <select class="form-select" id="sourceSchemaSelect" name="sourceSchema" required
+                                                    hx-get="/database-diff/schema-summary"
+                                                    hx-target="#sourceSummary"
+                                                    hx-trigger="change"
+                                                    hx-include="#sourceInstance, #sourceDatabaseSelect">
+                                                {#for schema in schemas}
+                                                <option value="{schema}" {#if schema == 'public'}selected{/if}>{schema}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="sourceSummary" class="mt-2"
+                                         hx-get="/database-diff/schema-summary?instance={currentInstance}&database={currentDatabase}&schema=public&side=source"
+                                         hx-trigger="load"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Destination Side -->
+                        <div class="col-md-6">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-database-check me-2"></i>Destination</h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Destination Instance -->
+                                    <div class="mb-3">
+                                        <label for="destInstance" class="form-label">Instance</label>
+                                        <select class="form-select" id="destInstance" name="destInstance" required
+                                                hx-get="/database-diff/databases"
+                                                hx-target="#destDatabaseContainer"
+                                                hx-trigger="change"
+                                                hx-vals='{"side": "dest"}'>
+                                            {#for inst in instances}
+                                            <option value="{inst}">{inst}</option>
+                                            {/for}
+                                        </select>
+                                    </div>
+
+                                    <!-- Destination Database -->
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label for="destDatabase" class="form-label mb-0">Database</label>
+                                            <button type="button" class="btn btn-sm btn-link p-0"
+                                                    onclick="toggleManualEntry('dest')"
+                                                    title="Toggle manual entry">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                        </div>
+                                        <div id="destDatabaseContainer">
+                                            <select class="form-select" id="destDatabaseSelect" name="destDatabase" required
+                                                    hx-get="/database-diff/schemas"
+                                                    hx-target="#destSchemaContainer"
+                                                    hx-trigger="change"
+                                                    hx-vals='{"side": "dest"}'
+                                                    hx-include="#destInstance">
+                                                {#for db in databases}
+                                                <option value="{db}">{db}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                        <input type="text" class="form-control d-none" id="destDatabaseManual"
+                                               placeholder="Enter database name"
+                                               hx-get="/database-diff/schemas"
+                                               hx-target="#destSchemaContainer"
+                                               hx-trigger="change changed delay:500ms"
+                                               hx-vals='{"side": "dest"}'
+                                               hx-include="#destInstance">
+                                    </div>
+
+                                    <!-- Destination Schema -->
+                                    <div class="mb-0">
+                                        <label for="destSchema" class="form-label">Schema</label>
+                                        <div id="destSchemaContainer">
+                                            <select class="form-select" id="destSchemaSelect" name="destSchema" required
+                                                    hx-get="/database-diff/schema-summary"
+                                                    hx-target="#destSummary"
+                                                    hx-trigger="change"
+                                                    hx-include="#destInstance, #destDatabaseSelect">
+                                                {#for schema in schemas}
+                                                <option value="{schema}" {#if schema == 'public'}selected{/if}>{schema}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="destSummary" class="mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Options -->
+                    <div class="row mt-4">
+                        <div class="col">
+                            <div class="card bg-body-tertiary">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Filter Options</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label for="filterPreset" class="form-label">Filter Preset</label>
+                                            <select class="form-select" id="filterPreset" name="filterPreset">
+                                                <option value="">No preset</option>
+                                                {#for preset in filterPresets}
+                                                <option value="{preset.name()}">{preset.displayName}</option>
+                                                {/for}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <label for="excludePatterns" class="form-label">Exclude Patterns (one per line)</label>
+                                            <textarea class="form-control" id="excludePatterns" name="excludePatterns" rows="2"
+                                                      placeholder="temp_*&#10;*_backup"></textarea>
+                                            <div class="form-text">Use * for wildcards</div>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label">Include Object Types</label>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTables" id="includeTables" value="true" checked>
+                                                <label class="form-check-label" for="includeTables">Tables</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeViews" id="includeViews" value="true" checked>
+                                                <label class="form-check-label" for="includeViews">Views</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeFunctions" id="includeFunctions" value="true" checked>
+                                                <label class="form-check-label" for="includeFunctions">Functions</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeSequences" id="includeSequences" value="true" checked>
+                                                <label class="form-check-label" for="includeSequences">Sequences</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTypes" id="includeTypes" value="true" checked>
+                                                <label class="form-check-label" for="includeTypes">Types</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeExtensions" id="includeExtensions" value="true">
+                                                <label class="form-check-label" for="includeExtensions">Extensions</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeIndexes" id="includeIndexes" value="true" checked>
+                                                <label class="form-check-label" for="includeIndexes">Indexes</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeTriggers" id="includeTriggers" value="true" checked>
+                                                <label class="form-check-label" for="includeTriggers">Triggers</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="includeConstraints" id="includeConstraints" value="true" checked>
+                                                <label class="form-check-label" for="includeConstraints">Constraints</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col text-end">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-play-fill me-2"></i>Compare Databases
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+function toggleManualEntry(side) {
+    const container = document.getElementById(side + 'DatabaseContainer');
+    const selectEl = document.getElementById(side + 'DatabaseSelect');
+    const manualEl = document.getElementById(side + 'DatabaseManual');
+
+    if (selectEl && manualEl) {
+        const isManualMode = manualEl.classList.contains('d-none');
+
+        if (isManualMode) {
+            // Switch to manual entry
+            selectEl.classList.add('d-none');
+            selectEl.removeAttribute('name');
+            manualEl.classList.remove('d-none');
+            manualEl.setAttribute('name', side + 'Database');
+            manualEl.focus();
+        } else {
+            // Switch back to dropdown
+            manualEl.classList.add('d-none');
+            manualEl.removeAttribute('name');
+            selectEl.classList.remove('d-none');
+            selectEl.setAttribute('name', side + 'Database');
+        }
+    }
+}
+
+// Update form to include manual database value before submit
+document.getElementById('diffForm')?.addEventListener('submit', function(e) {
+    // Ensure database names are correctly set from either dropdown or manual input
+    ['source', 'dest'].forEach(side => {
+        const selectEl = document.getElementById(side + 'DatabaseSelect');
+        const manualEl = document.getElementById(side + 'DatabaseManual');
+
+        if (manualEl && !manualEl.classList.contains('d-none') && manualEl.value) {
+            // Manual mode is active, ensure name attribute is set
+            manualEl.setAttribute('name', side + 'Database');
+            if (selectEl) selectEl.removeAttribute('name');
+        }
+    });
+});
+</script>
+
+{/include}
