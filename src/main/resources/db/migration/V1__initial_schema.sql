@@ -690,11 +690,14 @@ CREATE TABLE IF NOT EXISTS pgconsole.runbook (
     created_by TEXT,
 
     -- Estimated duration
-    estimated_duration_minutes INT
+    estimated_duration_minutes INT,
+
+    -- Auto-execution capability
+    auto_executable BOOLEAN DEFAULT FALSE
 );
 
 -- Insert default runbooks
-INSERT INTO pgconsole.runbook (name, title, description, category, trigger_type, trigger_conditions, steps, estimated_duration_minutes)
+INSERT INTO pgconsole.runbook (name, title, description, category, trigger_type, trigger_conditions, steps, estimated_duration_minutes, auto_executable)
 VALUES
     ('high_connection_usage', 'High Connection Usage Response', 'Steps to diagnose and resolve high connection usage', 'INCIDENT', 'ALERT',
      '{"alert_type": "CONNECTION_THRESHOLD", "severity": ["CRITICAL", "HIGH"]}',
@@ -704,7 +707,18 @@ VALUES
          {"order": 3, "title": "Check for Idle Connections", "description": "Identify idle-in-transaction connections", "action_type": "QUERY", "action": "SELECT * FROM pg_stat_activity WHERE state = ''idle in transaction'' AND now() - xact_start > interval ''5 minutes''", "auto_execute": true},
          {"order": 4, "title": "Consider Connection Pooling", "description": "If connections are legitimately high, consider adding PgBouncer", "action_type": "DOCUMENTATION", "action": "https://www.pgbouncer.org/", "auto_execute": false},
          {"order": 5, "title": "Terminate Idle Connections", "description": "If necessary, terminate long-idle connections", "action_type": "SQL_TEMPLATE", "action": "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = ''idle'' AND now() - state_change > interval ''30 minutes''", "auto_execute": false, "requires_confirmation": true}
-     ]', 15),
+     ]', 15, FALSE),
+
+    ('high_connection_usage_diagnostic', 'High Connection Usage Diagnostic',
+     'Diagnostic investigation of high connection usage. This read-only runbook gathers connection data without terminating any connections. Use the full high_connection_usage runbook if connection termination is needed.',
+     'INCIDENT', 'ALERT',
+     '{"alert_type": "CONNECTION_THRESHOLD", "severity": ["CRITICAL", "HIGH"]}',
+     '[
+         {"order": 1, "title": "Check Connection Count", "description": "View current active connections and their states", "action_type": "NAVIGATE", "action": "/activity", "expected_outcome": "Review the number of active, idle, and idle-in-transaction connections", "auto_execute": true},
+         {"order": 2, "title": "Identify Long-Running Queries", "description": "Look for queries running longer than expected that may be holding connections", "action_type": "NAVIGATE", "action": "/slow-queries?sort=duration", "expected_outcome": "Identify any unusually long-running queries that should be investigated", "auto_execute": true},
+         {"order": 3, "title": "Check for Idle-in-Transaction Connections", "description": "Identify connections stuck in idle-in-transaction state for over 5 minutes", "action_type": "QUERY", "action": "SELECT pid, usename, application_name, client_addr, state, now() - xact_start AS transaction_duration, now() - query_start AS query_duration, LEFT(query, 100) AS query_preview FROM pg_stat_activity WHERE state = ''idle in transaction'' AND now() - xact_start > interval ''5 minutes'' ORDER BY xact_start", "expected_outcome": "List of connections that have been idle in transaction for too long - these may need attention", "auto_execute": true},
+         {"order": 4, "title": "Check Connection Distribution by Application", "description": "See which applications are using the most connections", "action_type": "QUERY", "action": "SELECT application_name, state, COUNT(*) as connection_count, COUNT(*) FILTER (WHERE state = ''active'') as active, COUNT(*) FILTER (WHERE state = ''idle'') as idle, COUNT(*) FILTER (WHERE state = ''idle in transaction'') as idle_in_txn FROM pg_stat_activity WHERE backend_type = ''client backend'' GROUP BY application_name, state ORDER BY connection_count DESC", "expected_outcome": "Identify which applications are consuming the most connections and their states", "auto_execute": true}
+     ]', 5, TRUE),
 
     ('blocked_queries', 'Blocked Queries Investigation', 'Diagnose and resolve query blocking issues', 'TROUBLESHOOTING', 'ALERT',
      '{"alert_type": "BLOCKED_QUERIES", "min_count": 1}',
@@ -713,7 +727,7 @@ VALUES
          {"order": 2, "title": "Identify Root Blocker", "description": "Find the query at the top of the blocking chain", "action_type": "QUERY", "action": "SELECT * FROM pg_stat_activity WHERE pid IN (SELECT DISTINCT blocking_pid FROM pg_locks WHERE granted = false)", "auto_execute": true},
          {"order": 3, "title": "Assess Blocker Query", "description": "Determine if the blocking query can be safely terminated", "action_type": "MANUAL", "action": "Review the blocking query and determine appropriate action", "auto_execute": false},
          {"order": 4, "title": "Terminate if Necessary", "description": "Cancel or terminate the blocking query", "action_type": "SQL_TEMPLATE", "action": "SELECT pg_cancel_backend({pid})", "auto_execute": false, "requires_confirmation": true}
-     ]', 10),
+     ]', 10, FALSE),
 
     ('low_cache_hit', 'Low Cache Hit Ratio Investigation', 'Diagnose poor cache hit ratio', 'TROUBLESHOOTING', 'ALERT',
      '{"alert_type": "CACHE_HIT_RATIO", "threshold": 0.90}',
@@ -722,7 +736,7 @@ VALUES
          {"order": 2, "title": "Check shared_buffers Setting", "description": "Review current shared_buffers configuration", "action_type": "QUERY", "action": "SHOW shared_buffers", "auto_execute": true},
          {"order": 3, "title": "Identify Tables with Poor Cache Usage", "description": "Find tables with low cache hit rates", "action_type": "QUERY", "action": "SELECT schemaname, relname, heap_blks_hit, heap_blks_read, CASE WHEN heap_blks_hit + heap_blks_read > 0 THEN round(heap_blks_hit::numeric / (heap_blks_hit + heap_blks_read) * 100, 2) ELSE 0 END as hit_ratio FROM pg_statio_user_tables ORDER BY heap_blks_read DESC LIMIT 20", "auto_execute": true},
          {"order": 4, "title": "Consider Increasing shared_buffers", "description": "If memory is available, consider increasing shared_buffers", "action_type": "DOCUMENTATION", "action": "Recommended: 25% of system RAM for dedicated database servers", "auto_execute": false}
-     ]', 20),
+     ]', 20, TRUE),
 
     ('vacuum_maintenance', 'Regular Vacuum Maintenance', 'Perform routine vacuum maintenance', 'MAINTENANCE', 'SCHEDULED',
      '{"schedule": "0 3 * * 0"}',
@@ -730,7 +744,7 @@ VALUES
          {"order": 1, "title": "Check Tables Needing Vacuum", "description": "Identify tables with high dead tuple counts", "action_type": "NAVIGATE", "action": "/table-maintenance", "auto_execute": true},
          {"order": 2, "title": "Review Autovacuum Settings", "description": "Check current autovacuum configuration", "action_type": "QUERY", "action": "SELECT name, setting FROM pg_settings WHERE name LIKE ''autovacuum%''", "auto_execute": true},
          {"order": 3, "title": "Run VACUUM ANALYZE on Priority Tables", "description": "Vacuum tables with highest dead tuple ratios first", "action_type": "SQL_TEMPLATE", "action": "VACUUM ANALYZE {table_name}", "auto_execute": false}
-     ]', 30)
+     ]', 30, TRUE)
 ON CONFLICT (name) DO NOTHING;
 
 -- Runbook execution history
@@ -738,6 +752,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.runbook_execution (
     id BIGSERIAL PRIMARY KEY,
     runbook_id BIGINT NOT NULL REFERENCES pgconsole.runbook(id),
     instance_id TEXT NOT NULL,
+
+    -- Database scope (NULL means instance-wide)
+    database_name TEXT,
 
     -- Execution details
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -761,6 +778,8 @@ CREATE INDEX idx_runbook_execution_instance
     ON pgconsole.runbook_execution(instance_id, started_at DESC);
 CREATE INDEX idx_runbook_execution_status
     ON pgconsole.runbook_execution(status) WHERE status = 'IN_PROGRESS';
+CREATE INDEX idx_runbook_execution_database
+    ON pgconsole.runbook_execution(database_name) WHERE database_name IS NOT NULL;
 
 -- ============================================================================
 -- SCHEDULED MAINTENANCE AUTOMATION TABLES
@@ -1695,6 +1714,11 @@ COMMENT ON COLUMN pgconsole.runbook.estimated_duration_minutes IS
 'Expected time to complete this runbook. '
 'Helps operators plan and prioritise during incidents.';
 
+COMMENT ON COLUMN pgconsole.runbook.auto_executable IS
+'Whether this runbook can be auto-executed without user intervention. '
+'Only enable for runbooks with non-destructive operations (e.g., VACUUM, ANALYSE, read-only queries). '
+'Runbooks with destructive steps like pg_terminate_backend should have this set to FALSE.';
+
 COMMENT ON TABLE pgconsole.runbook_execution IS
 'Tracks individual runbook executions from start to completion. '
 'Records which steps were executed, their results, and overall status. '
@@ -1717,6 +1741,11 @@ COMMENT ON COLUMN pgconsole.runbook_execution.step_results IS
 'JSONB array of results from each completed step. '
 '[{"step": 1, "completed_at": "2025-01-01T10:00:00Z", "result": "23 active connections found"}]. '
 'Provides execution history and context for subsequent steps.';
+
+COMMENT ON COLUMN pgconsole.runbook_execution.database_name IS
+'The specific database this runbook execution applies to. '
+'NULL means all databases (instance-wide). '
+'Useful for scoping diagnostics to a particular database (e.g., connection analysis, query performance).';
 
 -- ============================================================================
 -- SCHEDULED MAINTENANCE AUTOMATION DOCUMENTATION

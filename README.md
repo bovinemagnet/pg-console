@@ -136,6 +136,10 @@ export POSTGRES_PASSWORD=your-password
 | `QUARKUS_MAILER_FROM` | Email sender address for reports | (required if reports enabled) |
 | `QUARKUS_MAILER_HOST` | SMTP server host | `localhost` |
 | `QUARKUS_MAILER_PORT` | SMTP server port | `25` |
+| `PG_CONSOLE_METADATA_DATASOURCE` | Datasource for pgconsole metadata (empty=default, "metadata"=dedicated, or instance name) | (default datasource) |
+| `PG_CONSOLE_METADATA_URL` | JDBC URL for dedicated metadata database | (none) |
+| `PG_CONSOLE_METADATA_USER` | Username for metadata database | (none) |
+| `PG_CONSOLE_METADATA_PASSWORD` | Password for metadata database | (none) |
 
 ### Database Filter
 
@@ -173,7 +177,58 @@ export PG_CONSOLE_HISTORY_INTERVAL=30
 export PG_CONSOLE_HISTORY_RETENTION=14
 ```
 
-History data is stored in a `pgconsole` schema created automatically via Flyway migrations.
+History data is stored in a `pgconsole` schema created automatically via Flyway migrations. By default, this schema is created in the monitored database, but it can be stored separately using the metadata datasource configuration (see below).
+
+### Metadata Datasource Separation
+
+By default, pg-console stores its metadata (history, bookmarks, audit logs) in the same database being monitored. For production environments, you may want to store metadata separately to:
+
+- Enable **read-only monitoring** of production databases
+- Centralise metadata storage for multi-instance deployments
+- Keep the monitored database clean of pgconsole schema
+
+#### Configuration Options
+
+**Option 1: Default (Backwards Compatible)**
+
+Leave `PG_CONSOLE_METADATA_DATASOURCE` unset. Metadata is stored in the monitored database.
+
+**Option 2: Dedicated Metadata Database**
+
+```bash
+# Configure monitored instance (can be read-only)
+export POSTGRES_URL=jdbc:postgresql://prod-db:5432/postgres
+export POSTGRES_USER=readonly_monitor
+export POSTGRES_PASSWORD=secure_password
+
+# Configure dedicated metadata database
+export PG_CONSOLE_METADATA_DATASOURCE=metadata
+export PG_CONSOLE_METADATA_URL=jdbc:postgresql://control-db:5432/pgconsole
+export PG_CONSOLE_METADATA_USER=pgconsole_admin
+export PG_CONSOLE_METADATA_PASSWORD=metadata_password
+```
+
+**Option 3: Use Another Instance's Datasource**
+
+```bash
+# Monitor multiple instances
+export PG_CONSOLE_INSTANCES=production,staging
+
+# Store metadata in the staging instance
+export PG_CONSOLE_METADATA_DATASOURCE=staging
+```
+
+#### Initialising the Schema
+
+When using a dedicated metadata database, initialise the schema using the CLI:
+
+```bash
+# Initialise schema on metadata database
+java -jar pg-console.jar init-schema --metadata
+
+# Dry-run to see what migrations would run
+java -jar pg-console.jar init-schema --metadata --dry-run
+```
 
 ### Multi-Instance Configuration
 
