@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.AuditLog;
 import com.bovinemagnet.pgconsole.model.AuditLog.Action;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -34,6 +35,7 @@ public class AuditService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     /**

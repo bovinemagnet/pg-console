@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.ComparisonFilter;
 import com.bovinemagnet.pgconsole.model.ComparisonProfile;
 import com.bovinemagnet.pgconsole.model.SchemaComparisonResult;
@@ -31,6 +32,7 @@ public class ComparisonProfileRepository {
     private static final Logger LOG = Logger.getLogger(ComparisonProfileRepository.class);
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     private final ObjectMapper objectMapper = new ObjectMapper();

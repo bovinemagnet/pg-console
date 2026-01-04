@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.ComparisonHistory;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -28,6 +29,7 @@ public class ComparisonHistoryRepository {
     private static final Logger LOG = Logger.getLogger(ComparisonHistoryRepository.class);
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     /**

@@ -1,6 +1,7 @@
 package com.bovinemagnet.pgconsole.cli;
 
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
+import com.bovinemagnet.pgconsole.service.MetadataDataSourceProvider;
 import jakarta.inject.Inject;
 import org.flywaydb.core.Flyway;
 import picocli.CommandLine.Command;
@@ -17,6 +18,12 @@ import java.sql.Statement;
  * Creates the required database schema and tables for storing
  * historical metrics data. Uses Flyway migrations to ensure
  * the schema is up to date.
+ * <p>
+ * The schema can be initialised on either:
+ * <ul>
+ *   <li>A specific PostgreSQL instance (default behaviour)</li>
+ *   <li>The dedicated metadata database (when --metadata flag is used)</li>
+ * </ul>
  *
  * @author Paul Snow
  * @version 0.0.0
@@ -29,8 +36,12 @@ import java.sql.Statement;
 public class InitSchemaCommand implements Runnable {
 
     @Option(names = {"-i", "--instance"},
-            description = "Target instance (default: default)")
+            description = "Target instance (default: default). Ignored if --metadata is set.")
     private String instance = "default";
+
+    @Option(names = {"--metadata"},
+            description = "Initialise schema on the configured metadata database instead of an instance")
+    private boolean useMetadata;
 
     @Option(names = {"--dry-run"},
             description = "Show what would be done without making changes")
@@ -43,17 +54,35 @@ public class InitSchemaCommand implements Runnable {
     @Inject
     DataSourceManager dataSourceManager;
 
+    @Inject
+    MetadataDataSourceProvider metadataProvider;
+
     @Override
     public void run() {
         System.out.println();
         System.out.println("PG Console Schema Initialisation");
         System.out.println("=================================");
         System.out.println();
-        System.out.println("Instance: " + instance);
+
+        DataSource ds;
+        String targetDescription;
+
+        if (useMetadata) {
+            ds = metadataProvider.getDataSource();
+            targetDescription = "Metadata database (" + metadataProvider.getDataSourceName() + ")";
+            if (metadataProvider.isDedicatedMetadataDataSource()) {
+                System.out.println("Target: Dedicated metadata database");
+            } else {
+                System.out.println("Target: Default datasource (no dedicated metadata database configured)");
+            }
+        } else {
+            ds = dataSourceManager.getDataSource(instance);
+            targetDescription = "Instance: " + instance;
+            System.out.println(targetDescription);
+        }
         System.out.println();
 
         try {
-            DataSource ds = dataSourceManager.getDataSource(instance);
 
             // Check if schema already exists
             boolean schemaExists = checkSchemaExists(ds);

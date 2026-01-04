@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.MaintenanceWindow;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -24,6 +25,7 @@ import java.util.Optional;
 public class MaintenanceWindowRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     /**

@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.repository;
 
+import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.AlertSilence;
 import com.bovinemagnet.pgconsole.model.AlertSilence.Matcher;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -26,6 +27,7 @@ import java.util.Optional;
 public class AlertSilenceRepository {
 
     @Inject
+    @MetadataDataSource
     DataSource dataSource;
 
     private final ObjectMapper objectMapper = new ObjectMapper();

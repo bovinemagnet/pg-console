@@ -77,6 +77,16 @@ public interface InstanceConfig {
     SchemaConfig schema();
 
     /**
+     * Metadata datasource configuration.
+     * <p>
+     * Allows pgconsole schema (metadata storage) to be separate from
+     * the monitored database instances.
+     *
+     * @return metadata configuration
+     */
+    MetadataConfig metadata();
+
+    /**
      * Properties for a specific instance.
      */
     interface InstanceProperties {
@@ -164,6 +174,33 @@ public interface InstanceConfig {
         @WithName("in-memory-minutes")
         @WithDefault("30")
         int inMemoryMinutes();
+    }
+
+    /**
+     * Metadata datasource configuration.
+     * <p>
+     * Allows pgconsole schema (metadata storage) to be stored in a different
+     * database from the monitored instances. This enables:
+     * <ul>
+     *   <li>Read-only monitoring of production databases</li>
+     *   <li>Central metadata store for multi-instance correlation</li>
+     *   <li>Cleaner separation of monitoring metadata from application data</li>
+     * </ul>
+     */
+    interface MetadataConfig {
+        /**
+         * Datasource name for storing pgconsole metadata.
+         * <p>
+         * Options:
+         * <ul>
+         *   <li>Not set / "default": Use the default datasource (backwards compatible)</li>
+         *   <li>"metadata": Use the dedicated metadata datasource</li>
+         *   <li>Instance name: Use a specific instance's datasource</li>
+         * </ul>
+         *
+         * @return datasource name, or empty if not specified
+         */
+        Optional<String> datasource();
     }
 
     /**
