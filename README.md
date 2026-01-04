@@ -337,6 +337,8 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 | `/comparison` | Side-by-side instance comparison |
 | `/bookmarks` | Query bookmarks and annotations |
 | `/audit-log` | Admin action audit log |
+| `/schema-docs` | Schema documentation generation ([docs](docs/modules/user-guide/pages/schema-docs.adoc)) |
+| `/database-diff` | Cross-database schema comparison ([docs](docs/modules/user-guide/pages/database-diff.adoc)) |
 | `/logical-replication` | Publications, subscriptions, and replication origins |
 | `/cdc` | Change data capture dashboard with table activity |
 | `/data-lineage` | Foreign keys, views, and function dependencies |
@@ -413,6 +415,16 @@ Comprehensive documentation is available in [AsciiDoc](https://asciidoc.org/) fo
 - [Multi-Instance Setup](docs/modules/admin-guide/pages/multi-instance.adoc) - Monitoring multiple PostgreSQL instances
 - [REST API Endpoints](docs/modules/api-reference/pages/endpoints.adoc) - Complete API reference
 - [Architecture Overview](docs/modules/developer-guide/pages/architecture.adoc) - System design and components
+- [Schema Documentation](docs/modules/user-guide/pages/schema-docs.adoc) - Generate data dictionaries from database schemas
+- [Database Diff](docs/modules/user-guide/pages/database-diff.adoc) - Compare schemas across databases and instances
+- [Runbooks](docs/modules/user-guide/pages/runbooks.adoc) - Automated diagnostic workflows
+- [XID Wraparound](docs/modules/user-guide/pages/xid-wraparound.adoc) - Transaction ID monitoring and prevention
+- [Troubleshooting](docs/modules/user-guide/pages/troubleshooting.adoc) - Common issues and solutions
+- [Security Configuration](docs/modules/admin-guide/pages/security.adoc) - Authentication and authorisation
+- [CLI Reference](docs/modules/admin-guide/pages/cli-reference.adoc) - Command-line options and init-schema
+- [Schema-Free Mode](docs/modules/admin-guide/pages/schema-free-mode.adoc) - Read-only monitoring without pgconsole schema
+- [Database Schema](docs/modules/developer-guide/pages/database-schema.adoc) - pgconsole internal schema design
+- [Testing Guide](docs/modules/developer-guide/pages/testing.adoc) - Running and writing tests
 
 ### Building Documentation
 
