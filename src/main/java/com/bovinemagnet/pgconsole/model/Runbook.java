@@ -1,5 +1,7 @@
 package com.bovinemagnet.pgconsole.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -113,9 +115,19 @@ public class Runbook {
         private int order;
         private String title;
         private String description;
+
+        @JsonProperty("action_type")
         private ActionType actionType;
+
         private String action;
+
+        @JsonProperty("expected_outcome")
+        private String expectedOutcome;
+
+        @JsonProperty("auto_execute")
         private boolean autoExecute;
+
+        @JsonProperty("requires_confirmation")
         private boolean requiresConfirmation;
 
         public Step() {
@@ -187,6 +199,14 @@ public class Runbook {
         public void setRequiresConfirmation(boolean requiresConfirmation) {
             this.requiresConfirmation = requiresConfirmation;
         }
+
+        public String getExpectedOutcome() {
+            return expectedOutcome;
+        }
+
+        public void setExpectedOutcome(String expectedOutcome) {
+            this.expectedOutcome = expectedOutcome;
+        }
     }
 
     private Long id;
@@ -211,6 +231,9 @@ public class Runbook {
 
     // Estimated duration
     private Integer estimatedDurationMinutes;
+
+    // Whether this runbook can be auto-executed (all steps are safe/non-destructive)
+    private boolean autoExecutable;
 
     public Runbook() {
         this.version = 1;
@@ -362,5 +385,13 @@ public class Runbook {
 
     public void setEstimatedDurationMinutes(Integer estimatedDurationMinutes) {
         this.estimatedDurationMinutes = estimatedDurationMinutes;
+    }
+
+    public boolean isAutoExecutable() {
+        return autoExecutable;
+    }
+
+    public void setAutoExecutable(boolean autoExecutable) {
+        this.autoExecutable = autoExecutable;
     }
 }

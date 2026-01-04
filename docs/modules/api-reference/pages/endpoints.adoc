@@ -639,6 +639,261 @@ curl http://localhost:8080/api/v1/table-maintenance
 
 '''
 
+=== GET /insights/runbooks
+
+Lists all available runbooks for guided troubleshooting and incident response.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "runbooks": [
+    {
+      "id": 1,
+      "name": "vacuum_maintenance",
+      "title": "VACUUM Maintenance",
+      "description": "Step-by-step guide for vacuum maintenance operations",
+      "category": "MAINTENANCE",
+      "triggerType": "MANUAL",
+      "stepCount": 3,
+      "estimatedDurationMinutes": 15,
+      "autoExecutable": true
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/insights/runbooks?instance=default
+----
+
+'''
+
+=== POST /insights/runbooks/\{id\}/start
+
+Starts a new runbook execution for manual step-by-step progression.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Runbook ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`username`
+|Query (optional)
+|User starting the execution (default: `anonymous`)
+|===
+
+==== Response
+
+Redirects to the runbook execution page.
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/insights/runbooks/1/start?instance=default"
+----
+
+'''
+
+=== POST /insights/runbooks/\{id\}/auto-execute
+
+Automatically executes all steps in a runbook without manual intervention.
+Only runbooks marked as `autoExecutable` can use this endpoint.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Runbook ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`username`
+|Query (optional)
+|User starting the execution (default: `anonymous`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "status": "COMPLETED",
+  "executionId": 15,
+  "redirectUrl": "/insights/runbooks/execution/15?instance=default"
+}
+----
+
+==== Error Response
+
+[source,json]
+----
+{
+  "error": "Runbook is not marked as auto-executable: high_connections"
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/insights/runbooks/1/auto-execute?instance=default"
+----
+
+'''
+
+=== GET /insights/runbooks/execution/\{id\}
+
+Returns details of a runbook execution including step results.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Execution ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+Returns the runbook execution page with step-by-step progress and results.
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/insights/runbooks/execution/15?instance=default
+----
+
+'''
+
+=== POST /insights/runbooks/execution/\{id\}/advance
+
+Completes the current step and advances to the next step.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Execution ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`output`
+|Form (optional)
+|Output or notes from the completed step
+|===
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/insights/runbooks/execution/15/advance?instance=default" \
+  -d "output=Vacuum completed successfully"
+----
+
+'''
+
+=== POST /insights/runbooks/execution/\{id\}/skip
+
+Skips the current step and advances to the next step.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Execution ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/insights/runbooks/execution/15/skip?instance=default"
+----
+
+'''
+
+=== POST /insights/runbooks/execution/\{id\}/cancel
+
+Cancels an in-progress runbook execution.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`id`
+|Path
+|Execution ID
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/insights/runbooks/execution/15/cancel?instance=default"
+----
+
+'''
+
 [#diagnostics]
 == Advanced Diagnostics
 
@@ -1373,7 +1628,7 @@ curl http://localhost:8080/dashboards/custom/api?instance=default
 
 '''
 
-=== GET /dashboards/custom/api/{id}
+=== GET /dashboards/custom/api/\{id\}
 
 Returns a single custom dashboard with widget data.
 

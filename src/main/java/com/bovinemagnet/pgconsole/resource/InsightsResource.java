@@ -373,6 +373,34 @@ public class InsightsResource {
     }
 
     /**
+     * Auto-execute a runbook (all steps run automatically).
+     * <p>
+     * Only available for runbooks marked as auto-executable (safe, non-destructive operations).
+     */
+    @POST
+    @Path("/runbooks/{runbookId}/auto-execute")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response autoExecuteRunbook(
+            @PathParam("runbookId") long runbookId,
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("username") @DefaultValue("anonymous") String username) {
+
+        try {
+            RunbookExecution execution = runbookService.autoExecuteRunbook(instance, runbookId, username);
+
+            return Response.ok(Map.of(
+                    "status", execution.getStatus().name(),
+                    "executionId", execution.getId(),
+                    "redirectUrl", "/insights/runbooks/execution/" + execution.getId() + "?instance=" + instance
+            )).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    /**
      * Advance runbook execution to next step.
      */
     @POST

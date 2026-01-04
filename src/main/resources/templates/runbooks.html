@@ -93,13 +93,26 @@
                         </div>
                     </div>
                     <div class="card-footer bg-transparent">
-                        <button class="btn btn-sm btn-primary w-100"
-                                hx-post="/insights/runbooks/{runbook.id}/start?instance={instance}"
-                                hx-swap="none"
-                                hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; }">
-                            <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
-                            Start Runbook
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary flex-grow-1"
+                                    hx-post="/insights/runbooks/{runbook.id}/start?instance={instance}"
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; }">
+                                <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                                Start
+                            </button>
+                            {#if runbook.autoExecutable}
+                            <button class="btn btn-sm btn-success"
+                                    title="Auto-execute all steps"
+                                    hx-post="/insights/runbooks/{runbook.id}/auto-execute?instance={instance}"
+                                    hx-swap="none"
+                                    hx-confirm="This will automatically execute all steps. Continue?"
+                                    hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; } else { alert('Auto-execute not available for this runbook'); }">
+                                <i class="bi bi-lightning-fill" aria-hidden="true"></i>
+                                Auto
+                            </button>
+                            {/if}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -141,7 +154,7 @@
                         </td>
                         <td>
                             {#if exec.completedAt}
-                            <small>{exec.durationMinutes} min</small>
+                            <small>{exec.formattedDuration}</small>
                             {#else}
                             <small class="text-muted">-</small>
                             {/if}

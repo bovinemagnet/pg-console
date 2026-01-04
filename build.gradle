@@ -29,6 +29,10 @@ dependencies {
     implementation 'io.quarkus:quarkus-picocli'
     implementation 'io.quarkus:quarkus-smallrye-openapi'
 
+    // PDF generation (OpenHTMLtoPDF for HTML-to-PDF conversion)
+    implementation 'com.openhtmltopdf:openhtmltopdf-core:1.0.10'
+    implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
+
     // Test dependencies - Core
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.quarkus:quarkus-junit5-mockito'

@@ -3,7 +3,10 @@ package com.bovinemagnet.pgconsole.service;
 import com.bovinemagnet.pgconsole.model.Runbook;
 import com.bovinemagnet.pgconsole.model.RunbookExecution;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -27,10 +30,20 @@ public class RunbookService {
 
     private static final Logger LOG = Logger.getLogger(RunbookService.class);
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public RunbookService() {
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
 
     @Inject
     DataSourceManager dataSourceManager;
+
+    @Inject
+    TableMaintenanceService tableMaintenanceService;
 
     /**
      * Get all available runbooks.
@@ -47,7 +60,7 @@ public class RunbookService {
             String sql = """
                 SELECT id, name, title, description, category, trigger_type,
                        trigger_conditions, steps, version, enabled, created_at,
-                       updated_at, created_by, estimated_duration_minutes
+                       updated_at, created_by, estimated_duration_minutes, auto_executable
                 FROM pgconsole.runbook
                 WHERE enabled = true
                 ORDER BY category, title
@@ -85,7 +98,7 @@ public class RunbookService {
             String sql = """
                 SELECT id, name, title, description, category, trigger_type,
                        trigger_conditions, steps, version, enabled, created_at,
-                       updated_at, created_by, estimated_duration_minutes
+                       updated_at, created_by, estimated_duration_minutes, auto_executable
                 FROM pgconsole.runbook
                 WHERE enabled = true AND category = ?
                 ORDER BY title
@@ -124,7 +137,7 @@ public class RunbookService {
             String sql = """
                 SELECT id, name, title, description, category, trigger_type,
                        trigger_conditions, steps, version, enabled, created_at,
-                       updated_at, created_by, estimated_duration_minutes
+                       updated_at, created_by, estimated_duration_minutes, auto_executable
                 FROM pgconsole.runbook
                 WHERE id = ?
                 """;
@@ -162,7 +175,7 @@ public class RunbookService {
             String sql = """
                 SELECT id, name, title, description, category, trigger_type,
                        trigger_conditions, steps, version, enabled, created_at,
-                       updated_at, created_by, estimated_duration_minutes
+                       updated_at, created_by, estimated_duration_minutes, auto_executable
                 FROM pgconsole.runbook
                 WHERE name = ?
                 """;
@@ -314,6 +327,167 @@ public class RunbookService {
         updateExecution(instanceName, execution);
 
         return execution;
+    }
+
+    /**
+     * Auto-execute a runbook, running all steps automatically.
+     * <p>
+     * Only runbooks marked as autoExecutable can be auto-executed.
+     * QUERY steps are executed directly, SQL_TEMPLATE steps with table_name
+     * parameters are executed for each table needing maintenance.
+     *
+     * @param instanceName the PostgreSQL instance name
+     * @param runbookId the runbook ID to execute
+     * @param username the user starting the execution
+     * @return the completed execution record
+     */
+    public RunbookExecution autoExecuteRunbook(String instanceName, long runbookId, String username) {
+        Runbook runbook = getRunbook(instanceName, runbookId);
+        if (runbook == null) {
+            throw new IllegalArgumentException("Runbook not found: " + runbookId);
+        }
+
+        if (!runbook.isAutoExecutable()) {
+            throw new IllegalArgumentException("Runbook is not marked as auto-executable: " + runbook.getName());
+        }
+
+        // Start execution
+        RunbookExecution execution = startExecution(instanceName, runbookId,
+                RunbookExecution.TriggeredBy.MANUAL, username);
+
+        try {
+            DataSource ds = dataSourceManager.getDataSource(instanceName);
+
+            // Execute each step
+            for (Runbook.Step step : runbook.getSteps()) {
+                int stepIdx = step.getOrder() - 1;
+                RunbookExecution.StepResult stepResult = execution.getStepResults().get(stepIdx);
+                stepResult.setStatus(RunbookExecution.StepResult.StepStatus.RUNNING);
+                stepResult.setStartedAt(Instant.now());
+
+                try {
+                    String output = executeStep(ds, instanceName, step);
+                    stepResult.setStatus(RunbookExecution.StepResult.StepStatus.COMPLETED);
+                    stepResult.setOutput(output);
+                } catch (Exception e) {
+                    LOG.warnf(e, "Auto-execute step %d failed: %s", step.getOrder(), e.getMessage());
+                    stepResult.setStatus(RunbookExecution.StepResult.StepStatus.FAILED);
+                    stepResult.setErrorMessage(e.getMessage());
+                    // Continue to next step, don't fail the whole runbook
+                }
+
+                stepResult.setCompletedAt(Instant.now());
+                execution.setCurrentStep(step.getOrder() + 1);
+            }
+
+            // Mark execution as completed
+            execution.setStatus(RunbookExecution.Status.COMPLETED);
+            execution.setCompletedAt(Instant.now());
+            execution.setCurrentStep(runbook.getStepCount());
+
+        } catch (Exception e) {
+            LOG.errorf(e, "Error auto-executing runbook %s", runbook.getName());
+            execution.setStatus(RunbookExecution.Status.FAILED);
+            execution.setCompletedAt(Instant.now());
+            execution.setNotes("Auto-execution failed: " + e.getMessage());
+        }
+
+        updateExecution(instanceName, execution);
+        return execution;
+    }
+
+    /**
+     * Execute a single step and return the output.
+     */
+    private String executeStep(DataSource ds, String instanceName, Runbook.Step step) throws SQLException {
+        StringBuilder output = new StringBuilder();
+
+        switch (step.getActionType()) {
+            case QUERY:
+                // Execute the query and return results
+                try (Connection conn = ds.getConnection();
+                     Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(step.getAction())) {
+
+                    int rowCount = 0;
+                    while (rs.next() && rowCount < 100) {
+                        int colCount = rs.getMetaData().getColumnCount();
+                        for (int i = 1; i <= colCount; i++) {
+                            if (i > 1) output.append(" | ");
+                            output.append(rs.getMetaData().getColumnName(i))
+                                  .append(": ")
+                                  .append(rs.getString(i));
+                        }
+                        output.append("\n");
+                        rowCount++;
+                    }
+                    if (rowCount == 0) {
+                        output.append("No results");
+                    } else {
+                        output.insert(0, rowCount + " row(s) returned:\n");
+                    }
+                }
+                break;
+
+            case SQL_TEMPLATE:
+                // Handle SQL templates with table_name parameter
+                String sql = step.getAction();
+                if (sql.contains("{table_name}")) {
+                    // Get tables needing vacuum
+                    var recommendations = tableMaintenanceService.findTablesNeedingVacuum(instanceName);
+                    if (recommendations.isEmpty()) {
+                        output.append("No tables need maintenance");
+                    } else {
+                        int executed = 0;
+                        for (var rec : recommendations) {
+                            String tableFqn = rec.getSchemaName() + "." + rec.getTableName();
+                            String execSql = sql.replace("{table_name}", tableFqn);
+
+                            try (Connection conn = ds.getConnection();
+                                 Statement stmt = conn.createStatement()) {
+                                stmt.execute(execSql);
+                                output.append("Executed: ").append(execSql).append("\n");
+                                executed++;
+                            } catch (SQLException e) {
+                                output.append("Failed: ").append(execSql)
+                                      .append(" - ").append(e.getMessage()).append("\n");
+                            }
+
+                            // Limit to first 10 tables to avoid long-running operations
+                            if (executed >= 10) {
+                                output.append("... limited to first 10 tables\n");
+                                break;
+                            }
+                        }
+                        output.insert(0, "Processed " + executed + " table(s):\n");
+                    }
+                } else {
+                    // Execute as-is
+                    try (Connection conn = ds.getConnection();
+                         Statement stmt = conn.createStatement()) {
+                        stmt.execute(sql);
+                        output.append("Executed: ").append(sql);
+                    }
+                }
+                break;
+
+            case NAVIGATE:
+                output.append("Navigation step: ").append(step.getAction());
+                break;
+
+            case DOCUMENTATION:
+                output.append("Documentation reference: ").append(step.getAction());
+                break;
+
+            case MANUAL:
+                output.append("Manual step skipped in auto-execute mode");
+                break;
+
+            default:
+                output.append("Unknown action type: ").append(step.getActionType());
+        }
+
+        return output.toString();
     }
 
     /**
@@ -511,6 +685,14 @@ public class RunbookService {
         runbook.setCreatedBy(rs.getString("created_by"));
         runbook.setEstimatedDurationMinutes(rs.getInt("estimated_duration_minutes"));
 
+        // Handle auto_executable column which may not exist in older schemas
+        try {
+            runbook.setAutoExecutable(rs.getBoolean("auto_executable"));
+        } catch (SQLException e) {
+            // Column doesn't exist, default to false
+            runbook.setAutoExecutable(false);
+        }
+
         return runbook;
     }
 
@@ -558,7 +740,7 @@ public class RunbookService {
                         new TypeReference<List<RunbookExecution.StepResult>>() {});
                 execution.setStepResults(stepResults);
             } catch (Exception e) {
-                LOG.debugf(e, "Error parsing step results JSON");
+                LOG.warnf(e, "Error parsing step results JSON: %s", stepResultsJson);
                 execution.setStepResults(new ArrayList<>());
             }
         }

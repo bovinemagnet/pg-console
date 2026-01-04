@@ -201,6 +201,13 @@ test_endpoint "/schema-comparison/profiles?instance=${INSTANCE}"
 test_endpoint "/schema-comparison/history?instance=${INSTANCE}"
 
 echo ""
+echo -e "${YELLOW}=== Schema Comparison Export Endpoints ===${NC}"
+# Note: These require valid instance/schema params to generate actual content
+test_endpoint "/schema-comparison/export/html?sourceInstance=${INSTANCE}&destInstance=${INSTANCE}&sourceSchema=public&destSchema=public"
+test_endpoint "/schema-comparison/export/markdown?sourceInstance=${INSTANCE}&destInstance=${INSTANCE}&sourceSchema=public&destSchema=public"
+test_endpoint "/schema-comparison/export/pdf?sourceInstance=${INSTANCE}&destInstance=${INSTANCE}&sourceSchema=public&destSchema=public"
+
+echo ""
 echo -e "${YELLOW}=== Insights API ===${NC}"
 test_endpoint "/insights/explain/cache_hit_ratio"
 
