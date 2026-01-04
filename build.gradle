@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'io.quarkus' version '3.30.5'
+    id 'io.quarkus' version "${quarkusPluginVersion}"
     id 'jacoco'
     id "org.antora" version "${antoraPluginVersion}"
 
@@ -12,7 +12,7 @@ repositories {
 }
 
 dependencies {
-    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.30.5')
+    implementation enforcedPlatform("io.quarkus.platform:quarkus-bom:${quarkusPlatformVersion}")
     implementation 'io.quarkus:quarkus-rest'
     implementation 'io.quarkus:quarkus-rest-qute'
     implementation 'io.quarkus:quarkus-qute'
@@ -30,6 +30,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-smallrye-openapi'
 
     // PDF generation (OpenHTMLtoPDF for HTML-to-PDF conversion)
+    // https://mvnrepository.com/artifact/com.openhtmltopdf/openhtmltopdf-core
     implementation 'com.openhtmltopdf:openhtmltopdf-core:1.0.10'
     implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
 
@@ -40,9 +41,9 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-jdbc-h2'
 
     // Test dependencies - Testcontainers for PostgreSQL integration tests
-    testImplementation 'org.testcontainers:testcontainers:1.19.3'
-    testImplementation 'org.testcontainers:postgresql:1.19.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
     // Test dependencies - Better assertions
     testImplementation 'org.assertj:assertj-core:3.25.1'
