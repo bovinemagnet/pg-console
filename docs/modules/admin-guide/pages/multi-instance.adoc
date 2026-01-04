@@ -257,6 +257,29 @@ The currently selected instance is displayed in the navigation bar with:
 
 Each instance maintains separate historical data in the `pgconsole` schema.
 
+=== Metadata Datasource Separation
+
+By default, pg-console stores metadata in the monitored database. For multi-instance deployments, you can centralise metadata storage:
+
+[source,bash]
+----
+# All instances share a central metadata database
+export PG_CONSOLE_METADATA_DATASOURCE=metadata
+export PG_CONSOLE_METADATA_URL=jdbc:postgresql://control-db:5432/pgconsole
+export PG_CONSOLE_METADATA_USER=pgconsole
+export PG_CONSOLE_METADATA_PASSWORD=metadata_password
+----
+
+Alternatively, use one of your configured instances for metadata:
+
+[source,bash]
+----
+# Store metadata in the staging instance
+export PG_CONSOLE_METADATA_DATASOURCE=staging
+----
+
+See xref:configuration.adoc#_metadata_datasource_separation[Metadata Datasource Separation] for detailed configuration options.
+
 === Schema Separation
 
 Historical data is stored with instance-specific prefixes:

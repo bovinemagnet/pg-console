@@ -18,6 +18,16 @@ The schema is created and managed automatically using Flyway migrations, which r
 
 IMPORTANT: pg-console requires `CREATE SCHEMA` and `CREATE TABLE` privileges to initialise its schema. See xref:admin-guide:deployment.adoc#database-permissions[Database Permissions] for details.
 
+=== Metadata Datasource Separation
+
+The `pgconsole` schema can be stored in a separate database from the one being monitored. This enables:
+
+* Read-only monitoring of production databases
+* Centralised metadata storage for multi-instance deployments
+* Cleaner separation between monitored and monitoring data
+
+Configure using `PG_CONSOLE_METADATA_DATASOURCE` to specify a dedicated datasource or use an existing instance's datasource. See xref:admin-guide:configuration.adoc#_metadata_datasource_separation[Metadata Datasource Separation] for configuration details.
+
 === Schema-Free Mode
 
 pg-console can also operate without creating any database schema. When `PG_CONSOLE_SCHEMA_ENABLED=false`, all schema creation is disabled:

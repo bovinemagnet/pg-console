@@ -228,6 +228,158 @@ This disables:
 
 For completely read-only monitoring without any schema creation, use `PG_CONSOLE_SCHEMA_ENABLED=false` instead. See xref:schema-free-mode.adoc[Schema-Free Mode].
 
+== Metadata Datasource Separation
+
+By default, pg-console stores its metadata (history, bookmarks, audit logs) in the same database being monitored. For production environments, you may want to store metadata separately to:
+
+* Enable **read-only monitoring** of production databases
+* Centralise metadata storage for multi-instance deployments
+* Keep the monitored database clean of pgconsole schema
+
+=== Configuration Options
+
+[cols="2,1,3"]
+|===
+|Property |Default |Description
+
+|`PG_CONSOLE_METADATA_DATASOURCE`
+|(empty)
+|Datasource for pgconsole metadata. Options: empty (use default), `metadata` (dedicated datasource), or an instance name
+
+|`PG_CONSOLE_METADATA_URL`
+|(none)
+|JDBC URL for dedicated metadata database (when using `metadata` datasource)
+
+|`PG_CONSOLE_METADATA_USER`
+|(none)
+|Username for dedicated metadata database
+
+|`PG_CONSOLE_METADATA_PASSWORD`
+|(none)
+|Password for dedicated metadata database
+|===
+
+=== Option 1: Default (Backwards Compatible)
+
+Leave `PG_CONSOLE_METADATA_DATASOURCE` unset. Metadata is stored in the monitored database (original behaviour).
+
+[source,bash]
+----
+# No configuration needed - metadata stored in default monitored database
+export POSTGRES_URL=jdbc:postgresql://db:5432/postgres
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=postgres
+----
+
+=== Option 2: Dedicated Metadata Database
+
+Use a separate database for storing all pg-console metadata. This is the recommended approach for production monitoring.
+
+[source,bash]
+----
+# Configure monitored instance (can be read-only user)
+export POSTGRES_URL=jdbc:postgresql://prod-db:5432/postgres
+export POSTGRES_USER=readonly_monitor
+export POSTGRES_PASSWORD=secure_password
+
+# Configure dedicated metadata database
+export PG_CONSOLE_METADATA_DATASOURCE=metadata
+export PG_CONSOLE_METADATA_URL=jdbc:postgresql://control-db:5432/pgconsole
+export PG_CONSOLE_METADATA_USER=pgconsole_admin
+export PG_CONSOLE_METADATA_PASSWORD=metadata_password
+----
+
+Or in `application.properties`:
+
+[source,properties]
+----
+# Monitored database (read-only access)
+quarkus.datasource.db-kind=postgresql
+quarkus.datasource.jdbc.url=${POSTGRES_URL:jdbc:postgresql://prod-db:5432/postgres}
+quarkus.datasource.username=${POSTGRES_USER:readonly_monitor}
+quarkus.datasource.password=${POSTGRES_PASSWORD:secure_password}
+
+# Metadata datasource selection
+pg-console.metadata.datasource=metadata
+
+# Dedicated metadata datasource
+quarkus.datasource.metadata.db-kind=postgresql
+quarkus.datasource.metadata.jdbc.url=${PG_CONSOLE_METADATA_URL:jdbc:postgresql://control-db:5432/pgconsole}
+quarkus.datasource.metadata.username=${PG_CONSOLE_METADATA_USER:pgconsole_admin}
+quarkus.datasource.metadata.password=${PG_CONSOLE_METADATA_PASSWORD:metadata_password}
+----
+
+=== Option 3: Use Another Instance's Datasource
+
+In multi-instance deployments, you can store metadata in one of the configured instance datasources:
+
+[source,bash]
+----
+# Monitor multiple instances
+export PG_CONSOLE_INSTANCES=production,staging
+
+# Store metadata in the staging instance
+export PG_CONSOLE_METADATA_DATASOURCE=staging
+----
+
+This approach is useful when you have a non-production instance that can host the metadata schema.
+
+=== Initialising the Schema
+
+When using a dedicated metadata database, the schema must be initialised. Use the CLI command:
+
+[source,bash]
+----
+# Initialise schema on metadata database
+java -jar pg-console.jar init-schema --metadata
+
+# Dry-run to see what migrations would run
+java -jar pg-console.jar init-schema --metadata --dry-run
+
+# Force re-run migrations
+java -jar pg-console.jar init-schema --metadata --force
+----
+
+For more details on CLI commands, see xref:cli-reference.adoc[CLI Reference].
+
+=== Use Cases
+
+==== Read-Only Production Monitoring
+
+Monitor a production database without write permissions:
+
+[source,bash]
+----
+# Production database (read-only user, no schema creation)
+export POSTGRES_URL=jdbc:postgresql://prod-db:5432/postgres
+export POSTGRES_USER=monitoring_readonly
+export POSTGRES_PASSWORD=readonly_password
+export PG_CONSOLE_SCHEMA_ENABLED=false
+
+# All metadata stored in separate control database
+export PG_CONSOLE_METADATA_DATASOURCE=metadata
+export PG_CONSOLE_METADATA_URL=jdbc:postgresql://control-db:5432/pgconsole
+export PG_CONSOLE_METADATA_USER=pgconsole_admin
+export PG_CONSOLE_METADATA_PASSWORD=control_password
+----
+
+==== Centralised Metadata for Multi-Instance
+
+Store metadata from all monitored instances in a single database:
+
+[source,bash]
+----
+export PG_CONSOLE_INSTANCES=prod_us,prod_eu,staging
+
+# All instances share metadata storage
+export PG_CONSOLE_METADATA_DATASOURCE=metadata
+export PG_CONSOLE_METADATA_URL=jdbc:postgresql://central-db:5432/pgconsole_metadata
+export PG_CONSOLE_METADATA_USER=pgconsole
+export PG_CONSOLE_METADATA_PASSWORD=metadata_password
+----
+
+This enables cross-instance queries and consolidated reporting.
+
 == Multi-Instance Monitoring
 
 Monitor multiple PostgreSQL instances from a single pg-console deployment.
