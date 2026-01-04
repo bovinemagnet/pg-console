@@ -43,6 +43,9 @@ public class RunbookService {
     DataSourceManager dataSourceManager;
 
     @Inject
+    PostgresService postgresService;
+
+    @Inject
     TableMaintenanceService tableMaintenanceService;
 
     /**
@@ -211,6 +214,22 @@ public class RunbookService {
     public RunbookExecution startExecution(String instanceName, long runbookId,
                                             RunbookExecution.TriggeredBy triggeredBy,
                                             String username) {
+        return startExecution(instanceName, runbookId, triggeredBy, username, null);
+    }
+
+    /**
+     * Start execution of a runbook scoped to a specific database.
+     *
+     * @param instanceName the PostgreSQL instance name
+     * @param runbookId the runbook ID to execute
+     * @param triggeredBy what triggered the execution
+     * @param username the user starting the execution
+     * @param databaseName the specific database to scope to (null for all databases)
+     * @return the execution record
+     */
+    public RunbookExecution startExecution(String instanceName, long runbookId,
+                                            RunbookExecution.TriggeredBy triggeredBy,
+                                            String username, String databaseName) {
         Runbook runbook = getRunbook(instanceName, runbookId);
         if (runbook == null) {
             throw new IllegalArgumentException("Runbook not found: " + runbookId);
@@ -220,6 +239,7 @@ public class RunbookService {
         execution.setRunbookId(runbookId);
         execution.setRunbook(runbook);
         execution.setInstanceId(instanceName);
+        execution.setDatabaseName(databaseName);
         execution.setTriggeredBy(triggeredBy);
         execution.setExecutedBy(username);
         execution.setStatus(RunbookExecution.Status.IN_PROGRESS);
@@ -342,6 +362,24 @@ public class RunbookService {
      * @return the completed execution record
      */
     public RunbookExecution autoExecuteRunbook(String instanceName, long runbookId, String username) {
+        return autoExecuteRunbook(instanceName, runbookId, username, null);
+    }
+
+    /**
+     * Auto-execute a runbook scoped to a specific database.
+     * <p>
+     * Only runbooks marked as autoExecutable can be auto-executed.
+     * QUERY steps are executed directly, SQL_TEMPLATE steps with table_name
+     * parameters are executed for each table needing maintenance.
+     *
+     * @param instanceName the PostgreSQL instance name
+     * @param runbookId the runbook ID to execute
+     * @param username the user starting the execution
+     * @param databaseName the specific database to scope to (null for all databases)
+     * @return the completed execution record
+     */
+    public RunbookExecution autoExecuteRunbook(String instanceName, long runbookId,
+                                                String username, String databaseName) {
         Runbook runbook = getRunbook(instanceName, runbookId);
         if (runbook == null) {
             throw new IllegalArgumentException("Runbook not found: " + runbookId);
@@ -351,9 +389,9 @@ public class RunbookService {
             throw new IllegalArgumentException("Runbook is not marked as auto-executable: " + runbook.getName());
         }
 
-        // Start execution
+        // Start execution with database scope
         RunbookExecution execution = startExecution(instanceName, runbookId,
-                RunbookExecution.TriggeredBy.MANUAL, username);
+                RunbookExecution.TriggeredBy.MANUAL, username, databaseName);
 
         try {
             DataSource ds = dataSourceManager.getDataSource(instanceName);
@@ -366,7 +404,7 @@ public class RunbookService {
                 stepResult.setStartedAt(Instant.now());
 
                 try {
-                    String output = executeStep(ds, instanceName, step);
+                    String output = executeStep(ds, instanceName, databaseName, step);
                     stepResult.setStatus(RunbookExecution.StepResult.StepStatus.COMPLETED);
                     stepResult.setOutput(output);
                 } catch (Exception e) {
@@ -399,7 +437,7 @@ public class RunbookService {
     /**
      * Execute a single step and return the output.
      */
-    private String executeStep(DataSource ds, String instanceName, Runbook.Step step) throws SQLException {
+    private String executeStep(DataSource ds, String instanceName, String databaseName, Runbook.Step step) throws SQLException {
         StringBuilder output = new StringBuilder();
 
         switch (step.getActionType()) {
@@ -472,7 +510,8 @@ public class RunbookService {
                 break;
 
             case NAVIGATE:
-                output.append("Navigation step: ").append(step.getAction());
+                // Capture actual data from the target page instead of just linking to it
+                output.append(captureNavigationData(instanceName, databaseName, step.getAction()));
                 break;
 
             case DOCUMENTATION:
@@ -502,7 +541,7 @@ public class RunbookService {
             DataSource ds = dataSourceManager.getDataSource(instanceName);
 
             String sql = """
-                SELECT e.id, e.runbook_id, e.instance_id, e.started_at, e.completed_at,
+                SELECT e.id, e.runbook_id, e.instance_id, e.database_name, e.started_at, e.completed_at,
                        e.status, e.triggered_by, e.current_step, e.step_results,
                        e.executed_by, e.notes,
                        r.id as r_id, r.name as r_name, r.title as r_title,
@@ -548,7 +587,7 @@ public class RunbookService {
             DataSource ds = dataSourceManager.getDataSource(instanceName);
 
             String sql = """
-                SELECT e.id, e.runbook_id, e.instance_id, e.started_at, e.completed_at,
+                SELECT e.id, e.runbook_id, e.instance_id, e.database_name, e.started_at, e.completed_at,
                        e.status, e.triggered_by, e.current_step, e.step_results,
                        e.executed_by, e.notes,
                        r.id as r_id, r.name as r_name, r.title as r_title,
@@ -595,7 +634,7 @@ public class RunbookService {
             DataSource ds = dataSourceManager.getDataSource(instanceName);
 
             String sql = """
-                SELECT e.id, e.runbook_id, e.instance_id, e.started_at, e.completed_at,
+                SELECT e.id, e.runbook_id, e.instance_id, e.database_name, e.started_at, e.completed_at,
                        e.status, e.triggered_by, e.current_step, e.step_results,
                        e.executed_by, e.notes,
                        r.id as r_id, r.name as r_name, r.title as r_title,
@@ -702,6 +741,14 @@ public class RunbookService {
         execution.setRunbookId(rs.getLong("runbook_id"));
         execution.setInstanceId(rs.getString("instance_id"));
 
+        // Read database_name (may be null for instance-wide executions)
+        try {
+            execution.setDatabaseName(rs.getString("database_name"));
+        } catch (SQLException e) {
+            // Column may not exist in older schemas
+            execution.setDatabaseName(null);
+        }
+
         Timestamp startedAt = rs.getTimestamp("started_at");
         if (startedAt != null) {
             execution.setStartedAt(startedAt.toInstant());
@@ -788,9 +835,9 @@ public class RunbookService {
 
             String sql = """
                 INSERT INTO pgconsole.runbook_execution
-                    (runbook_id, instance_id, started_at, status, triggered_by,
+                    (runbook_id, instance_id, database_name, started_at, status, triggered_by,
                      current_step, step_results, executed_by)
-                VALUES (?, ?, NOW(), ?, ?, ?, ?::jsonb, ?)
+                VALUES (?, ?, ?, NOW(), ?, ?, ?, ?::jsonb, ?)
                 RETURNING id
                 """;
 
@@ -799,11 +846,12 @@ public class RunbookService {
 
                 stmt.setLong(1, execution.getRunbookId());
                 stmt.setString(2, instanceName);
-                stmt.setString(3, execution.getStatus().name());
-                stmt.setString(4, execution.getTriggeredBy().name());
-                stmt.setInt(5, execution.getCurrentStep());
-                stmt.setString(6, objectMapper.writeValueAsString(execution.getStepResults()));
-                stmt.setString(7, execution.getExecutedBy());
+                stmt.setString(3, execution.getDatabaseName());
+                stmt.setString(4, execution.getStatus().name());
+                stmt.setString(5, execution.getTriggeredBy().name());
+                stmt.setInt(6, execution.getCurrentStep());
+                stmt.setString(7, objectMapper.writeValueAsString(execution.getStepResults()));
+                stmt.setString(8, execution.getExecutedBy());
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
@@ -845,5 +893,348 @@ public class RunbookService {
         } catch (Exception e) {
             LOG.errorf(e, "Error updating execution");
         }
+    }
+
+    // ============================================================
+    // Navigation Data Capture Methods
+    // ============================================================
+
+    /**
+     * Captures actual data from a navigation target instead of just linking to it.
+     * This makes the runbook execution report self-contained with all diagnostic data.
+     *
+     * @param instanceName the PostgreSQL instance
+     * @param databaseName the specific database to filter by (null for all)
+     * @param navigationPath the path being navigated to (e.g., "/activity")
+     * @return formatted data from the target page
+     */
+    private String captureNavigationData(String instanceName, String databaseName, String navigationPath) {
+        if (navigationPath == null || navigationPath.isEmpty()) {
+            return "No navigation target specified";
+        }
+
+        // Extract base path without query parameters
+        String basePath = navigationPath.split("\\?")[0];
+
+        // Add database scope header if filtering by database
+        String scopeHeader = databaseName != null && !databaseName.isEmpty()
+                ? "[Database: " + databaseName + "]\n\n"
+                : "";
+
+        try {
+            String data = switch (basePath) {
+                case "/activity" -> captureActivityData(instanceName, databaseName);
+                case "/slow-queries" -> captureSlowQueriesData(instanceName, databaseName, navigationPath);
+                case "/", "/index", "" -> captureOverviewData(instanceName, databaseName);
+                case "/locks" -> captureLocksData(instanceName, databaseName);
+                case "/table-maintenance" -> captureTableMaintenanceData(instanceName);
+                case "/tables" -> captureTablesData(instanceName);
+                default -> "Navigation to: " + navigationPath + " (data capture not available for this page)";
+            };
+            return scopeHeader + data;
+        } catch (Exception e) {
+            LOG.warnf(e, "Error capturing data for navigation: %s", navigationPath);
+            return scopeHeader + "Navigation to: " + navigationPath + " (error capturing data: " + e.getMessage() + ")";
+        }
+    }
+
+    /**
+     * Captures current database activity (pg_stat_activity).
+     *
+     * @param instanceName the PostgreSQL instance
+     * @param databaseName optional database to filter by (null for all)
+     */
+    private String captureActivityData(String instanceName, String databaseName) {
+        var activities = postgresService.getCurrentActivity(instanceName);
+
+        // Filter by database if specified
+        if (databaseName != null && !databaseName.isEmpty()) {
+            activities = activities.stream()
+                    .filter(a -> databaseName.equals(a.getDatabase()))
+                    .toList();
+        }
+
+        if (activities.isEmpty()) {
+            return "=== Current Activity ===\nNo active sessions (excluding idle connections)";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Current Activity ===\n");
+        sb.append(String.format("Total active sessions: %d\n\n", activities.size()));
+
+        // Group by state
+        var byState = new LinkedHashMap<String, List<com.bovinemagnet.pgconsole.model.Activity>>();
+        for (var activity : activities) {
+            String state = activity.getState() != null ? activity.getState() : "unknown";
+            byState.computeIfAbsent(state, k -> new ArrayList<>()).add(activity);
+        }
+
+        for (var entry : byState.entrySet()) {
+            sb.append(String.format("--- %s (%d) ---\n", entry.getKey().toUpperCase(), entry.getValue().size()));
+            for (var activity : entry.getValue()) {
+                sb.append(String.format("  PID: %d | User: %s | DB: %s | App: %s\n",
+                        activity.getPid(),
+                        activity.getUser() != null ? activity.getUser() : "-",
+                        activity.getDatabase() != null ? activity.getDatabase() : "-",
+                        activity.getApplicationName() != null ? activity.getApplicationName() : "-"));
+                if (activity.getQuery() != null && !activity.getQuery().isEmpty()) {
+                    String truncatedQuery = activity.getQuery().length() > 200
+                            ? activity.getQuery().substring(0, 200) + "..."
+                            : activity.getQuery();
+                    sb.append(String.format("    Query: %s\n", truncatedQuery.replace("\n", " ")));
+                }
+                if (activity.getWaitEventType() != null) {
+                    sb.append(String.format("    Waiting: %s/%s\n",
+                            activity.getWaitEventType(), activity.getWaitEvent()));
+                }
+                if (activity.getBlockingPid() != null && activity.getBlockingPid() > 0) {
+                    sb.append(String.format("    BLOCKED BY PID: %d\n", activity.getBlockingPid()));
+                }
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Captures slow query statistics (pg_stat_statements).
+     *
+     * @param instanceName the PostgreSQL instance
+     * @param databaseName optional database to filter by (null for all)
+     * @param navigationPath the navigation URL for parsing sort parameters
+     */
+    private String captureSlowQueriesData(String instanceName, String databaseName, String navigationPath) {
+        // Parse sort parameter from URL
+        String sortBy = "total_exec_time";
+        if (navigationPath.contains("sort=duration")) {
+            sortBy = "mean_exec_time";
+        } else if (navigationPath.contains("sort=calls")) {
+            sortBy = "calls";
+        }
+
+        var queries = postgresService.getSlowQueries(instanceName, sortBy, "DESC");
+
+        // Filter by database if specified
+        if (databaseName != null && !databaseName.isEmpty()) {
+            queries = queries.stream()
+                    .filter(q -> databaseName.equals(q.getDatabase()))
+                    .toList();
+        }
+
+        if (queries.isEmpty()) {
+            return "=== Slow Queries ===\nNo query statistics available (pg_stat_statements may not be enabled)";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Slow Queries (Top 20 by " + sortBy + ") ===\n\n");
+
+        int count = 0;
+        for (var query : queries) {
+            if (count >= 20) break;
+            count++;
+
+            sb.append(String.format("%d. Calls: %,d | Total: %.2f ms | Mean: %.2f ms | Max: %.2f ms\n",
+                    count,
+                    query.getTotalCalls(),
+                    query.getTotalTime(),
+                    query.getMeanTime(),
+                    query.getMaxTime()));
+
+            String truncatedQuery = query.getQuery() != null && query.getQuery().length() > 150
+                    ? query.getQuery().substring(0, 150) + "..."
+                    : query.getQuery();
+            sb.append(String.format("   Query: %s\n\n",
+                    truncatedQuery != null ? truncatedQuery.replace("\n", " ") : "-"));
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Captures dashboard overview statistics.
+     * <p>
+     * Note: Overview stats are instance-wide. When a database is specified,
+     * a note is added but instance-level metrics are still shown.
+     *
+     * @param instanceName the PostgreSQL instance
+     * @param databaseName optional database scope (informational only for overview)
+     */
+    private String captureOverviewData(String instanceName, String databaseName) {
+        var stats = postgresService.getOverviewStats(instanceName);
+        if (stats == null) {
+            return "=== Overview ===\nUnable to retrieve overview statistics";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Database Overview ===\n");
+        if (databaseName != null && !databaseName.isEmpty()) {
+            sb.append("(Note: Overview metrics are instance-wide)\n");
+        }
+        sb.append("\n");
+
+        sb.append("--- Connection Stats ---\n");
+        sb.append(String.format("  Connections: %d / %d (%.1f%% used)\n",
+                stats.getConnectionsUsed(), stats.getMaxConnections(),
+                stats.getMaxConnections() > 0 ? (stats.getConnectionsUsed() * 100.0 / stats.getMaxConnections()) : 0));
+        sb.append(String.format("  Active Queries: %d\n", stats.getActiveQueries()));
+        sb.append(String.format("  Blocked Queries: %d\n", stats.getBlockedQueries()));
+        sb.append(String.format("  Longest Running: %s\n", stats.getLongestQueryDuration()));
+        sb.append("\n");
+
+        sb.append("--- Performance Stats ---\n");
+        sb.append(String.format("  Cache Hit Ratio: %.2f%%\n", stats.getCacheHitRatio()));
+        sb.append(String.format("  Database Size: %s\n", stats.getDatabaseSize()));
+        sb.append("\n");
+
+        if (stats.getTopTablesBySize() != null && !stats.getTopTablesBySize().isEmpty()) {
+            sb.append("--- Top Tables by Size ---\n");
+            for (var table : stats.getTopTablesBySize()) {
+                sb.append(String.format("  %s.%s: %s\n",
+                        table.getSchemaName(), table.getTableName(), table.getSize()));
+            }
+            sb.append("\n");
+        }
+
+        if (stats.getTopIndexesBySize() != null && !stats.getTopIndexesBySize().isEmpty()) {
+            sb.append("--- Top Indexes by Size ---\n");
+            for (var index : stats.getTopIndexesBySize()) {
+                sb.append(String.format("  %s (%s): %s\n",
+                        index.getIndexName(), index.getTableName(), index.getSize()));
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Captures lock information and blocking tree.
+     *
+     * @param instanceName the PostgreSQL instance
+     * @param databaseName optional database to filter by (null for all)
+     */
+    private String captureLocksData(String instanceName, String databaseName) {
+        var blockingTree = postgresService.getBlockingTree(instanceName);
+        var lockInfo = postgresService.getLockInfo(instanceName);
+
+        // Filter lock info by database if specified
+        if (databaseName != null && !databaseName.isEmpty()) {
+            lockInfo = lockInfo.stream()
+                    .filter(l -> databaseName.equals(l.getDatabase()))
+                    .toList();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Lock Analysis ===\n\n");
+
+        // Blocking tree
+        sb.append("--- Blocking Relationships ---\n");
+        if (blockingTree.isEmpty()) {
+            sb.append("  No blocking relationships detected\n");
+        } else {
+            for (var block : blockingTree) {
+                sb.append(String.format("  BLOCKER PID %d (%s) -> BLOCKED PID %d (%s)\n",
+                        block.getBlockerPid(),
+                        block.getBlockerUser() != null ? block.getBlockerUser() : "-",
+                        block.getBlockedPid(),
+                        block.getBlockedUser() != null ? block.getBlockedUser() : "-"));
+                sb.append(String.format("    Blocked duration: %s\n", block.getBlockedDuration()));
+                sb.append(String.format("    Lock mode: %s\n", block.getLockMode()));
+                if (block.getBlockerQuery() != null) {
+                    String truncated = block.getBlockerQuery().length() > 100
+                            ? block.getBlockerQuery().substring(0, 100) + "..."
+                            : block.getBlockerQuery();
+                    sb.append(String.format("    Blocker query: %s\n", truncated.replace("\n", " ")));
+                }
+            }
+        }
+        sb.append("\n");
+
+        // Lock summary
+        sb.append("--- Current Locks ---\n");
+        if (lockInfo.isEmpty()) {
+            sb.append("  No significant locks detected\n");
+        } else {
+            var granted = lockInfo.stream().filter(l -> l.isGranted()).count();
+            var waiting = lockInfo.size() - granted;
+            sb.append(String.format("  Total locks: %d (Granted: %d, Waiting: %d)\n",
+                    lockInfo.size(), granted, waiting));
+
+            // Show waiting locks
+            var waitingLocks = lockInfo.stream().filter(l -> !l.isGranted()).limit(10).toList();
+            if (!waitingLocks.isEmpty()) {
+                sb.append("\n  Waiting locks:\n");
+                for (var lock : waitingLocks) {
+                    sb.append(String.format("    PID %d waiting for %s on %s\n",
+                            lock.getPid(), lock.getMode(), lock.getRelation()));
+                }
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Captures table maintenance recommendations.
+     */
+    private String captureTableMaintenanceData(String instanceName) {
+        var recommendations = tableMaintenanceService.getRecommendations(instanceName);
+        if (recommendations.isEmpty()) {
+            return "=== Table Maintenance ===\nNo maintenance recommendations at this time";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Table Maintenance Recommendations ===\n\n");
+
+        // Group by severity
+        var bySeverity = new LinkedHashMap<String, List<com.bovinemagnet.pgconsole.model.TableMaintenanceRecommendation>>();
+        for (var rec : recommendations) {
+            String severity = rec.getSeverity() != null ? rec.getSeverity().name() : "UNKNOWN";
+            bySeverity.computeIfAbsent(severity, k -> new ArrayList<>()).add(rec);
+        }
+
+        for (var entry : bySeverity.entrySet()) {
+            sb.append(String.format("--- %s (%d tables) ---\n", entry.getKey(), entry.getValue().size()));
+            for (var rec : entry.getValue()) {
+                sb.append(String.format("  %s.%s\n", rec.getSchemaName(), rec.getTableName()));
+                sb.append(String.format("    Action: %s\n", rec.getTypeDisplay()));
+                sb.append(String.format("    Dead tuples: %,d (%.1f%%)\n",
+                        rec.getDeadTuples(), rec.getDeadTupleRatio() * 100));
+                sb.append(String.format("    Reason: %s\n", rec.getRationale()));
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Captures table statistics.
+     */
+    private String captureTablesData(String instanceName) {
+        var tables = postgresService.getTableStats(instanceName);
+        if (tables.isEmpty()) {
+            return "=== Table Statistics ===\nNo table statistics available";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== Table Statistics (Top 30 by Size) ===\n\n");
+
+        int count = 0;
+        for (var table : tables) {
+            if (count >= 30) break;
+            count++;
+
+            sb.append(String.format("%s.%s\n", table.getSchemaName(), table.getTableName()));
+            sb.append(String.format("  Live rows: %,d | Dead rows: %,d (%.1f%% bloat)\n",
+                    table.getnLiveTup(),
+                    table.getnDeadTup(),
+                    table.getBloatRatio() * 100));
+            sb.append(String.format("  Seq scans: %,d | Idx scans: %,d\n",
+                    table.getSeqScan(), table.getIdxScan()));
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 }

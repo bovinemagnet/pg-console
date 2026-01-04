@@ -192,6 +192,7 @@ public class RunbookExecution {
     private Long id;
     private Long runbookId;
     private String instanceId;
+    private String databaseName;  // Specific database to scope diagnostics to (null = all databases)
 
     // Associated runbook (for display)
     private Runbook runbook;
@@ -287,6 +288,25 @@ public class RunbookExecution {
 
     public void setInstanceId(String instanceId) {
         this.instanceId = instanceId;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
+    }
+
+    public void setDatabaseName(String databaseName) {
+        this.databaseName = databaseName;
+    }
+
+    /**
+     * Get a display-friendly scope description.
+     *
+     * @return database name if set, otherwise "All databases"
+     */
+    public String getScopeDisplay() {
+        return databaseName != null && !databaseName.isEmpty()
+                ? databaseName
+                : "All databases";
     }
 
     public Runbook getRunbook() {
