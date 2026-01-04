@@ -408,6 +408,13 @@ public class DiagnosticsResource {
         String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
         List<XidWraparound> xids = postgresService.getXidWraparound(instanceName);
 
+        // Deduplicate vacuum commands (same oldest table appears for all databases)
+        List<String> uniqueVacuumCommands = xids.stream()
+                .filter(x -> x.getOldestXidFullTableName() != null && !x.getOldestXidFullTableName().isEmpty())
+                .map(XidWraparound::getVacuumFreezeCommand)
+                .distinct()
+                .toList();
+
         return xidWraparound.data("appName", appName)
                 .data("appVersion", appVersion)
                 .data("currentPage", "xid-wraparound")
@@ -415,6 +422,7 @@ public class DiagnosticsResource {
                 .data("instance", instanceName)
                 .data("instances", postgresService.getInstanceList())
                 .data("xids", xids)
+                .data("vacuumCommands", uniqueVacuumCommands)
                 .data("warnPercent", xidWarnPercent)
                 .data("criticalPercent", xidCriticalPercent)
                 .data("schemaEnabled", config.schema().enabled())

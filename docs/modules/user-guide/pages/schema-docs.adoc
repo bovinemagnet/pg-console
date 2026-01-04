@@ -1,0 +1,835 @@
+= Schema Documentation
+Paul Snow
+0.0.0
+:description: Guide to generating comprehensive database schema documentation using pg-console
+:keywords: schema documentation, data dictionary, database documentation, DDL, schema export
+
+[abstract]
+This guide covers the Schema Documentation feature in pg-console, which generates comprehensive data dictionaries from PostgreSQL database schemas. Use this tool to create detailed documentation for databases, support compliance requirements, onboard new developers, and maintain technical reference materials.
+
+== Overview
+
+The Schema Documentation feature provides automated generation of comprehensive data dictionaries from PostgreSQL schemas. Unlike simple schema diagrams, Schema Documentation captures complete database metadata including:
+
+* Tables (columns, data types, constraints, comments)
+* Views and their SQL definitions
+* Functions and stored procedures with signatures
+* Sequences
+* Custom types (ENUM, COMPOSITE, DOMAIN)
+* Extensions and their versions
+* Indexes (types, columns, conditions)
+* Constraints (PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK)
+* Triggers and their firing conditions
+* Object comments and descriptions
+
+This tool is particularly valuable when:
+
+* Creating data dictionaries for compliance and audit requirements
+* Onboarding new developers to existing database schemas
+* Documenting database structure for technical specifications
+* Maintaining reference documentation alongside code
+* Exporting schema information for wikis and knowledge bases
+* Generating printable database reference guides
+
+== Accessing Schema Documentation
+
+Navigate to *Enterprise* > *Schema Docs* in the sidebar.
+
+[NOTE]
+====
+The Schema Documentation feature may be disabled by configuration. If you cannot see this menu item, contact your administrator to enable it via the `PG_CONSOLE_DASH_SCHEMA_DOCS` environment variable.
+====
+
+== Selecting Database Target
+
+Schema Documentation uses cascading dropdown menus to select the target database:
+
+1. *Instance* - Select the PostgreSQL instance (if multiple instances are configured)
+2. *Database* - Select the database name within the instance
+3. *Schema* - Select the schema to document (typically `public`)
+
+The dropdowns dynamically load available options based on your selections using HTMX for seamless interaction.
+
+=== Example Targets
+
+* *Production documentation*: `prod.myapp.public`
+* *Development reference*: `dev.myapp_v2.public`
+* *Cross-schema documentation*: `prod.analytics.reporting`
+
+== Filter Options
+
+Schema Documentation provides filtering capabilities to focus documentation on relevant objects and exclude temporary or system-generated elements.
+
+=== Filter Presets
+
+Convenient preset filters for common documentation scenarios:
+
+==== NONE
+
+Includes all objects without filtering:
+
+* *Includes*: All tables, views, functions, sequences, types, extensions
+* *Excludes*: Nothing
+
+Use this preset for:
+
+* Complete database documentation
+* Comprehensive technical reference
+* Full data dictionary generation
+
+==== EXCLUDE_TEMP_TABLES
+
+Excludes temporary and backup tables:
+
+* *Excludes*: Tables matching `temp_*`, `tmp_*`, `*_backup`, `*_bak`, `zz_*`
+* *Includes*: All other objects
+
+Use this preset for:
+
+* Production documentation without clutter
+* Clean data dictionaries
+* User-facing documentation
+
+==== EXCLUDE_SYSTEM_SCHEMAS
+
+Excludes PostgreSQL system schemas:
+
+* *Excludes*: `pg_catalog`, `information_schema`, `pgconsole`
+* *Includes*: Application schemas only
+
+Use this preset for:
+
+* Application-specific documentation
+* Developer onboarding materials
+* Business-focused data dictionaries
+
+==== PRODUCTION_SAFE
+
+Combines both EXCLUDE_TEMP_TABLES and EXCLUDE_SYSTEM_SCHEMAS:
+
+* *Excludes*: Temporary tables AND system schemas
+* *Includes*: Production application objects only
+
+Use this preset for:
+
+* Clean production documentation
+* Compliance and audit documentation
+* Professional data dictionaries
+
+=== Custom Exclude Patterns
+
+For fine-grained control, enter custom exclude patterns in the *Exclude Patterns* textarea:
+
+[source,text]
+----
+legacy_*, old_*, archive_*, test_*
+----
+
+Patterns support:
+
+* *Wildcards* - Use `*` to match any characters
+* *Multiple patterns* - Separate with commas
+* *Case sensitivity* - Patterns are case-insensitive by default
+
+==== Example Custom Patterns
+
+[cols="1,3"]
+|===
+|Pattern |Description
+
+|`temp_*, tmp_*`
+|Exclude all temporary tables
+
+|`*_backup, *_bak, *_old`
+|Exclude all backup tables
+
+|`test_*, dev_*, debug_*`
+|Exclude development and testing tables
+
+|`staging_*, *_staging`
+|Exclude staging-related objects
+
+|`z_*, zz_*, zzz_*`
+|Exclude archived or deprecated objects
+|===
+
+[TIP]
+====
+Combine filter presets with custom patterns for maximum flexibility:
+
+1. Select *EXCLUDE_SYSTEM_SCHEMAS* preset
+2. Add custom patterns: `migration_*, flyway_*`
+3. Result: Production schema without system objects or migration tables
+====
+
+== Include Objects
+
+Control which types of database objects appear in the documentation by selecting from the available object types:
+
+[cols="1,3"]
+|===
+|Object Type |Description
+
+|*Tables*
+|Table definitions including all columns, data types, defaults, and constraints
+
+|*Views*
+|View definitions with SQL queries and column information
+
+|*Functions*
+|Stored functions and procedures with parameters, return types, and source code
+
+|*Sequences*
+|Sequence definitions including current values and increment settings
+
+|*Custom Types*
+|User-defined types (ENUM, COMPOSITE, DOMAIN) with complete definitions
+
+|*Extensions*
+|Installed PostgreSQL extensions with versions and descriptions
+|===
+
+By default, all object types are included. Deselect types to create focused documentation (e.g., tables and views only for a lightweight data dictionary).
+
+== Include Details
+
+Control which detailed metadata appears in the documentation:
+
+[cols="1,3"]
+|===
+|Detail Type |Description
+
+|*Indexes*
+|Index definitions, types (B-tree, GiST, GIN), indexed columns, and conditions
+
+|*Constraints*
+|Primary keys, foreign keys, unique constraints, check constraints with definitions
+
+|*Triggers*
+|Trigger definitions including firing conditions, timing (BEFORE/AFTER), and functions
+
+|*Comments*
+|Database object comments and descriptions from `COMMENT ON` statements
+|===
+
+Deselecting details reduces documentation size and focuses on core structure.
+
+=== Detail Combinations
+
+* *Minimal documentation* - Deselect all details for table/view structure only
+* *Standard documentation* - Include indexes and constraints for common reference
+* *Complete documentation* - Include all details for comprehensive technical reference
+
+== Output Formats
+
+Schema Documentation supports three output formats optimised for different use cases:
+
+=== HTML Format
+
+Generates a self-contained, styled HTML document:
+
+* *Styling* - Professional styling with Bootstrap CSS
+* *Table of contents* - Clickable navigation to all documented objects
+* *Printable* - Optimised for printing to PDF
+* *Self-contained* - Embeds CSS for offline viewing
+* *Responsive* - Mobile-friendly layout
+
+Use HTML format for:
+
+* Printable reference guides
+* Offline documentation
+* Email distribution
+* Management presentations
+* Compliance documentation
+
+==== HTML Features
+
+* Collapsible sections for large schemas
+* Syntax highlighting for SQL definitions
+* Colour-coded object types
+* Quick search within browser
+* Print-optimised layouts
+
+=== Markdown Format
+
+Generates GitHub-flavoured Markdown:
+
+* *Plain text* - Human-readable in text editors
+* *Version control friendly* - Clean diffs in Git
+* *Wiki compatible* - Works with GitHub, GitLab, Confluence
+* *Tables and code blocks* - Formatted with Markdown syntax
+* *Portable* - Renders in any Markdown viewer
+
+Use Markdown format for:
+
+* Version control commits alongside code
+* GitHub/GitLab wiki pages
+* README documentation
+* Developer collaboration
+* Integration with static site generators
+
+==== Markdown Features
+
+* Table-based object listings
+* Code blocks with syntax highlighting
+* Hierarchical headings for navigation
+* Links to related objects
+* Compatible with MkDocs, Docusaurus, Jekyll
+
+=== AsciiDoc Format
+
+Generates AsciiDoc markup suitable for Antora documentation sites:
+
+* *Antora compatible* - Integrates with Antora documentation systems
+* *Rich markup* - Advanced formatting capabilities
+* *Modular* - Supports includes and cross-references
+* *Professional* - Publication-quality output
+* *Extensible* - Custom attributes and macros
+
+Use AsciiDoc format for:
+
+* Antora documentation sites
+* Technical writing workflows
+* Professional documentation publishing
+* Integration with corporate documentation systems
+* Multi-format export (PDF, HTML, EPUB from AsciiDoc)
+
+==== AsciiDoc Features
+
+* Admonition blocks for notes and warnings
+* Source blocks with language specification
+* Cross-reference support
+* Attribute-based customisation
+* Table support with advanced formatting
+
+[TIP]
+====
+Choose the format based on your workflow:
+
+* *HTML* - For immediate viewing and printing
+* *Markdown* - For version control and wikis
+* *AsciiDoc* - For professional documentation sites and publishing
+====
+
+== Generating Documentation
+
+After configuring your selections, generate the documentation using one of two actions:
+
+=== Preview Documentation
+
+Click *Preview* to open the generated documentation in a new browser tab:
+
+* *Immediate viewing* - See results instantly
+* *No download required* - View directly in browser
+* *Iterative refinement* - Adjust filters and regenerate quickly
+* *Shareable URL* - Share the preview URL (temporary)
+
+Use preview for:
+
+* Verifying filter settings
+* Checking documentation content before download
+* Quick reference during development
+* Sharing temporary documentation links
+
+[NOTE]
+====
+Preview URLs are temporary and may expire after a period of inactivity. For permanent documentation, use the Download action.
+====
+
+=== Download Documentation
+
+Click *Download* to save the documentation as a file:
+
+* *Timestamped filename* - Includes generation timestamp
+* *Format-specific extension* - `.html`, `.md`, or `.adoc`
+* *Ready for archival* - Permanent local copy
+* *Version control ready* - Commit to Git repositories
+
+Downloaded files follow the naming convention:
+
+[source,text]
+----
+schema_docs_{instance}_{database}_{schema}_{timestamp}.{format}
+----
+
+Example filenames:
+
+[source,text]
+----
+schema_docs_prod_myapp_public_20260105_143022.html
+schema_docs_dev_analytics_reporting_20260105_143022.md
+schema_docs_prod_core_public_20260105_143022.adoc
+----
+
+== Use Cases
+
+=== Compliance and Audit Documentation
+
+*Scenario*: Generate data dictionary for SOC2 or GDPR compliance audits.
+
+*Process*:
+
+1. Select Instance: `prod`, Database: `customer_db`, Schema: `public`
+2. Select Filter Preset: *PRODUCTION_SAFE*
+3. Include Objects: *Tables*, *Views*, *Custom Types*
+4. Include Details: *Indexes*, *Constraints*, *Comments*
+5. Select Format: *HTML*
+6. Click *Download*
+7. Print to PDF for audit records
+
+*Expected Outcome*: Professional data dictionary documenting all production tables, constraints, and comments for compliance verification.
+
+=== New Developer Onboarding
+
+*Scenario*: Create reference documentation for developers joining the project.
+
+*Process*:
+
+1. Select Instance: `dev`, Database: `myapp`, Schema: `public`
+2. Select Filter Preset: *EXCLUDE_TEMP_TABLES*
+3. Include Objects: All object types
+4. Include Details: *Indexes*, *Constraints*, *Triggers*, *Comments*
+5. Select Format: *Markdown*
+6. Click *Download*
+7. Commit `schema-reference.md` to Git repository
+8. Link from `README.md` or developer wiki
+
+*Expected Outcome*: Comprehensive, version-controlled schema documentation accessible to all developers in the repository.
+
+=== API Documentation Generation
+
+*Scenario*: Document database schema for REST API technical specifications.
+
+*Process*:
+
+1. Select Instance: `prod`, Database: `api_backend`, Schema: `public`
+2. Select Filter Preset: *EXCLUDE_SYSTEM_SCHEMAS*
+3. Custom Exclude Patterns: `migration_*, internal_*`
+4. Include Objects: *Tables*, *Views*, *Custom Types*
+5. Include Details: *Constraints*, *Comments*
+6. Select Format: *AsciiDoc*
+7. Click *Download*
+8. Integrate into Antora documentation site under API reference section
+
+*Expected Outcome*: Technical API documentation including database schema details integrated with REST endpoint documentation.
+
+=== Database Refactoring Reference
+
+*Scenario*: Create snapshot of current schema before major refactoring project.
+
+*Process*:
+
+1. Select Instance: `prod`, Database: `legacy_app`, Schema: `public`
+2. Select Filter Preset: *NONE*
+3. Include Objects: All object types
+4. Include Details: All details
+5. Select Format: *HTML*
+6. Click *Download*
+7. Save as `schema_before_refactoring_20260105.html` (with timestamp)
+8. Compare against post-refactoring documentation
+
+*Expected Outcome*: Complete baseline documentation for comparison during and after refactoring.
+
+=== Multi-Schema Documentation
+
+*Scenario*: Document multiple application schemas for comprehensive reference.
+
+*Process*:
+
+1. Generate documentation for each schema:
+   * Instance: `prod`, Database: `myapp`, Schema: `public` → `public_schema.md`
+   * Instance: `prod`, Database: `myapp`, Schema: `reporting` → `reporting_schema.md`
+   * Instance: `prod`, Database: `myapp`, Schema: `audit` → `audit_schema.md`
+2. Use consistent filter preset: *PRODUCTION_SAFE*
+3. Use format: *Markdown*
+4. Combine into single documentation repository
+5. Create index page linking to each schema's documentation
+
+*Expected Outcome*: Organised multi-schema documentation structure in version control.
+
+== API Access
+
+Schema Documentation functionality is available via REST API for programmatic access and automation.
+
+=== API Endpoints
+
+==== List Databases
+
+Retrieve available databases for an instance:
+
+[source,bash]
+----
+curl "http://localhost:8080/schema-docs/databases?instance=production"
+----
+
+Response:
+
+[source,json]
+----
+{
+  "databases": ["myapp", "analytics", "reporting"]
+}
+----
+
+==== List Schemas
+
+Retrieve available schemas for a database:
+
+[source,bash]
+----
+curl "http://localhost:8080/schema-docs/schemas?instance=prod&database=myapp"
+----
+
+Response:
+
+[source,json]
+----
+{
+  "schemas": ["public", "reporting", "audit"]
+}
+----
+
+==== Generate Documentation
+
+Generate schema documentation programmatically:
+
+[source,bash]
+----
+curl "http://localhost:8080/schema-docs/generate? \
+  instance=prod& \
+  database=myapp& \
+  schema=public& \
+  format=HTML& \
+  filterPreset=PRODUCTION_SAFE& \
+  includeTables=true& \
+  includeViews=true& \
+  includeFunctions=true& \
+  includeSequences=true& \
+  includeTypes=true& \
+  includeExtensions=true& \
+  includeIndexes=true& \
+  includeConstraints=true& \
+  includeTriggers=true& \
+  includeComments=true" \
+  -o schema_docs.html
+----
+
+==== JSON API
+
+Retrieve schema metadata as JSON:
+
+[source,bash]
+----
+curl "http://localhost:8080/schema-docs/api?instance=prod&database=myapp"
+----
+
+Response:
+
+[source,json]
+----
+{
+  "instance": "prod",
+  "database": "myapp",
+  "schema": "public",
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigserial",
+          "nullable": false,
+          "default": "nextval('users_id_seq'::regclass)"
+        },
+        {
+          "name": "email",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "users_pkey",
+          "type": "PRIMARY KEY",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ]
+    }
+  ],
+  "views": [],
+  "functions": []
+}
+----
+
+=== Automation Examples
+
+==== Daily Documentation Generation
+
+Automate documentation generation using cron:
+
+[source,bash]
+----
+#!/bin/bash
+# daily-schema-docs.sh
+# Generate daily schema documentation for archival
+
+DATE=$(date +%Y%m%d)
+OUTPUT_DIR="/var/docs/schema"
+
+curl "http://localhost:8080/schema-docs/generate? \
+  instance=prod& \
+  database=myapp& \
+  schema=public& \
+  format=HTML& \
+  filterPreset=PRODUCTION_SAFE& \
+  includeTables=true& \
+  includeViews=true& \
+  includeIndexes=true& \
+  includeConstraints=true& \
+  includeComments=true" \
+  -o "${OUTPUT_DIR}/schema_${DATE}.html"
+
+# Keep only last 30 days
+find ${OUTPUT_DIR} -name "schema_*.html" -mtime +30 -delete
+----
+
+Add to crontab:
+
+[source,text]
+----
+0 2 * * * /usr/local/bin/daily-schema-docs.sh
+----
+
+==== CI/CD Integration
+
+Generate documentation during CI/CD pipeline:
+
+[source,yaml]
+----
+# .github/workflows/schema-docs.yml
+name: Generate Schema Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'migrations/**'
+
+jobs:
+  schema-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Generate schema documentation
+        run: |
+          curl "http://pg-console:8080/schema-docs/generate? \
+            instance=dev& \
+            database=myapp& \
+            schema=public& \
+            format=MARKDOWN& \
+            filterPreset=PRODUCTION_SAFE& \
+            includeTables=true& \
+            includeViews=true& \
+            includeIndexes=true& \
+            includeConstraints=true& \
+            includeComments=true" \
+            -o docs/schema-reference.md
+
+      - name: Commit updated documentation
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add docs/schema-reference.md
+          git commit -m "docs: update schema documentation [skip ci]" || true
+          git push
+----
+
+== Best Practices
+
+=== Documentation Workflow
+
+1. *Version control documentation* - Commit generated Markdown/AsciiDoc to Git alongside code
+2. *Automate generation* - Use API to regenerate documentation on schema changes
+3. *Consistent filtering* - Use same filter presets across environments for comparability
+4. *Enrich with comments* - Add PostgreSQL comments to objects for better generated documentation
+5. *Regular updates* - Regenerate documentation after each migration or schema change
+
+=== PostgreSQL Comment Best Practices
+
+Schema Documentation extracts PostgreSQL object comments when *Include Comments* is enabled. Enhance your documentation by adding meaningful comments:
+
+[source,sql]
+----
+-- Table comments
+COMMENT ON TABLE users IS 'Application user accounts with authentication details';
+
+-- Column comments
+COMMENT ON COLUMN users.email IS 'User email address, must be unique';
+COMMENT ON COLUMN users.created_at IS 'Account creation timestamp (UTC)';
+
+-- View comments
+COMMENT ON VIEW active_users IS 'Users who have logged in within the last 30 days';
+
+-- Function comments
+COMMENT ON FUNCTION calculate_total(bigint) IS
+  'Calculates order total including tax and shipping';
+
+-- Constraint comments (via table comment or check constraint name)
+COMMENT ON CONSTRAINT users_email_format ON users IS
+  'Ensures email addresses match standard format';
+----
+
+[TIP]
+====
+Adopt a comment style guide for consistency:
+
+* *Tables* - Business purpose and primary use case
+* *Columns* - Data meaning, format, valid values, units
+* *Views* - Data aggregation logic and intended use
+* *Functions* - Purpose, parameters, return value, side effects
+====
+
+=== Format Selection Strategy
+
+Choose formats based on documentation lifecycle:
+
+[cols="1,3"]
+|===
+|Lifecycle Stage |Recommended Format
+
+|*Development*
+|Markdown (commit to repository)
+
+|*Code review*
+|Markdown (diff-friendly in pull requests)
+
+|*Deployment*
+|HTML or AsciiDoc (publish to documentation site)
+
+|*Compliance audit*
+|HTML (print to PDF for archival)
+
+|*Knowledge base*
+|Markdown or AsciiDoc (integrate with wiki systems)
+|===
+
+=== Performance Considerations
+
+1. *Large schemas* - For schemas with thousands of objects, deselect unnecessary details to speed generation
+2. *Off-peak generation* - Generate documentation during low-traffic periods
+3. *Filter aggressively* - Use exclude patterns to focus on relevant objects
+4. *Preview before download* - Use preview to verify filter settings before generating large documents
+
+=== Security Considerations
+
+1. *Access control* - Restrict Schema Documentation access to authorised users only
+2. *Sensitive data* - Exclude tables with sensitive data using custom patterns
+3. *Comment sanitisation* - Review PostgreSQL comments for sensitive information before sharing documentation
+4. *Distribution control* - Track who downloads documentation and where it's shared
+
+== Troubleshooting
+
+=== Empty Documentation Generated
+
+If generated documentation contains no objects:
+
+1. *Check schema selection* - Verify the correct schema is selected (e.g., `public`, not `pg_catalog`)
+2. *Review filter settings* - Ensure filters aren't too restrictive
+3. *Verify object types* - Confirm at least one object type is selected
+4. *Check permissions* - Verify the database user has access to schema metadata
+
+[source,sql]
+----
+-- Verify schema contents
+SELECT tablename FROM pg_tables WHERE schemaname = 'public';
+
+-- Check user permissions
+SELECT has_schema_privilege('public', 'USAGE');
+----
+
+=== Missing Comments in Documentation
+
+If object comments don't appear:
+
+1. *Enable Include Comments* - Ensure the *Comments* checkbox is selected
+2. *Verify comments exist* - Check PostgreSQL for comments:
++
+[source,sql]
+----
+-- View table comments
+SELECT obj_description('public.users'::regclass);
+
+-- View column comments
+SELECT col_description('public.users'::regclass, 1);
+----
+
+3. *Check permissions* - Verify access to `pg_catalog.pg_description`
+
+=== Preview URL Not Working
+
+If preview URLs fail to load:
+
+1. *Regenerate documentation* - Click *Preview* again to create a new temporary URL
+2. *Check browser console* - Look for JavaScript errors or network issues
+3. *Verify format* - Ensure format is compatible with browser preview (HTML works best)
+4. *Use download instead* - Download the file and open locally
+
+=== Large Documentation Files
+
+If documentation files are too large:
+
+1. *Reduce object types* - Deselect functions or triggers if not needed
+2. *Deselect details* - Remove indexes, constraints, or triggers
+3. *Use exclude patterns* - Filter out unnecessary objects
+4. *Split by schema* - Generate separate documentation for each schema
+5. *Consider JSON API* - Use API to extract specific object metadata programmatically
+
+=== Permission Denied Errors
+
+If you encounter permission errors during generation:
+
+[source,sql]
+----
+-- Grant necessary privileges for schema documentation
+GRANT USAGE ON SCHEMA public TO pgconsole_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgconsole_user;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO pgconsole_user;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO pgconsole_user;
+
+-- For metadata access
+GRANT SELECT ON pg_catalog.pg_class TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_attribute TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_description TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_proc TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_type TO pgconsole_user;
+----
+
+== Configuration
+
+Schema Documentation behaviour can be customised via configuration. See xref:admin-guide:configuration.adoc#schema-docs-configuration[Schema Documentation Configuration] for details.
+
+Key configuration options:
+
+* *Enable/disable feature* - `PG_CONSOLE_DASH_SCHEMA_DOCS`
+* *Default filter preset* - Preset to apply by default
+* *Default output format* - HTML, Markdown, or AsciiDoc
+* *Maximum object count* - Limit for performance protection
+* *Include options defaults* - Default selections for object types and details
+* *Instance list* - Configure available PostgreSQL instances
+
+== Related Documentation
+
+* xref:database-diff.adoc[Database Diff] - Compare schemas across instances and generate migration scripts
+* xref:dashboards.adoc#tables-dashboard[Tables Dashboard] - Real-time table statistics and bloat monitoring
+* xref:admin-guide:configuration.adoc[Configuration Guide] - Configure pg-console features and behaviour
+* xref:api-reference:endpoints.adoc#schema-docs-endpoints[API Reference] - Complete API documentation for Schema Documentation
+
+== Next Steps
+
+* Explore xref:database-diff.adoc[Database Diff] to compare schemas and generate migration scripts
+* Review xref:diagnostics.adoc[Advanced Diagnostics] for schema health monitoring
+* Learn about xref:admin-guide:multi-instance.adoc[Multi-Instance Configuration] to document multiple PostgreSQL clusters
+* Consult xref:troubleshooting.adoc[Troubleshooting Guide] for common schema documentation issues

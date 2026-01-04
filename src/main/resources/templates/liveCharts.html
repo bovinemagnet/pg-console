@@ -37,7 +37,9 @@
                 <h5 class="card-title mb-0">Database Connections</h5>
             </div>
             <div class="card-body">
-                <canvas id="connectionsChart" height="200"></canvas>
+                <div class="chart-container" style="position: relative; height: 200px;">
+                    <canvas id="connectionsChart"></canvas>
+                </div>
                 <div class="mt-2 small text-muted">
                     <span class="badge" style="background-color: #28a745">Active: <span id="activeConn">0</span></span>
                     <span class="badge" style="background-color: #6c757d">Idle: <span id="idleConn">0</span></span>
@@ -54,7 +56,9 @@
                 <h5 class="card-title mb-0">Transaction Rate</h5>
             </div>
             <div class="card-body">
-                <canvas id="transactionsChart" height="200"></canvas>
+                <div class="chart-container" style="position: relative; height: 200px;">
+                    <canvas id="transactionsChart"></canvas>
+                </div>
                 <div class="mt-2 small text-muted">
                     <span class="badge" style="background-color: #28a745">Commits/s: <span id="commitsRate">0</span></span>
                     <span class="badge" style="background-color: #dc3545">Rollbacks/s: <span id="rollbacksRate">0</span></span>
@@ -72,7 +76,9 @@
                 <h5 class="card-title mb-0">Tuple Operations</h5>
             </div>
             <div class="card-body">
-                <canvas id="tuplesChart" height="200"></canvas>
+                <div class="chart-container" style="position: relative; height: 200px;">
+                    <canvas id="tuplesChart"></canvas>
+                </div>
                 <div class="mt-2 small text-muted">
                     <span class="badge" style="background-color: #28a745">Inserts/s: <span id="insertsRate">0</span></span>
                     <span class="badge" style="background-color: #007bff">Updates/s: <span id="updatesRate">0</span></span>
@@ -89,7 +95,9 @@
                 <h5 class="card-title mb-0">Cache Hit Ratio</h5>
             </div>
             <div class="card-body">
-                <canvas id="cacheChart" height="200"></canvas>
+                <div class="chart-container" style="position: relative; height: 200px;">
+                    <canvas id="cacheChart"></canvas>
+                </div>
                 <div class="mt-2 small text-muted">
                     <span class="badge" style="background-color: #28a745">Buffer: <span id="bufferHit">0</span>%</span>
                     <span class="badge" style="background-color: #007bff">Index: <span id="indexHit">0</span>%</span>
@@ -126,49 +134,73 @@
         }
     };
 
-    // Initialise charts
+    // Generate initial empty labels for chart structure
+    const initialLabels = Array(10).fill('');
+
+    // Initialise charts with placeholder structure
     const connectionsChart = new Chart(document.getElementById('connectionsChart'), {
         ...chartConfig,
         data: {
-            labels: [],
+            labels: [...initialLabels],
             datasets: [
-                { label: 'Active', data: [], borderColor: '#28a745', tension: 0.1 },
-                { label: 'Idle', data: [], borderColor: '#6c757d', tension: 0.1 },
-                { label: 'Idle in Txn', data: [], borderColor: '#ffc107', tension: 0.1 }
+                { label: 'Active', data: Array(10).fill(null), borderColor: '#28a745', tension: 0.1, fill: false },
+                { label: 'Idle', data: Array(10).fill(null), borderColor: '#6c757d', tension: 0.1, fill: false },
+                { label: 'Idle in Txn', data: Array(10).fill(null), borderColor: '#ffc107', tension: 0.1, fill: false }
             ]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                x: { display: false },
+                y: { beginAtZero: true, suggestedMax: 10 }
+            }
         }
     });
 
     const transactionsChart = new Chart(document.getElementById('transactionsChart'), {
         ...chartConfig,
         data: {
-            labels: [],
+            labels: [...initialLabels],
             datasets: [
-                { label: 'Commits', data: [], borderColor: '#28a745', tension: 0.1 },
-                { label: 'Rollbacks', data: [], borderColor: '#dc3545', tension: 0.1 }
+                { label: 'Commits', data: Array(10).fill(null), borderColor: '#28a745', tension: 0.1, fill: false },
+                { label: 'Rollbacks', data: Array(10).fill(null), borderColor: '#dc3545', tension: 0.1, fill: false }
             ]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                x: { display: false },
+                y: { beginAtZero: true, suggestedMax: 10 }
+            }
         }
     });
 
     const tuplesChart = new Chart(document.getElementById('tuplesChart'), {
         ...chartConfig,
         data: {
-            labels: [],
+            labels: [...initialLabels],
             datasets: [
-                { label: 'Inserts', data: [], borderColor: '#28a745', tension: 0.1 },
-                { label: 'Updates', data: [], borderColor: '#007bff', tension: 0.1 },
-                { label: 'Deletes', data: [], borderColor: '#dc3545', tension: 0.1 }
+                { label: 'Inserts', data: Array(10).fill(null), borderColor: '#28a745', tension: 0.1, fill: false },
+                { label: 'Updates', data: Array(10).fill(null), borderColor: '#007bff', tension: 0.1, fill: false },
+                { label: 'Deletes', data: Array(10).fill(null), borderColor: '#dc3545', tension: 0.1, fill: false }
             ]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                x: { display: false },
+                y: { beginAtZero: true, suggestedMax: 10 }
+            }
         }
     });
 
     const cacheChart = new Chart(document.getElementById('cacheChart'), {
         ...chartConfig,
         data: {
-            labels: [],
+            labels: [...initialLabels],
             datasets: [
-                { label: 'Buffer Cache', data: [], borderColor: '#28a745', tension: 0.1 },
-                { label: 'Index Cache', data: [], borderColor: '#007bff', tension: 0.1 }
+                { label: 'Buffer Cache', data: Array(10).fill(null), borderColor: '#28a745', tension: 0.1, fill: false },
+                { label: 'Index Cache', data: Array(10).fill(null), borderColor: '#007bff', tension: 0.1, fill: false }
             ]
         },
         options: {
@@ -236,13 +268,20 @@
     }
 
     function addDataPoint(chart, label, values) {
-        chart.data.labels.push(label);
-        values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+        // Shift out oldest data point
+        chart.data.labels.shift();
+        chart.data.datasets.forEach(ds => ds.data.shift());
 
-        if (chart.data.labels.length > maxDataPoints) {
+        // Add new data point
+        chart.data.labels.push(label);
+        values.forEach((v, i) => chart.data.datasets[i].data.push(parseFloat(v)));
+
+        // Trim to max data points if needed
+        while (chart.data.labels.length > maxDataPoints) {
             chart.data.labels.shift();
             chart.data.datasets.forEach(ds => ds.data.shift());
         }
+
         chart.update('none');
     }
 

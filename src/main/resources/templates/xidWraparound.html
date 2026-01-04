@@ -82,10 +82,8 @@
             </div>
             <div class="card-body">
                 <p class="text-muted">Run these commands to freeze old transactions:</p>
-                {#for x in xids}
-                {#if x.oldestXidFullTableName}
-                <pre class="bg-dark text-light p-2 rounded"><code>{x.vacuumFreezeCommand}</code></pre>
-                {/if}
+                {#for cmd in vacuumCommands}
+                <pre class="bg-dark text-light p-2 rounded"><code>{cmd}</code></pre>
                 {/for}
             </div>
         </div>
