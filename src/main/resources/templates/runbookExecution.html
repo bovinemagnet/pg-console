@@ -52,7 +52,7 @@
                 <h6 class="text-muted mb-2">Duration</h6>
                 <h4 class="mb-0">
                     {#if execution.completedAt}
-                    {execution.durationMinutes} min
+                    {execution.formattedDuration}
                     {#else}
                     In Progress
                     {/if}
@@ -71,7 +71,7 @@
     <div class="card-body p-0">
         <div class="list-group list-group-flush">
             {#for step in execution.runbook.steps}
-            {#let stepNumber = step_index + 1}
+            {#let stepNumber = step.order}
             {#let stepResult = execution.getStepResult(stepNumber)}
             <div class="list-group-item {#if stepNumber == execution.currentStep && execution.status.name == 'IN_PROGRESS'}bg-primary bg-opacity-10{/if}">
                 <div class="d-flex">
@@ -113,19 +113,19 @@
                                 <p class="text-muted mb-2">{step.description}</p>
 
                                 {#if step.actionType.name == 'NAVIGATE'}
-                                <a href="{step.actionValue}?instance={instance}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                <a href="{step.action}?instance={instance}" class="btn btn-sm btn-outline-primary" target="_blank">
                                     <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
                                     Open Page
                                 </a>
                                 {#else if step.actionType.name == 'QUERY' || step.actionType.name == 'SQL_TEMPLATE'}
-                                <pre class="bg-dark text-light p-2 rounded mb-2"><code>{step.actionValue}</code></pre>
+                                <pre class="bg-dark text-light p-2 rounded mb-2"><code>{step.action}</code></pre>
                                 <button class="btn btn-sm btn-outline-secondary"
                                         onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim())">
                                     <i class="bi bi-clipboard me-1" aria-hidden="true"></i>
                                     Copy SQL
                                 </button>
                                 {#else if step.actionType.name == 'DOCUMENTATION'}
-                                <a href="{step.actionValue}" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener">
+                                <a href="{step.action}" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener">
                                     <i class="bi bi-book me-1" aria-hidden="true"></i>
                                     View Documentation
                                 </a>

@@ -61,6 +61,9 @@ public class SchemaComparisonResource {
     FeatureToggleService featureToggleService;
 
     @Inject
+    PdfExportService pdfExportService;
+
+    @Inject
     InstanceConfig config;
 
     /**
@@ -183,7 +186,8 @@ public class SchemaComparisonResource {
                 .data("drift", drift)
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("schemaEnabled", config.schema().enabled())
-                .data("toggles", featureToggleService.getAllToggles());
+                .data("toggles", featureToggleService.getAllToggles())
+                .data("instances", dataSourceManager.getAvailableInstances());
     }
 
     /**
@@ -228,7 +232,8 @@ public class SchemaComparisonResource {
                 .data("drift", drift)
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("schemaEnabled", config.schema().enabled())
-                .data("toggles", featureToggleService.getAllToggles());
+                .data("toggles", featureToggleService.getAllToggles())
+                .data("instances", dataSourceManager.getAvailableInstances());
     }
 
     /**
@@ -266,7 +271,8 @@ public class SchemaComparisonResource {
                 .data("selectedWrapOption", wrap)
                 .data("includeDrops", includeDrops)
                 .data("schemaEnabled", config.schema().enabled())
-                .data("toggles", featureToggleService.getAllToggles());
+                .data("toggles", featureToggleService.getAllToggles())
+                .data("instances", dataSourceManager.getAvailableInstances());
     }
 
     /**
@@ -591,6 +597,33 @@ public class SchemaComparisonResource {
 
         return Response.ok(md.toString())
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .build();
+    }
+
+    /**
+     * Export comparison result as PDF.
+     */
+    @GET
+    @Path("/export/pdf")
+    @Produces("application/pdf")
+    public Response exportPdf(
+            @QueryParam("sourceInstance") String sourceInstance,
+            @QueryParam("destInstance") String destInstance,
+            @QueryParam("sourceSchema") String sourceSchema,
+            @QueryParam("destSchema") String destSchema) {
+        featureToggleService.requirePageEnabled("schema-comparison");
+
+        SchemaComparisonResult result = comparisonService.compare(
+                sourceInstance, destInstance, sourceSchema, destSchema, null);
+
+        byte[] pdfBytes = pdfExportService.generateSchemaComparisonPdf(result);
+
+        String filename = String.format("comparison_%s_%s_vs_%s_%s.pdf",
+                sourceInstance, sourceSchema, destInstance, destSchema);
+
+        return Response.ok(pdfBytes)
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Type", "application/pdf")
                 .build();
     }
 

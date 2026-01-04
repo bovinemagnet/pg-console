@@ -271,6 +271,10 @@ Product Specification: Postgres Insight Dashboard
   - Automated diagnostic data collection
   - Integration with ticketing systems (Jira, ServiceNow)
   - Post-incident report generation
+  - Auto-executable runbooks for non-destructive operations (e.g., VACUUM ANALYZE)
+  - Auto-execute endpoint (`/insights/runbooks/{id}/auto-execute`) runs all steps automatically
+  - SQL_TEMPLATE steps with `{table_name}` placeholder execute against tables needing maintenance
+  - Step results tracked with status, timestamps, and output for each step
 - [x] **Scheduled Maintenance Automation**
   - Intelligent vacuum scheduling based on table activity
   - Automatic index rebuild recommendations
@@ -331,7 +335,7 @@ Product Specification: Postgres Insight Dashboard
   - Inline SQL definition diffs (unified or split view)
   - Search and filter within diff results
   - Export diff report as HTML or Markdown
-  - [ ] Export as PDF (deferred to future phase)
+  - [x] Export as PDF (OpenHTMLtoPDF library)
   - [ ] Shareable comparison result URLs (deferred to future phase)
 
 ### Phase 13 — Dashboard Feature Toggles & Modular Configuration (Completed)
@@ -687,6 +691,16 @@ Product Specification: Postgres Insight Dashboard
   - Per-instance storage (requires schema mode)
   - Feature toggle: `PG_CONSOLE_DASH_ENTERPRISE_CUSTOM_DASHBOARDS` (default: true)
   - Keyboard shortcut: `c` for quick access
+
+### Phase 24 — Playwright End-to-End Testing (Planned)
+- [ ] **Test Framework Setup** - Base test class, browser lifecycle, screenshot/video capture
+- [ ] **Page Object Model (POM)** - Reusable page and component objects
+- [ ] **Core Workflow Tests** - Navigation, theme, refresh, keyboard shortcuts
+- [ ] **Data Display Tests** - Slow queries, activity, locks, tables, sparklines
+- [ ] **Interactive Feature Tests** - Sorting, drill-downs, exports
+- [ ] **Responsive Design Tests** - Desktop, tablet, mobile viewports
+- [ ] **Accessibility Tests** - Keyboard navigation, ARIA, focus indicators
+- [ ] **Claude Code Playwright Plugin Integration** - AI-assisted test development workflow
 
 ---
 
@@ -1505,13 +1519,11 @@ Generated DDL scripts are syntactically correct and dependency-ordered - DONE
 
 Profiles persist and can be re-run with one click - DONE
 
-Comparison results exportable as HTML or Markdown - DONE
+Comparison results exportable as HTML, Markdown, or PDF - DONE
 
 Known Limitations:
 
 Scheduled comparison runs with email notifications deferred to future phase
-
-PDF export deferred to future phase
 
 Shareable comparison result URLs deferred to future phase
 
@@ -2133,6 +2145,373 @@ Configuration Properties:
 pg-console.schema.enabled=${PG_CONSOLE_SCHEMA_ENABLED:true}
 pg-console.schema.in-memory-minutes=${PG_CONSOLE_IN_MEMORY_MINUTES:30}
 ```
+
+### Phase 24 — Playwright End-to-End Testing (Planned)
+- [ ] **Test Framework Setup**
+  - Base test class `PlaywrightTestBase` with `@Tag("e2e")` annotation
+  - Browser lifecycle management (Chromium, Firefox, WebKit)
+  - Configurable headless/headed mode via environment variable
+  - Test timeout and retry configuration
+  - Screenshot and video capture on failure
+  - Parallel test execution support
+- [ ] **Page Object Model (POM) Implementation**
+  - `BasePage` class with common interactions (navigation, waits, assertions)
+  - Core page objects: `DashboardPage`, `ActivityPage`, `SlowQueriesPage`, `LocksPage`, `TablesPage`
+  - Analysis page objects: `IndexAdvisorPage`, `QueryRegressionsPage`, `ReplicationPage`
+  - Component objects: `SidebarComponent`, `TopbarComponent`, `ModalComponent`, `TableComponent`
+  - Fragment helpers for htmx-loaded content
+- [ ] **Core Workflow Tests**
+  - Application startup and dashboard load
+  - Navigation between all main pages
+  - Sidebar collapse/expand functionality
+  - Theme toggle (dark/light mode) with persistence
+  - Auto-refresh dropdown configuration
+  - Instance selector switching
+  - Keyboard shortcuts functionality
+- [ ] **Data Display Tests**
+  - Slow queries table loading and display
+  - Query detail page with copy functionality
+  - Activity page with session information
+  - Locks page with blocking tree visualisation
+  - Tables page with bloat indicators
+  - Databases comparison and detail views
+  - Sparkline SVG rendering verification
+- [ ] **Interactive Feature Tests**
+  - Column sorting on slow queries table
+  - Drill-down tooltip loading (htmx fragments)
+  - CSV export for slow queries
+  - Incident report export
+  - EXPLAIN plan generation (for SELECT queries)
+  - Query cancellation flow (with confirmation modal)
+- [ ] **Responsive Design Tests**
+  - Desktop viewport (1920x1080)
+  - Tablet viewport (768x1024)
+  - Mobile viewport (375x667)
+  - Mobile bottom navigation functionality
+  - Sidebar overlay on mobile
+  - Table-to-card conversion on small screens
+- [ ] **Accessibility Tests**
+  - Keyboard navigation throughout application
+  - ARIA labels on interactive elements
+  - Focus indicators visibility
+  - Screen reader announcements for dynamic content
+  - High contrast mode functionality
+- [ ] **Claude Code Playwright Plugin Integration**
+  - Configure Playwright MCP plugin for Claude Code
+  - Snapshot-based testing workflow documentation
+  - AI-assisted test development patterns
+  - Interactive debugging with browser snapshots
+
+Acceptance Criteria:
+
+- E2E tests run successfully with `gradle21w e2eTest` command
+- All core dashboard pages load without errors
+- Navigation works correctly across all pages
+- Theme toggle persists preference in localStorage
+- Auto-refresh updates content at configured intervals
+- Sorting produces correct column ordering
+- Drill-down tooltips load htmx fragments correctly
+- Export functionality generates valid files
+- Tests pass on Chromium, Firefox, and WebKit browsers
+- Responsive layouts work at all breakpoints
+- CI/CD pipeline runs E2E tests on pull requests
+- Screenshots captured automatically on test failures
+- Claude Code can use Playwright plugin to inspect and test pages
+
+Configuration Properties:
+
+```properties
+# E2E test configuration
+pg-console.test.e2e.headless=${PG_CONSOLE_TEST_HEADLESS:true}
+pg-console.test.e2e.browser=${PG_CONSOLE_TEST_BROWSER:chromium}
+pg-console.test.e2e.timeout-seconds=${PG_CONSOLE_TEST_TIMEOUT:30}
+pg-console.test.e2e.screenshot-on-failure=${PG_CONSOLE_TEST_SCREENSHOTS:true}
+pg-console.test.e2e.video-on-failure=${PG_CONSOLE_TEST_VIDEO:false}
+pg-console.test.e2e.base-url=${PG_CONSOLE_TEST_BASE_URL:http://localhost:8080}
+```
+
+Test Commands:
+
+```bash
+# Run all E2E tests (headless)
+gradle21w e2eTest
+
+# Run E2E tests with visible browser
+PG_CONSOLE_TEST_HEADLESS=false gradle21w e2eTest
+
+# Run specific test class
+gradle21w e2eTest --tests "DashboardE2ETest"
+
+# Run with specific browser
+PG_CONSOLE_TEST_BROWSER=firefox gradle21w e2eTest
+
+# Install Playwright browsers
+npx playwright install chromium firefox webkit
+```
+
+Example Test Class:
+
+```java
+@QuarkusTest
+@Tag("e2e")
+public class DashboardE2ETest extends PlaywrightTestBase {
+
+    @Test
+    void dashboardLoadsSuccessfully() {
+        page.navigate(baseUrl + "/");
+
+        // Verify page title
+        assertThat(page).hasTitle("Overview - PG Console");
+
+        // Verify key dashboard widgets are visible
+        assertThat(page.locator(".widget-connections")).isVisible();
+        assertThat(page.locator(".widget-active-queries")).isVisible();
+        assertThat(page.locator(".widget-cache-ratio")).isVisible();
+
+        // Verify sparklines rendered
+        assertThat(page.locator("svg.sparkline")).hasCount(greaterThan(0));
+    }
+
+    @Test
+    void navigationWorksCorrectly() {
+        page.navigate(baseUrl + "/");
+
+        // Click on Slow Queries in sidebar
+        page.locator("[data-nav='slow-queries']").click();
+
+        // Verify navigation occurred
+        assertThat(page).hasURL(Pattern.compile(".*/slow-queries.*"));
+        assertThat(page.locator("h1")).containsText("Slow Queries");
+    }
+
+    @Test
+    void themeTogglePersists() {
+        page.navigate(baseUrl + "/");
+
+        // Toggle to dark mode
+        page.locator("#theme-toggle").click();
+
+        // Verify dark mode applied
+        assertThat(page.locator("html")).hasAttribute("data-bs-theme", "dark");
+
+        // Reload page
+        page.reload();
+
+        // Verify dark mode persisted
+        assertThat(page.locator("html")).hasAttribute("data-bs-theme", "dark");
+    }
+
+    @Test
+    void responsiveLayoutMobile() {
+        page.setViewportSize(375, 667);
+        page.navigate(baseUrl + "/");
+
+        // Verify mobile bottom navigation is visible
+        assertThat(page.locator(".mobile-nav")).isVisible();
+
+        // Verify sidebar is hidden
+        assertThat(page.locator(".sidebar")).not().isVisible();
+    }
+}
+```
+
+Base Test Class:
+
+```java
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+public abstract class PlaywrightTestBase {
+
+    protected static Playwright playwright;
+    protected static Browser browser;
+    protected BrowserContext context;
+    protected Page page;
+
+    protected String baseUrl;
+
+    @BeforeAll
+    static void launchBrowser() {
+        playwright = Playwright.create();
+
+        String browserType = System.getenv().getOrDefault("PG_CONSOLE_TEST_BROWSER", "chromium");
+        boolean headless = Boolean.parseBoolean(
+            System.getenv().getOrDefault("PG_CONSOLE_TEST_HEADLESS", "true")
+        );
+
+        BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
+            .setHeadless(headless);
+
+        browser = switch (browserType) {
+            case "firefox" -> playwright.firefox().launch(options);
+            case "webkit" -> playwright.webkit().launch(options);
+            default -> playwright.chromium().launch(options);
+        };
+    }
+
+    @BeforeEach
+    void createContextAndPage() {
+        baseUrl = System.getenv().getOrDefault("PG_CONSOLE_TEST_BASE_URL", "http://localhost:8080");
+
+        context = browser.newContext(new Browser.NewContextOptions()
+            .setRecordVideoDir(Paths.get("build/test-videos")));
+
+        page = context.newPage();
+        page.setDefaultTimeout(30000);
+    }
+
+    @AfterEach
+    void closeContext(TestInfo testInfo) {
+        if (testInfo.getTestMethod().isPresent()) {
+            // Screenshot on failure is handled by JUnit extension
+        }
+        context.close();
+    }
+
+    @AfterAll
+    static void closeBrowser() {
+        browser.close();
+        playwright.close();
+    }
+}
+```
+
+Page Object Model Example:
+
+```java
+public class SlowQueriesPage extends BasePage {
+
+    private final Locator queryTable = page.locator("table.slow-queries");
+    private final Locator sortableHeaders = page.locator("th[data-sort]");
+    private final Locator exportButton = page.locator("[data-export='csv']");
+
+    public SlowQueriesPage(Page page) {
+        super(page);
+    }
+
+    public void navigate() {
+        page.navigate(baseUrl + "/slow-queries");
+        waitForPageLoad();
+    }
+
+    public void sortByColumn(String columnName) {
+        page.locator("th[data-sort='" + columnName + "']").click();
+        waitForHtmxLoad();
+    }
+
+    public void clickQueryDetail(int rowIndex) {
+        queryTable.locator("tr").nth(rowIndex).locator("a.detail-link").click();
+    }
+
+    public void exportToCsv() {
+        exportButton.click();
+    }
+
+    public int getQueryCount() {
+        return queryTable.locator("tbody tr").count();
+    }
+
+    protected void waitForHtmxLoad() {
+        page.waitForResponse(response ->
+            response.url().contains("/fragments/") && response.status() == 200
+        );
+    }
+}
+```
+
+CI/CD Integration:
+
+```yaml
+# .github/workflows/ci.yml - E2E job (enable by removing if: false)
+e2e:
+  runs-on: ubuntu-latest
+  needs: build
+  # if: false  # Remove this line to enable E2E tests
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps chromium firefox webkit
+
+    - name: Start PostgreSQL
+      run: docker-compose up -d
+
+    - name: Wait for PostgreSQL
+      run: |
+        for i in {1..30}; do
+          pg_isready -h localhost -p 5432 && break
+          sleep 1
+        done
+
+    - name: Start Application
+      run: |
+        ./gradlew quarkusBuild
+        java -jar build/quarkus-app/quarkus-run.jar &
+        sleep 15
+
+    - name: Run E2E Tests
+      run: ./gradlew e2eTest
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: e2e-test-results
+        path: |
+          build/reports/tests/e2eTest/
+          build/test-videos/
+          build/test-screenshots/
+```
+
+Claude Code Playwright Plugin Integration:
+
+The Playwright MCP plugin enables Claude Code to interact with browsers for testing:
+
+```bash
+# Enable Playwright MCP plugin in Claude Code settings
+# The plugin provides these capabilities:
+
+# 1. Navigate to pages
+browser_navigate(url="http://localhost:8080/slow-queries")
+
+# 2. Take accessibility snapshots (preferred for testing)
+browser_snapshot()
+
+# 3. Click elements by reference
+browser_click(element="Sort by mean time", ref="th[data-sort='mean_time']")
+
+# 4. Fill form fields
+browser_type(element="Search input", ref="#query-search", text="SELECT")
+
+# 5. Take screenshots for debugging
+browser_take_screenshot(filename="test-failure.png")
+
+# 6. Evaluate JavaScript
+browser_evaluate(function="() => localStorage.getItem('theme')")
+```
+
+Testing Workflow with Claude Code:
+
+1. Start the application: `gradle21w quarkusDev`
+2. Ask Claude Code to navigate to a page using `browser_navigate`
+3. Use `browser_snapshot` to get an accessibility tree of the page
+4. Claude Code can identify elements and suggest test assertions
+5. Use `browser_click`, `browser_type` to interact with elements
+6. Verify results with `browser_snapshot` or `browser_take_screenshot`
+
+Known Limitations:
+
+- Playwright Java tests require JDK 11+ (project uses JDK 21)
+- Browser installation required separately (`npx playwright install`)
+- Video recording increases test execution time
+- Some htmx interactions may require explicit waits
+- WebKit may have slight rendering differences on Linux
 
 ---
 

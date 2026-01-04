@@ -1,5 +1,8 @@
 package com.bovinemagnet.pgconsole.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -120,6 +123,7 @@ public class RunbookExecution {
         /**
          * Get the duration of this step.
          */
+        @JsonIgnore
         public Duration getDuration() {
             if (startedAt == null || completedAt == null) {
                 return null;
@@ -357,12 +361,34 @@ public class RunbookExecution {
         this.stepResults = stepResults;
     }
 
+    /**
+     * Get a specific step result by step number (1-based).
+     *
+     * @param stepNumber the step number (1-based)
+     * @return the step result, or null if not found
+     */
+    public StepResult getStepResult(int stepNumber) {
+        if (stepResults == null || stepNumber < 1 || stepNumber > stepResults.size()) {
+            return null;
+        }
+        return stepResults.get(stepNumber - 1);
+    }
+
     public String getExecutedBy() {
         return executedBy;
     }
 
     public void setExecutedBy(String executedBy) {
         this.executedBy = executedBy;
+    }
+
+    /**
+     * Alias for executedBy for template compatibility.
+     *
+     * @return the user who started/executed this runbook
+     */
+    public String getStartedBy() {
+        return executedBy;
     }
 
     public String getNotes() {
