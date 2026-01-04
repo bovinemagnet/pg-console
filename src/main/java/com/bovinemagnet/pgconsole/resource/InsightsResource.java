@@ -48,6 +48,12 @@ public class InsightsResource {
     RunbookService runbookService;
 
     @Inject
+    PdfExportService pdfExportService;
+
+    @Inject
+    PostgresService postgresService;
+
+    @Inject
     FeatureToggleService featureToggleService;
 
     @Inject
@@ -240,6 +246,7 @@ public class InsightsResource {
         List<Runbook> allRunbooks = runbookService.getRunbooks(instance);
         List<RunbookExecution> recentExecutions = runbookService.getRecentExecutions(instance, 10);
         List<RunbookExecution> inProgress = runbookService.getInProgressExecutions(instance);
+        List<String> databases = postgresService.getDatabaseList(instance);
 
         return runbooks
                 .data("instance", instance)
@@ -247,6 +254,7 @@ public class InsightsResource {
                 .data("recentExecutions", recentExecutions)
                 .data("inProgressExecutions", inProgress)
                 .data("categories", Runbook.Category.values())
+                .data("databases", databases)
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", instance)
                 .data("securityEnabled", config.security().enabled())
@@ -353,6 +361,12 @@ public class InsightsResource {
 
     /**
      * Start a runbook execution.
+     *
+     * @param runbookId the runbook ID to execute
+     * @param instance the PostgreSQL instance
+     * @param database optional specific database to scope execution to (null for all databases)
+     * @param username the user starting the execution
+     * @return JSON with execution ID and redirect URL
      */
     @POST
     @Path("/runbooks/{runbookId}/start")
@@ -360,10 +374,11 @@ public class InsightsResource {
     public Response startRunbook(
             @PathParam("runbookId") long runbookId,
             @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") String database,
             @QueryParam("username") @DefaultValue("anonymous") String username) {
 
         RunbookExecution execution = runbookService.startExecution(
-                instance, runbookId, RunbookExecution.TriggeredBy.MANUAL, username);
+                instance, runbookId, RunbookExecution.TriggeredBy.MANUAL, username, database);
 
         return Response.ok(Map.of(
                 "status", "started",
@@ -376,6 +391,12 @@ public class InsightsResource {
      * Auto-execute a runbook (all steps run automatically).
      * <p>
      * Only available for runbooks marked as auto-executable (safe, non-destructive operations).
+     *
+     * @param runbookId the runbook ID to execute
+     * @param instance the PostgreSQL instance
+     * @param database optional specific database to scope execution to (null for all databases)
+     * @param username the user starting the execution
+     * @return JSON with execution status and redirect URL
      */
     @POST
     @Path("/runbooks/{runbookId}/auto-execute")
@@ -383,10 +404,11 @@ public class InsightsResource {
     public Response autoExecuteRunbook(
             @PathParam("runbookId") long runbookId,
             @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") String database,
             @QueryParam("username") @DefaultValue("anonymous") String username) {
 
         try {
-            RunbookExecution execution = runbookService.autoExecuteRunbook(instance, runbookId, username);
+            RunbookExecution execution = runbookService.autoExecuteRunbook(instance, runbookId, username, database);
 
             return Response.ok(Map.of(
                     "status", execution.getStatus().name(),
@@ -452,6 +474,55 @@ public class InsightsResource {
         RunbookExecution execution = runbookService.cancelExecution(instance, executionId);
 
         return Response.ok(Map.of("status", "cancelled", "executionId", executionId)).build();
+    }
+
+    /**
+     * Export runbook execution as PDF.
+     * <p>
+     * Generates a comprehensive PDF report containing execution details,
+     * step results, recommendations, and audit trail.
+     */
+    @GET
+    @Path("/runbooks/execution/{executionId}/export/pdf")
+    @Produces("application/pdf")
+    public Response exportExecutionPdf(
+            @PathParam("executionId") long executionId,
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        if (!featureToggleService.isPageEnabled("runbooks")) {
+            throw new NotFoundException("Runbooks page is disabled");
+        }
+
+        RunbookExecution execution = runbookService.getExecution(instance, executionId);
+        if (execution == null) {
+            throw new NotFoundException("Execution not found: " + executionId);
+        }
+
+        try {
+            byte[] pdfBytes = pdfExportService.generateRunbookExecutionPdf(execution);
+
+            String runbookName = execution.getRunbook() != null
+                    ? execution.getRunbook().getName()
+                    : "runbook";
+            String timestamp = execution.getStartedAt() != null
+                    ? java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+                            .withZone(java.time.ZoneId.systemDefault())
+                            .format(execution.getStartedAt())
+                    : "unknown";
+            String filename = String.format("runbook_execution_%d_%s_%s.pdf",
+                    executionId, runbookName, timestamp);
+
+            return Response.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Type", "application/pdf")
+                    .build();
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to generate PDF for execution %d", executionId);
+            return Response.serverError()
+                    .entity("Failed to generate PDF: " + e.getMessage())
+                    .type(MediaType.TEXT_PLAIN)
+                    .build();
+        }
     }
 
     /**

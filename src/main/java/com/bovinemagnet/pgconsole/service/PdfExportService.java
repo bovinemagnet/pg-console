@@ -1,12 +1,18 @@
 package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.model.ObjectDifference;
+import com.bovinemagnet.pgconsole.model.Runbook;
+import com.bovinemagnet.pgconsole.model.RunbookExecution;
 import com.bovinemagnet.pgconsole.model.SchemaComparisonResult;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Service for generating PDF exports from schema comparison results.
@@ -477,5 +483,729 @@ public class PdfExportService {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    // ============================================================
+    // Runbook Execution PDF Export
+    // ============================================================
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
+
+    private static final int MAX_OUTPUT_LENGTH = 5000;
+
+    /**
+     * Generates a PDF document from a runbook execution.
+     *
+     * @param execution the runbook execution to export
+     * @return PDF document as byte array
+     */
+    public byte[] generateRunbookExecutionPdf(RunbookExecution execution) {
+        LOG.infof("Generating PDF for runbook execution: %d", execution.getId());
+
+        String html = generateRunbookExecutionHtml(execution);
+
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(html, null);
+            builder.toStream(os);
+            builder.run();
+
+            LOG.infof("PDF generated successfully for execution %d, size: %d bytes",
+                    execution.getId(), os.size());
+            return os.toByteArray();
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to generate PDF for runbook execution: %d", execution.getId());
+            throw new RuntimeException("Failed to generate PDF: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Generates print-optimised HTML for runbook execution PDF conversion.
+     *
+     * @param execution the runbook execution
+     * @return HTML string optimised for PDF rendering
+     */
+    private String generateRunbookExecutionHtml(RunbookExecution execution) {
+        StringBuilder html = new StringBuilder();
+        Runbook runbook = execution.getRunbook();
+
+        // XML declaration and DOCTYPE for XHTML
+        html.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        html.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" ");
+        html.append("\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n");
+        html.append("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
+        html.append("<head>\n");
+        html.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n");
+        html.append("<title>Runbook Execution Report</title>\n");
+        html.append("<style type=\"text/css\">\n");
+        html.append(getRunbookPrintStyles());
+        html.append("</style>\n");
+        html.append("</head>\n");
+        html.append("<body>\n");
+
+        // Header
+        html.append("<div class=\"header\">\n");
+        html.append("<h1>Runbook Execution Report</h1>\n");
+        html.append("<p class=\"subtitle\">").append(escapeHtml(runbook != null ? runbook.getTitle() : "Unknown Runbook")).append("</p>\n");
+        html.append("</div>\n");
+
+        // Metadata section
+        html.append("<div class=\"metadata\">\n");
+        html.append("<table class=\"meta-table\">\n");
+        html.append("<tr><td class=\"label\">Execution ID:</td><td>#").append(execution.getId()).append("</td></tr>\n");
+        if (runbook != null) {
+            html.append("<tr><td class=\"label\">Runbook:</td><td>")
+                    .append(escapeHtml(runbook.getName()))
+                    .append(" v").append(runbook.getVersion())
+                    .append("</td></tr>\n");
+            if (runbook.getCategory() != null) {
+                html.append("<tr><td class=\"label\">Category:</td><td>")
+                        .append(escapeHtml(runbook.getCategory().getDisplayName()))
+                        .append("</td></tr>\n");
+            }
+        }
+        html.append("<tr><td class=\"label\">Instance:</td><td>")
+                .append(escapeHtml(execution.getInstanceId()))
+                .append("</td></tr>\n");
+        html.append("<tr><td class=\"label\">Database Scope:</td><td>")
+                .append(escapeHtml(execution.getScopeDisplay()))
+                .append("</td></tr>\n");
+        html.append("<tr><td class=\"label\">Started:</td><td>")
+                .append(formatInstant(execution.getStartedAt()))
+                .append("</td></tr>\n");
+        html.append("<tr><td class=\"label\">Completed:</td><td>")
+                .append(formatInstant(execution.getCompletedAt()))
+                .append("</td></tr>\n");
+        html.append("<tr><td class=\"label\">Duration:</td><td>")
+                .append(escapeHtml(execution.getFormattedDuration()))
+                .append("</td></tr>\n");
+        html.append("</table>\n");
+        html.append("</div>\n");
+
+        // Executive Summary
+        html.append("<div class=\"summary\">\n");
+        html.append("<h2>Executive Summary</h2>\n");
+        html.append("<div class=\"summary-cards\">\n");
+
+        // Status card
+        String statusClass = getExecutionStatusClass(execution.getStatus());
+        String statusDisplay = execution.getStatus() != null ? execution.getStatus().getDisplayName() : "Unknown";
+        html.append("<div class=\"summary-card ").append(statusClass).append("\">\n");
+        html.append("<span class=\"count\">").append(escapeHtml(statusDisplay)).append("</span>\n");
+        html.append("<span class=\"label\">Status</span>\n");
+        html.append("</div>\n");
+
+        // Progress card
+        int totalSteps = runbook != null ? runbook.getStepCount() : 0;
+        int completedSteps = countCompletedSteps(execution);
+        html.append("<div class=\"summary-card progress\">\n");
+        html.append("<span class=\"count\">").append(completedSteps).append("/").append(totalSteps).append("</span>\n");
+        html.append("<span class=\"label\">Steps Completed</span>\n");
+        html.append("</div>\n");
+
+        // Triggered By card
+        String triggeredByDisplay = execution.getTriggeredBy() != null
+                ? execution.getTriggeredBy().getDisplayName() : "Unknown";
+        html.append("<div class=\"summary-card trigger\">\n");
+        html.append("<span class=\"count\">").append(escapeHtml(triggeredByDisplay)).append("</span>\n");
+        html.append("<span class=\"label\">Triggered By</span>\n");
+        html.append("</div>\n");
+
+        // Duration card
+        html.append("<div class=\"summary-card duration\">\n");
+        html.append("<span class=\"count\">").append(escapeHtml(execution.getFormattedDuration())).append("</span>\n");
+        html.append("<span class=\"label\">Duration</span>\n");
+        html.append("</div>\n");
+
+        html.append("</div>\n"); // summary-cards
+        html.append("</div>\n"); // summary
+
+        // Runbook Description
+        if (runbook != null && runbook.getDescription() != null) {
+            html.append("<div class=\"description\">\n");
+            html.append("<h2>Runbook Description</h2>\n");
+            html.append("<p>").append(escapeHtml(runbook.getDescription())).append("</p>\n");
+            html.append("<table class=\"meta-table\">\n");
+            html.append("<tr><td class=\"label\">Estimated Duration:</td><td>")
+                    .append(escapeHtml(runbook.getFormattedDuration()))
+                    .append("</td></tr>\n");
+            html.append("<tr><td class=\"label\">Auto-Executable:</td><td>")
+                    .append(runbook.isAutoExecutable() ? "Yes" : "No")
+                    .append("</td></tr>\n");
+            html.append("</table>\n");
+            html.append("</div>\n");
+        }
+
+        // Step Execution Summary Table
+        if (runbook != null && runbook.getSteps() != null && !runbook.getSteps().isEmpty()) {
+            html.append("<div class=\"step-summary\">\n");
+            html.append("<h2>Step Execution Summary</h2>\n");
+            html.append("<table class=\"step-table\">\n");
+            html.append("<thead>\n");
+            html.append("<tr>\n");
+            html.append("<th>#</th>\n");
+            html.append("<th>Step Title</th>\n");
+            html.append("<th>Action Type</th>\n");
+            html.append("<th>Status</th>\n");
+            html.append("<th>Duration</th>\n");
+            html.append("</tr>\n");
+            html.append("</thead>\n");
+            html.append("<tbody>\n");
+
+            for (Runbook.Step step : runbook.getSteps()) {
+                RunbookExecution.StepResult result = execution.getStepResult(step.getOrder());
+                String rowClass = result != null ? getStepRowClass(result.getStatus()) : "row-pending";
+                String stepStatusDisplay = result != null ? result.getStatus().getDisplayName() : "Pending";
+                String stepStatusClass = result != null ? getStepStatusClass(result.getStatus()) : "pending";
+                String stepDuration = result != null ? formatDuration(result.getDuration()) : "-";
+
+                html.append("<tr class=\"").append(rowClass).append("\">\n");
+                html.append("<td>").append(step.getOrder()).append("</td>\n");
+                html.append("<td>").append(escapeHtml(step.getTitle())).append("</td>\n");
+                html.append("<td>").append(escapeHtml(step.getActionType() != null ? step.getActionType().getDisplayName() : "-")).append("</td>\n");
+                html.append("<td><span class=\"badge ").append(stepStatusClass).append("\">")
+                        .append(escapeHtml(stepStatusDisplay)).append("</span></td>\n");
+                html.append("<td>").append(stepDuration).append("</td>\n");
+                html.append("</tr>\n");
+            }
+
+            html.append("</tbody>\n");
+            html.append("</table>\n");
+            html.append("</div>\n");
+        }
+
+        // Detailed Step Results
+        if (runbook != null && runbook.getSteps() != null && !runbook.getSteps().isEmpty()) {
+            html.append("<div class=\"details\">\n");
+            html.append("<h2>Detailed Step Results</h2>\n");
+
+            for (Runbook.Step step : runbook.getSteps()) {
+                RunbookExecution.StepResult result = execution.getStepResult(step.getOrder());
+
+                html.append("<div class=\"detail-item\">\n");
+                html.append("<h3>Step ").append(step.getOrder()).append(": ").append(escapeHtml(step.getTitle())).append("</h3>\n");
+
+                if (step.getDescription() != null && !step.getDescription().isEmpty()) {
+                    html.append("<p class=\"step-description\">").append(escapeHtml(step.getDescription())).append("</p>\n");
+                }
+
+                html.append("<table class=\"attr-table\">\n");
+                html.append("<tr><td class=\"label\">Action Type:</td><td>")
+                        .append(escapeHtml(step.getActionType() != null ? step.getActionType().getDisplayName() : "-"))
+                        .append("</td></tr>\n");
+
+                if (step.getAction() != null && !step.getAction().isEmpty()) {
+                    html.append("<tr><td class=\"label\">Action:</td><td class=\"monospace\">")
+                            .append(escapeHtml(truncateOutput(step.getAction(), 500)))
+                            .append("</td></tr>\n");
+                }
+
+                if (step.getExpectedOutcome() != null && !step.getExpectedOutcome().isEmpty()) {
+                    html.append("<tr><td class=\"label\">Expected Outcome:</td><td class=\"recommendation\">")
+                            .append(escapeHtml(step.getExpectedOutcome()))
+                            .append("</td></tr>\n");
+                }
+
+                if (result != null) {
+                    html.append("<tr><td class=\"label\">Status:</td><td><span class=\"badge ")
+                            .append(getStepStatusClass(result.getStatus()))
+                            .append("\">").append(escapeHtml(result.getStatus().getDisplayName()))
+                            .append("</span></td></tr>\n");
+
+                    if (result.getStartedAt() != null) {
+                        html.append("<tr><td class=\"label\">Started:</td><td>")
+                                .append(formatInstant(result.getStartedAt()))
+                                .append("</td></tr>\n");
+                    }
+
+                    if (result.getCompletedAt() != null) {
+                        html.append("<tr><td class=\"label\">Completed:</td><td>")
+                                .append(formatInstant(result.getCompletedAt()))
+                                .append("</td></tr>\n");
+                    }
+
+                    if (result.getDuration() != null) {
+                        html.append("<tr><td class=\"label\">Duration:</td><td>")
+                                .append(formatDuration(result.getDuration()))
+                                .append("</td></tr>\n");
+                    }
+                }
+
+                html.append("</table>\n");
+
+                // Output section
+                if (result != null && result.getOutput() != null && !result.getOutput().isEmpty()) {
+                    html.append("<div class=\"output-section\">\n");
+                    html.append("<h4>Output</h4>\n");
+                    html.append("<pre class=\"output\">").append(escapeHtml(truncateOutput(result.getOutput(), MAX_OUTPUT_LENGTH))).append("</pre>\n");
+                    html.append("</div>\n");
+                }
+
+                // Error section
+                if (result != null && result.getErrorMessage() != null && !result.getErrorMessage().isEmpty()) {
+                    html.append("<div class=\"error-section\">\n");
+                    html.append("<h4>Error</h4>\n");
+                    html.append("<pre class=\"error\">").append(escapeHtml(result.getErrorMessage())).append("</pre>\n");
+                    html.append("</div>\n");
+                }
+
+                html.append("</div>\n"); // detail-item
+            }
+
+            html.append("</div>\n"); // details
+        }
+
+        // Audit Trail
+        html.append("<div class=\"audit\">\n");
+        html.append("<h2>Audit Trail</h2>\n");
+        html.append("<table class=\"meta-table\">\n");
+        html.append("<tr><td class=\"label\">Executed By:</td><td>")
+                .append(escapeHtml(execution.getExecutedBy() != null ? execution.getExecutedBy() : "Unknown"))
+                .append("</td></tr>\n");
+        if (execution.getTriggeredBy() != null) {
+            html.append("<tr><td class=\"label\">Triggered By:</td><td>")
+                    .append(escapeHtml(execution.getTriggeredBy().getDisplayName()))
+                    .append(" - ").append(escapeHtml(execution.getTriggeredBy().getDescription()))
+                    .append("</td></tr>\n");
+        }
+        html.append("<tr><td class=\"label\">Instance:</td><td>")
+                .append(escapeHtml(execution.getInstanceId()))
+                .append("</td></tr>\n");
+        if (execution.getNotes() != null && !execution.getNotes().isEmpty()) {
+            html.append("<tr><td class=\"label\">Notes:</td><td>")
+                    .append(escapeHtml(execution.getNotes()))
+                    .append("</td></tr>\n");
+        }
+        html.append("</table>\n");
+        html.append("</div>\n");
+
+        // Footer
+        html.append("<div class=\"footer\">\n");
+        html.append("<p>Generated by pg-console - PostgreSQL Insight Dashboard</p>\n");
+        html.append("<p>Report generated at: ").append(formatInstant(Instant.now())).append("</p>\n");
+        html.append("</div>\n");
+
+        html.append("</body>\n");
+        html.append("</html>");
+
+        return html.toString();
+    }
+
+    /**
+     * Returns CSS styles optimised for runbook execution PDF printing.
+     */
+    private String getRunbookPrintStyles() {
+        return """
+            @page {
+                size: A4;
+                margin: 2cm;
+                @bottom-center {
+                    content: "Page " counter(page) " of " counter(pages);
+                    font-size: 9pt;
+                    color: #666;
+                }
+            }
+
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 10pt;
+                line-height: 1.4;
+                color: #333;
+                margin: 0;
+                padding: 0;
+            }
+
+            .header {
+                text-align: center;
+                margin-bottom: 20pt;
+                padding-bottom: 10pt;
+                border-bottom: 2pt solid #0d6efd;
+            }
+
+            h1 {
+                font-size: 18pt;
+                color: #0d6efd;
+                margin: 0 0 5pt 0;
+            }
+
+            .subtitle {
+                font-size: 12pt;
+                color: #333;
+                margin: 0;
+                font-weight: bold;
+            }
+
+            h2 {
+                font-size: 14pt;
+                color: #333;
+                margin: 15pt 0 10pt 0;
+                padding-bottom: 5pt;
+                border-bottom: 1pt solid #ddd;
+            }
+
+            h3 {
+                font-size: 11pt;
+                color: #0d6efd;
+                margin: 10pt 0 5pt 0;
+            }
+
+            h4 {
+                font-size: 10pt;
+                color: #555;
+                margin: 8pt 0 4pt 0;
+            }
+
+            .metadata {
+                margin-bottom: 15pt;
+            }
+
+            .meta-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            .meta-table td {
+                padding: 3pt 5pt;
+                border: none;
+                vertical-align: top;
+            }
+
+            .meta-table .label {
+                font-weight: bold;
+                width: 120pt;
+                color: #555;
+            }
+
+            .summary {
+                margin-bottom: 20pt;
+            }
+
+            .summary-cards {
+                display: block;
+                width: 100%;
+            }
+
+            .summary-card {
+                display: inline-block;
+                width: 22%;
+                margin-right: 2%;
+                padding: 10pt;
+                text-align: center;
+                border-radius: 4pt;
+                vertical-align: top;
+            }
+
+            .summary-card .count {
+                font-size: 14pt;
+                font-weight: bold;
+                display: block;
+            }
+
+            .summary-card .label {
+                font-size: 8pt;
+                color: #666;
+            }
+
+            .summary-card.completed {
+                background-color: #d1e7dd;
+                border: 1pt solid #198754;
+            }
+
+            .summary-card.failed {
+                background-color: #f8d7da;
+                border: 1pt solid #dc3545;
+            }
+
+            .summary-card.cancelled {
+                background-color: #e2e3e5;
+                border: 1pt solid #6c757d;
+            }
+
+            .summary-card.in_progress {
+                background-color: #cfe2ff;
+                border: 1pt solid #0d6efd;
+            }
+
+            .summary-card.progress {
+                background-color: #cfe2ff;
+                border: 1pt solid #0d6efd;
+            }
+
+            .summary-card.trigger {
+                background-color: #e2e3e5;
+                border: 1pt solid #6c757d;
+            }
+
+            .summary-card.duration {
+                background-color: #f8f9fa;
+                border: 1pt solid #ddd;
+            }
+
+            .description {
+                margin-bottom: 15pt;
+            }
+
+            .description p {
+                margin-bottom: 10pt;
+            }
+
+            .step-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 15pt;
+                page-break-inside: auto;
+            }
+
+            .step-table tr {
+                page-break-inside: avoid;
+            }
+
+            .step-table th, .step-table td {
+                border: 1pt solid #ddd;
+                padding: 6pt 8pt;
+                text-align: left;
+            }
+
+            .step-table th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }
+
+            .step-table tr.row-completed {
+                background-color: #d1e7dd;
+            }
+
+            .step-table tr.row-failed {
+                background-color: #f8d7da;
+            }
+
+            .step-table tr.row-skipped {
+                background-color: #e9ecef;
+            }
+
+            .step-table tr.row-running {
+                background-color: #cfe2ff;
+            }
+
+            .step-table tr.row-pending {
+                background-color: #f8f9fa;
+            }
+
+            .badge {
+                display: inline-block;
+                padding: 2pt 6pt;
+                border-radius: 3pt;
+                font-size: 8pt;
+                font-weight: bold;
+            }
+
+            .badge.completed {
+                background-color: #198754;
+                color: #fff;
+            }
+
+            .badge.failed {
+                background-color: #dc3545;
+                color: #fff;
+            }
+
+            .badge.skipped {
+                background-color: #6c757d;
+                color: #fff;
+            }
+
+            .badge.running {
+                background-color: #0d6efd;
+                color: #fff;
+            }
+
+            .badge.pending {
+                background-color: #e2e3e5;
+                color: #333;
+            }
+
+            .detail-item {
+                page-break-inside: avoid;
+                margin-bottom: 15pt;
+                padding-bottom: 10pt;
+                border-bottom: 1pt solid #eee;
+            }
+
+            .detail-item:last-child {
+                border-bottom: none;
+            }
+
+            .step-description {
+                font-style: italic;
+                color: #555;
+                margin-bottom: 8pt;
+            }
+
+            .attr-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 10pt;
+            }
+
+            .attr-table td {
+                padding: 4pt 6pt;
+                border: 1pt solid #eee;
+                vertical-align: top;
+            }
+
+            .attr-table .label {
+                font-weight: bold;
+                width: 120pt;
+                background-color: #f8f9fa;
+                color: #555;
+            }
+
+            .monospace {
+                font-family: monospace;
+                font-size: 9pt;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+
+            .recommendation {
+                background-color: #fff3cd;
+                padding: 4pt;
+            }
+
+            .output-section, .error-section {
+                margin-top: 10pt;
+                padding: 8pt;
+                border-radius: 4pt;
+            }
+
+            .output-section {
+                background-color: #f8f9fa;
+                border: 1pt solid #ddd;
+            }
+
+            .error-section {
+                background-color: #f8d7da;
+                border: 1pt solid #f5c2c7;
+            }
+
+            .output, .error {
+                font-family: monospace;
+                font-size: 8pt;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                margin: 0;
+                max-height: 200pt;
+                overflow: hidden;
+            }
+
+            .audit {
+                margin-top: 20pt;
+                page-break-inside: avoid;
+            }
+
+            .footer {
+                margin-top: 20pt;
+                padding-top: 10pt;
+                border-top: 1pt solid #ddd;
+                text-align: center;
+                font-size: 9pt;
+                color: #666;
+            }
+
+            .details {
+                page-break-before: auto;
+            }
+            """;
+    }
+
+    /**
+     * Gets CSS class for execution status.
+     */
+    private String getExecutionStatusClass(RunbookExecution.Status status) {
+        if (status == null) {
+            return "pending";
+        }
+        return switch (status) {
+            case COMPLETED -> "completed";
+            case FAILED -> "failed";
+            case CANCELLED -> "cancelled";
+            case IN_PROGRESS -> "in_progress";
+        };
+    }
+
+    /**
+     * Gets CSS class for step result status.
+     */
+    private String getStepStatusClass(RunbookExecution.StepResult.StepStatus status) {
+        if (status == null) {
+            return "pending";
+        }
+        return switch (status) {
+            case COMPLETED -> "completed";
+            case FAILED -> "failed";
+            case SKIPPED -> "skipped";
+            case RUNNING -> "running";
+            case PENDING -> "pending";
+        };
+    }
+
+    /**
+     * Gets row CSS class for step result.
+     */
+    private String getStepRowClass(RunbookExecution.StepResult.StepStatus status) {
+        return "row-" + getStepStatusClass(status);
+    }
+
+    /**
+     * Counts completed or skipped steps.
+     */
+    private int countCompletedSteps(RunbookExecution execution) {
+        if (execution.getStepResults() == null) {
+            return 0;
+        }
+        return (int) execution.getStepResults().stream()
+                .filter(r -> r.getStatus() == RunbookExecution.StepResult.StepStatus.COMPLETED
+                        || r.getStatus() == RunbookExecution.StepResult.StepStatus.SKIPPED)
+                .count();
+    }
+
+    /**
+     * Formats an Instant for display.
+     */
+    private String formatInstant(Instant instant) {
+        if (instant == null) {
+            return "N/A";
+        }
+        return DATE_TIME_FORMATTER.format(instant);
+    }
+
+    /**
+     * Formats duration for display.
+     */
+    private String formatDuration(Duration duration) {
+        if (duration == null) {
+            return "-";
+        }
+        long minutes = duration.toMinutes();
+        long seconds = duration.toSecondsPart();
+        if (minutes > 0) {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
+    }
+
+    /**
+     * Truncates long output for PDF display.
+     */
+    private String truncateOutput(String output, int maxLength) {
+        if (output == null) {
+            return null;
+        }
+        if (output.length() <= maxLength) {
+            return output;
+        }
+        return output.substring(0, maxLength) + "\n... (truncated)";
     }
 }

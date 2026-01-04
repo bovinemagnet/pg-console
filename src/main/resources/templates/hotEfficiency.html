@@ -33,24 +33,24 @@
                 </thead>
                 <tbody>
                     {#for e in efficiencies}
-                    <tr {#if e.hotRatioPercent < warnPercent}class="table-warning"{/if}>
+                    <tr {#if e.hotUpdatePercent < warnPercent}class="table-warning"{/if}>
                         <td>{e.schemaName}</td>
                         <td><code>{e.tableName}</code></td>
-                        <td>{e.totalUpdates}</td>
-                        <td>{e.hotUpdates}</td>
+                        <td>{e.nTupUpd}</td>
+                        <td>{e.nTupHotUpd}</td>
                         <td>
-                            {#if e.hotRatioPercent >= 90}
-                                <span class="badge bg-success">{e.hotRatioPercent}%</span>
-                            {#else if e.hotRatioPercent >= warnPercent}
-                                <span class="badge bg-info">{e.hotRatioPercent}%</span>
+                            {#if e.hotUpdatePercent >= 90}
+                                <span class="badge bg-success">{e.hotUpdatePercent}%</span>
+                            {#else if e.hotUpdatePercent >= warnPercent}
+                                <span class="badge bg-info">{e.hotUpdatePercent}%</span>
                             {#else}
-                                <span class="badge bg-warning text-dark">{e.hotRatioPercent}%</span>
+                                <span class="badge bg-warning text-dark">{e.hotUpdatePercent}%</span>
                             {/if}
                         </td>
-                        <td>{e.deadTuples}</td>
+                        <td>{e.nDeadTup}</td>
                         <td>{e.tableSizeDisplay}</td>
                         <td>
-                            {#if e.hotRatioPercent < warnPercent}
+                            {#if e.hotUpdatePercent < warnPercent}
                                 <span class="text-warning">Consider reducing fill factor</span>
                             {#else}
                                 <span class="text-success">Good</span>

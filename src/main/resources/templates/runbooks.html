@@ -54,6 +54,33 @@
 </div>
 {/if}
 
+<!-- Database Scope Selector -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label for="databaseScope" class="col-form-label">
+                    <i class="bi bi-database me-1" aria-hidden="true"></i>
+                    Database Scope:
+                </label>
+            </div>
+            <div class="col-auto">
+                <select id="databaseScope" class="form-select" style="min-width: 200px;">
+                    <option value="">All databases</option>
+                    {#for db in databases}
+                    <option value="{db}">{db}</option>
+                    {/for}
+                </select>
+            </div>
+            <div class="col">
+                <small class="text-muted">
+                    Select a specific database to scope runbook diagnostics, or leave as "All databases" for instance-wide analysis.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Available Runbooks by Category -->
 <div class="row mb-4">
     {#for category in categories}
@@ -94,20 +121,17 @@
                     </div>
                     <div class="card-footer bg-transparent">
                         <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-primary flex-grow-1"
-                                    hx-post="/insights/runbooks/{runbook.id}/start?instance={instance}"
-                                    hx-swap="none"
-                                    hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; }">
+                            <button class="btn btn-sm btn-primary flex-grow-1 runbook-start-btn"
+                                    data-runbook-id="{runbook.id}"
+                                    data-instance="{instance}">
                                 <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
                                 Start
                             </button>
                             {#if runbook.autoExecutable}
-                            <button class="btn btn-sm btn-success"
+                            <button class="btn btn-sm btn-success runbook-auto-btn"
                                     title="Auto-execute all steps"
-                                    hx-post="/insights/runbooks/{runbook.id}/auto-execute?instance={instance}"
-                                    hx-swap="none"
-                                    hx-confirm="This will automatically execute all steps. Continue?"
-                                    hx-on::after-request="if(event.detail.xhr.status === 200) { const resp = JSON.parse(event.detail.xhr.responseText); window.location.href = resp.redirectUrl; } else { alert('Auto-execute not available for this runbook'); }">
+                                    data-runbook-id="{runbook.id}"
+                                    data-instance="{instance}">
                                 <i class="bi bi-lightning-fill" aria-hidden="true"></i>
                                 Auto
                             </button>
@@ -181,5 +205,65 @@
     </div>
 </div>
 {/if}
+
+<script>
+// Handle runbook start buttons
+document.querySelectorAll('.runbook-start-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+        var runbookId = this.dataset.runbookId;
+        var instance = this.dataset.instance;
+        var database = document.getElementById('databaseScope').value;
+
+        var url = '/insights/runbooks/' + runbookId + '/start?instance=' + instance;
+        if (database) {
+            url += '&database=' + encodeURIComponent(database);
+        }
+
+        try {
+            var response = await fetch(url, { method: 'POST' });
+            if (response.ok) {
+                var data = await response.json();
+                window.location.href = data.redirectUrl;
+            } else {
+                alert('Failed to start runbook');
+            }
+        } catch (err) {
+            console.error('Error starting runbook:', err);
+            alert('Error starting runbook');
+        }
+    });
+});
+
+// Handle runbook auto-execute buttons
+document.querySelectorAll('.runbook-auto-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+        if (!confirm('This will automatically execute all steps. Continue?')) {
+            return;
+        }
+
+        var runbookId = this.dataset.runbookId;
+        var instance = this.dataset.instance;
+        var database = document.getElementById('databaseScope').value;
+
+        var url = '/insights/runbooks/' + runbookId + '/auto-execute?instance=' + instance;
+        if (database) {
+            url += '&database=' + encodeURIComponent(database);
+        }
+
+        try {
+            var response = await fetch(url, { method: 'POST' });
+            if (response.ok) {
+                var data = await response.json();
+                window.location.href = data.redirectUrl;
+            } else {
+                alert('Auto-execute not available for this runbook');
+            }
+        } catch (err) {
+            console.error('Error auto-executing runbook:', err);
+            alert('Error auto-executing runbook');
+        }
+    });
+});
+</script>
 
 {/include}

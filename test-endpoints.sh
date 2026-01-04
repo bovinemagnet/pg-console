@@ -212,6 +212,11 @@ echo -e "${YELLOW}=== Insights API ===${NC}"
 test_endpoint "/insights/explain/cache_hit_ratio"
 
 echo ""
+echo -e "${YELLOW}=== Runbook Export ===${NC}"
+# Note: This test assumes execution ID 1 exists from initial data
+test_endpoint "/insights/runbooks/execution/1/export/pdf?instance=${INSTANCE}"
+
+echo ""
 echo -e "${YELLOW}=== API v1 Core Endpoints ===${NC}"
 test_endpoint "/api/v1/overview?instance=${INSTANCE}"
 test_endpoint "/api/v1/activity?instance=${INSTANCE}"

@@ -342,10 +342,10 @@ Comprehensive documentation is available in [AsciiDoc](https://asciidoc.org/) fo
 
 | Module | Description | Location |
 |--------|-------------|----------|
-| **User Guide** | Installation, configuration, and dashboard usage | [docs/modules/user-guide](docs/modules/user-guide/pages/) |
-| **Admin Guide** | Deployment, security, alerting, and multi-instance setup | [docs/modules/admin-guide](docs/modules/admin-guide/pages/) |
-| **Developer Guide** | Architecture, database schema, and testing | [docs/modules/developer-guide](docs/modules/developer-guide/pages/) |
-| **API Reference** | REST API endpoints and response formats | [docs/modules/api-reference](docs/modules/api-reference/pages/) |
+| **User Guide** | Installation, configuration, and dashboard usage | [docs/modules/user-guide](docs/modules/user-guide/pages/index.adoc) |
+| **Admin Guide** | Deployment, security, alerting, and multi-instance setup | [docs/modules/admin-guide](docs/modules/admin-guide/pages/index.adoc) |
+| **Developer Guide** | Architecture, database schema, and testing | [docs/modules/developer-guide](docs/modules/developer-guide/pages/index.adoc) |
+| **API Reference** | REST API endpoints and response formats | [docs/modules/api-reference](docs/modules/api-reference/pages/index.adoc) |
 
 ### Key Documentation Pages
 

@@ -1736,6 +1736,31 @@
                     });
                 }
             });
+
+            // Auto-expand section containing the active link and scroll into view
+            const activeLink = document.querySelector('.nav-link.active');
+            if (activeLink) {
+                const parentSection = activeLink.closest('.nav-section[data-section]');
+                if (parentSection && parentSection.classList.contains('collapsed')) {
+                    // Expand the parent section
+                    parentSection.classList.remove('collapsed');
+                    const sectionName = parentSection.getAttribute('data-section');
+                    const title = parentSection.querySelector('.nav-section-title');
+                    if (title) {
+                        title.setAttribute('aria-expanded', 'true');
+                    }
+                    // Update localStorage to reflect expanded state
+                    const index = collapsedSections.indexOf(sectionName);
+                    if (index > -1) {
+                        collapsedSections.splice(index, 1);
+                        saveCollapsedSections(collapsedSections);
+                    }
+                }
+                // Scroll the active link into view after a brief delay for CSS transitions
+                setTimeout(function() {
+                    activeLink.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }, 100);
+            }
         })();
 
         // ============================================
