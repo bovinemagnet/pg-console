@@ -1428,6 +1428,12 @@
                         <span class="nav-link-text">Schema Diff</span>
                     </a>
                     {/if}
+                    {#if toggles.databaseDiff}
+                    <a class="nav-link" href="/database-diff?instance={currentInstance ?: 'default'}" data-title="Database Diff">
+                        <i class="bi bi-database-gear" aria-hidden="true"></i>
+                        <span class="nav-link-text">Database Diff</span>
+                    </a>
+                    {/if}
                     {#if toggles.bookmarks}
                     <a class="nav-link" href="/bookmarks?instance={currentInstance ?: 'default'}" data-title="Bookmarks">
                         <i class="bi bi-bookmark-star" aria-hidden="true"></i>

@@ -698,9 +698,18 @@ Product Specification: Postgres Insight Dashboard
 - [ ] **Core Workflow Tests** - Navigation, theme, refresh, keyboard shortcuts
 - [ ] **Data Display Tests** - Slow queries, activity, locks, tables, sparklines
 - [ ] **Interactive Feature Tests** - Sorting, drill-downs, exports
+
 - [ ] **Responsive Design Tests** - Desktop, tablet, mobile viewports
 - [ ] **Accessibility Tests** - Keyboard navigation, ARIA, focus indicators
 - [ ] **Claude Code Playwright Plugin Integration** - AI-assisted test development workflow
+
+### Phase 25 — Cross-Database Schema Diff
+- [x] **CrossDatabaseConnectionService** - Ad-hoc connections to different databases on same instance
+- [x] **SchemaExtractorService Extensions** - Connection-based extraction methods
+- [x] **DatabaseDiffService** - Orchestrate cross-database schema comparisons
+- [x] **DatabaseDiffResource** - REST endpoints and UI at `/database-diff`
+- [x] **User Interface** - Cascading dropdowns, manual entry, comparison results
+- [x] **Feature Toggle** - Enterprise section integration with `database-diff` toggle
 
 ---
 
@@ -2512,6 +2521,84 @@ Known Limitations:
 - Video recording increases test execution time
 - Some htmx interactions may require explicit waits
 - WebKit may have slight rendering differences on Linux
+
+---
+
+### Phase 25 — Cross-Database Schema Diff
+
+- [x] **CrossDatabaseConnectionService** - Ad-hoc database connections
+  - Query pg_database for available databases on an instance
+  - Create connections to different databases using same credentials
+  - JDBC URL modification to target different databases
+  - Password extraction from Agroal DataSource configuration
+  - Connection testing and validation
+
+- [x] **SchemaExtractorService Extensions** - Connection-based extraction
+  - Add overloaded methods accepting Connection instead of instance name
+  - Support extraction from ad-hoc cross-database connections
+  - Reuse existing extraction logic with flexible connection handling
+
+- [x] **DatabaseDiffService** - Cross-database comparison orchestration
+  - Compare schemas across different databases on same or different instances
+  - Support comparisons like: `prod1.myapp.public` vs `prod2.myapp.public`
+  - Reuse comparison logic from SchemaComparisonService
+  - Generate migration scripts for cross-database changes
+
+- [x] **DatabaseDiffResource** - REST endpoints for cross-database comparison
+  - `GET /database-diff` - Main page with 6 cascading dropdowns
+  - `GET /database-diff/databases` - HTMX: List databases for instance
+  - `GET /database-diff/schemas` - HTMX: List schemas for database
+  - `GET /database-diff/schema-summary` - HTMX: Object counts for schema
+  - `POST /database-diff/compare` - Execute cross-database comparison
+  - `POST /database-diff/generate-migration` - Generate DDL migration script
+  - `GET /database-diff/download-script` - Download SQL migration file
+  - `GET /database-diff/export/html|markdown|pdf` - Export comparison reports
+
+- [x] **User Interface** - databaseDiff.html and databaseDiffResult.html
+  - 6 cascading dropdowns: Source (instance → database → schema), Destination (instance → database → schema)
+  - Manual database name entry option (pencil button toggles text input)
+  - HTMX for dynamic dropdown updates
+  - Filter checkboxes for object types (tables, views, functions, etc.)
+  - Results display with severity badges and expandable details
+  - Migration script generation modal with wrap options
+
+- [x] **Feature Toggle** - Enterprise section integration
+  - `pg-console.dashboards.enterprise.database-diff` configuration
+  - Navigation link in Enterprise sidebar section
+  - Consistent with existing feature toggle patterns
+
+Acceptance Criteria:
+
+- Users can compare schemas across different databases on the same PostgreSQL instance
+- Users can compare schemas across databases on different instances
+- Cascading dropdowns automatically populate databases and schemas
+- Manual database entry supported for databases not in auto-populated list
+- Comparison results match existing schema-comparison format
+- Migration scripts can be generated and downloaded
+- Export to HTML, Markdown, and PDF formats works correctly
+- Feature can be toggled on/off via configuration
+
+Configuration Properties:
+
+```properties
+# Enable/disable database diff feature
+pg-console.dashboards.enterprise.database-diff=${PG_CONSOLE_DASH_DATABASE_DIFF:true}
+```
+
+API Endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /database-diff | Main comparison page |
+| GET | /database-diff/databases | List databases for instance |
+| GET | /database-diff/schemas | List schemas for database |
+| GET | /database-diff/schema-summary | Object counts for schema |
+| POST | /database-diff/compare | Execute comparison |
+| POST | /database-diff/generate-migration | Generate migration script |
+| GET | /database-diff/download-script | Download SQL file |
+| GET | /database-diff/export/html | Export HTML report |
+| GET | /database-diff/export/markdown | Export Markdown report |
+| GET | /database-diff/export/pdf | Export PDF report |
 
 ---
 

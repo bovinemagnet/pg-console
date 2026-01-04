@@ -3,4 +3,5 @@
 ** xref:configuration.adoc[Configuration]
 ** xref:dashboards.adoc[Using Dashboards]
 ** xref:diagnostics.adoc[Advanced Diagnostics]
+** xref:database-diff.adoc[Database Diff]
 ** xref:troubleshooting.adoc[Troubleshooting]

@@ -13,6 +13,7 @@ This page provides a complete reference for all pg-console REST API endpoints, i
 * <<diagnostics,Advanced Diagnostics>> - Specialised diagnostic tools and analysis
 * <<security,Security & Compliance>> - Security monitoring and compliance
 * <<schema-comparison,Schema Comparison>> - Schema comparison and migration
+* <<database-diff,Database Diff>> - Cross-database schema comparison and migration scripts
 * <<custom-dashboards,Custom Dashboards>> - User-defined dashboard management
 * <<schema-docs,Schema Documentation>> - Database schema documentation generation
 * <<infrastructure,Infrastructure>> - Replication and background processes
@@ -2604,6 +2605,483 @@ Returns schema summary statistics for an instance.
 [source,bash]
 ----
 curl "http://localhost:8080/api/v1/schema-comparison/summary?instance=prod&schema=public"
+----
+
+'''
+
+[#database-diff]
+== Database Diff
+
+Endpoints for cross-database schema comparison, difference analysis, and migration script generation.
+
+=== GET /database-diff
+
+Returns the Database Diff dashboard page with cascading dropdowns for selecting source and destination databases.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+|===
+
+==== Response
+
+HTML page with interactive schema comparison interface.
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/database-diff?instance=production
+----
+
+'''
+
+=== GET /database-diff/databases
+
+Returns available databases for a specified instance.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (required)
+|PostgreSQL instance identifier
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "production",
+  "databases": [
+    "postgres",
+    "myapp",
+    "reporting",
+    "analytics"
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/database-diff/databases?instance=production
+----
+
+'''
+
+=== GET /database-diff/schemas
+
+Returns available schemas for a specified database within an instance.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (required)
+|PostgreSQL instance identifier
+
+|`database`
+|Query (required)
+|Database name
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "production",
+  "database": "myapp",
+  "schemas": [
+    "public",
+    "private",
+    "audit",
+    "reporting"
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/schemas?instance=prod&database=myapp"
+----
+
+'''
+
+=== GET /database-diff/schema-summary
+
+Returns object counts and summary statistics for a specified schema.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (required)
+|PostgreSQL instance identifier
+
+|`database`
+|Query (required)
+|Database name
+
+|`schema`
+|Query (required)
+|Schema name
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "instance": "production",
+  "database": "myapp",
+  "schema": "public",
+  "summary": {
+    "tables": 45,
+    "views": 12,
+    "functions": 28,
+    "sequences": 15,
+    "types": 5,
+    "extensions": 8,
+    "indexes": 87,
+    "triggers": 23,
+    "constraints": 156
+  }
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/schema-summary?instance=prod&database=myapp&schema=public"
+----
+
+'''
+
+=== POST /database-diff/compare
+
+Executes a schema comparison between source and destination databases.
+
+==== Request Body
+
+[source,json]
+----
+{
+  "source": {
+    "instance": "production",
+    "database": "myapp",
+    "schema": "public"
+  },
+  "destination": {
+    "instance": "staging",
+    "database": "myapp",
+    "schema": "public"
+  },
+  "filters": [
+    "TABLES",
+    "VIEWS",
+    "FUNCTIONS",
+    "SEQUENCES",
+    "TYPES",
+    "EXTENSIONS",
+    "INDEXES",
+    "TRIGGERS",
+    "CONSTRAINTS"
+  ]
+}
+----
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "comparisonId": "cmp_20251228_103000_abc123",
+  "source": {
+    "instance": "production",
+    "database": "myapp",
+    "schema": "public"
+  },
+  "destination": {
+    "instance": "staging",
+    "database": "myapp",
+    "schema": "public"
+  },
+  "summary": {
+    "matching": 45,
+    "missing": 8,
+    "extra": 3,
+    "modified": 12,
+    "total": 68
+  },
+  "severityCounts": {
+    "BREAKING": 2,
+    "WARNING": 15,
+    "INFO": 6
+  },
+  "differences": [
+    {
+      "objectType": "TABLE",
+      "objectName": "orders",
+      "category": "MODIFIED",
+      "severity": "WARNING",
+      "description": "Column data type changed: total numeric(10,2) -> numeric(12,2)",
+      "sourceDefinition": "CREATE TABLE orders (\n  id bigserial PRIMARY KEY,\n  customer_id bigint NOT NULL,\n  total numeric(10,2),\n  created_at timestamp DEFAULT now()\n);",
+      "destinationDefinition": "CREATE TABLE orders (\n  id bigserial PRIMARY KEY,\n  customer_id bigint NOT NULL,\n  total numeric(12,2),\n  status varchar(20),\n  created_at timestamp DEFAULT now()\n);"
+    },
+    {
+      "objectType": "INDEX",
+      "objectName": "idx_orders_customer",
+      "category": "MISSING",
+      "severity": "WARNING",
+      "description": "Index exists in source but not in destination",
+      "sourceDefinition": "CREATE INDEX idx_orders_customer ON orders(customer_id);",
+      "destinationDefinition": null
+    },
+    {
+      "objectType": "FUNCTION",
+      "objectName": "calculate_total",
+      "category": "MODIFIED",
+      "severity": "INFO",
+      "description": "Function definition changed",
+      "sourceDefinition": "CREATE FUNCTION calculate_total(order_id bigint) RETURNS numeric AS $$\n  SELECT SUM(quantity * price) FROM order_items WHERE order_id = $1;\n$$ LANGUAGE SQL IMMUTABLE;",
+      "destinationDefinition": "CREATE FUNCTION calculate_total(order_id bigint) RETURNS numeric AS $$\n  SELECT COALESCE(SUM(quantity * price), 0) FROM order_items WHERE order_id = $1;\n$$ LANGUAGE SQL IMMUTABLE;"
+    }
+  ]
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/database-diff/compare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": {
+      "instance": "production",
+      "database": "myapp",
+      "schema": "public"
+    },
+    "destination": {
+      "instance": "staging",
+      "database": "myapp",
+      "schema": "public"
+    },
+    "filters": ["TABLES", "INDEXES", "CONSTRAINTS"]
+  }'
+----
+
+'''
+
+=== POST /database-diff/generate-migration
+
+Generates a DDL migration script to synchronise destination schema with source.
+
+==== Request Body
+
+[source,json]
+----
+{
+  "comparisonId": "cmp_20251228_103000_abc123",
+  "wrapOption": "SINGLE_TRANSACTION",
+  "includeDrops": false,
+  "includeComments": true
+}
+----
+
+==== Request Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`comparisonId`
+|String (required)
+|Comparison ID from previous compare operation
+
+|`wrapOption`
+|String (required)
+|Transaction wrapping: `SINGLE_TRANSACTION`, `INDIVIDUAL_STATEMENTS`, or `SAVEPOINTS`
+
+|`includeDrops`
+|Boolean (optional)
+|Include DROP statements for extra objects (default: `false`)
+
+|`includeComments`
+|Boolean (optional)
+|Include SQL comments explaining each statement (default: `true`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamp": "2025-12-28T10:30:00Z",
+  "comparisonId": "cmp_20251228_103000_abc123",
+  "scriptId": "script_20251228_103015_xyz789",
+  "wrapOption": "SINGLE_TRANSACTION",
+  "statementCount": 15,
+  "script": "-- Database Diff Migration Script\n-- Source: production.myapp.public\n-- Destination: staging.myapp.public\n-- Generated: 2025-12-28 10:30:15\n\nBEGIN;\n\n-- Missing tables\nCREATE TABLE orders (\n  id bigserial PRIMARY KEY,\n  customer_id bigint NOT NULL,\n  total numeric(10,2),\n  created_at timestamp DEFAULT now()\n);\n\n-- Missing indexes\nCREATE INDEX idx_orders_customer ON orders(customer_id);\n\n-- Modified functions\nDROP FUNCTION IF EXISTS calculate_total(bigint);\nCREATE FUNCTION calculate_total(order_id bigint) RETURNS numeric AS $$\n  SELECT SUM(quantity * price) FROM order_items WHERE order_id = $1;\n$$ LANGUAGE SQL IMMUTABLE;\n\nCOMMIT;"
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl -X POST "http://localhost:8080/database-diff/generate-migration" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "comparisonId": "cmp_20251228_103000_abc123",
+    "wrapOption": "SINGLE_TRANSACTION",
+    "includeDrops": false,
+    "includeComments": true
+  }'
+----
+
+'''
+
+=== GET /database-diff/download-script
+
+Downloads a generated migration script as a SQL file.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`scriptId`
+|Query (required)
+|Script ID from generate-migration operation
+|===
+
+==== Response
+
+SQL file download with `Content-Disposition: attachment` header.
+
+Filename format: `migration_{source}_{destination}_{timestamp}.sql`
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/download-script?scriptId=script_20251228_103015_xyz789" \
+  -o migration.sql
+----
+
+'''
+
+=== GET /database-diff/export/html
+
+Exports comparison results as a standalone HTML report.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`comparisonId`
+|Query (required)
+|Comparison ID from compare operation
+|===
+
+==== Response
+
+HTML file download with embedded CSS and formatted comparison results.
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/export/html?comparisonId=cmp_20251228_103000_abc123" \
+  -o comparison_report.html
+----
+
+'''
+
+=== GET /database-diff/export/markdown
+
+Exports comparison results as a GitHub-flavoured Markdown document.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`comparisonId`
+|Query (required)
+|Comparison ID from compare operation
+|===
+
+==== Response
+
+Markdown file download with tables and code blocks.
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/export/markdown?comparisonId=cmp_20251228_103000_abc123" \
+  -o comparison_report.md
+----
+
+'''
+
+=== GET /database-diff/export/pdf
+
+Exports comparison results as a formatted PDF document.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`comparisonId`
+|Query (required)
+|Comparison ID from compare operation
+|===
+
+==== Response
+
+PDF file download with professional formatting and table of contents.
+
+==== Example
+
+[source,bash]
+----
+curl "http://localhost:8080/database-diff/export/pdf?comparisonId=cmp_20251228_103000_abc123" \
+  -o comparison_report.pdf
 ----
 
 '''

@@ -355,6 +355,18 @@ public interface DashboardConfig {
         boolean schemaComparisonEnabled();
 
         /**
+         * Enable or disable the Database Diff page (/database-diff).
+         * <p>
+         * Cross-database schema comparison allowing comparison of schemas
+         * across different databases on the same or different instances.
+         *
+         * @return true if page is enabled
+         */
+        @WithName("database-diff")
+        @WithDefault("true")
+        boolean databaseDiffEnabled();
+
+        /**
          * Enable or disable the Bookmarks page (/bookmarks).
          *
          * @return true if page is enabled

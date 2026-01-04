@@ -1,0 +1,288 @@
+{#include base}
+{#title}Database Diff Results - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/database-diff">Database Diff</a></li>
+                <li class="breadcrumb-item active">Results</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-database-gear me-2"></i>Cross-Database Comparison Results</h1>
+        <p class="text-muted">
+            <strong>{result.sourceInstance}.{sourceDatabase}.{result.sourceSchema}</strong>
+            <i class="bi bi-arrow-right mx-2"></i>
+            <strong>{result.destinationInstance}.{destDatabase}.{result.destinationSchema}</strong>
+            <span class="ms-3 text-secondary">Compared at {result.comparedAtFormatted}</span>
+        </p>
+    </div>
+</div>
+
+{#if !result.success}
+<div class="alert alert-danger" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>Comparison failed: {result.errorMessage}
+</div>
+{/if}
+
+<!-- Summary Cards -->
+<div class="row mb-4 g-3">
+    <div class="col-6 col-md-3">
+        <div class="card text-center {#if result.summary.missingObjects > 0}border-warning{/if}">
+            <div class="card-body">
+                <h2 class="display-5 text-warning">{result.summary.missingObjects}</h2>
+                <p class="mb-0">Missing</p>
+                <small class="text-muted">In source, not in destination</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center {#if result.summary.extraObjects > 0}border-info{/if}">
+            <div class="card-body">
+                <h2 class="display-5 text-info">{result.summary.extraObjects}</h2>
+                <p class="mb-0">Extra</p>
+                <small class="text-muted">In destination, not in source</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center {#if result.summary.modifiedObjects > 0}border-primary{/if}">
+            <div class="card-body">
+                <h2 class="display-5 text-primary">{result.summary.modifiedObjects}</h2>
+                <p class="mb-0">Modified</p>
+                <small class="text-muted">Different definitions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h2 class="display-5 text-success">{result.summary.matchingObjects}</h2>
+                <p class="mb-0">Matching</p>
+                <small class="text-muted">Identical objects</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions Bar -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="btn-group" role="group">
+            <a href="/database-diff" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>New Comparison
+            </a>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="/database-diff/export/html?sourceInstance={result.sourceInstance}&sourceDatabase={sourceDatabase}&sourceSchema={result.sourceSchema}&destInstance={result.destinationInstance}&destDatabase={destDatabase}&destSchema={result.destinationSchema}">
+                        <i class="bi bi-filetype-html me-2"></i>HTML Report
+                    </a></li>
+                    <li><a class="dropdown-item" href="/database-diff/export/markdown?sourceInstance={result.sourceInstance}&sourceDatabase={sourceDatabase}&sourceSchema={result.sourceSchema}&destInstance={result.destinationInstance}&destDatabase={destDatabase}&destSchema={result.destinationSchema}">
+                        <i class="bi bi-markdown me-2"></i>Markdown
+                    </a></li>
+                    <li><a class="dropdown-item" href="/database-diff/export/pdf?sourceInstance={result.sourceInstance}&sourceDatabase={sourceDatabase}&sourceSchema={result.sourceSchema}&destInstance={result.destinationInstance}&destDatabase={destDatabase}&destSchema={result.destinationSchema}">
+                        <i class="bi bi-filetype-pdf me-2"></i>PDF Report
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+
+        {#if result.summary.totalDifferences > 0}
+        <button type="button" class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#migrationModal">
+            <i class="bi bi-file-code me-1"></i>Generate Migration Script
+        </button>
+        {/if}
+    </div>
+</div>
+
+<!-- Migration Script Display (if generated) -->
+{#if script??}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-file-code me-2"></i>Generated Migration Script</h5>
+                <div>
+                    <span class="badge bg-light text-dark me-2">{script.statementCount} statements</span>
+                    <a href="/database-diff/download-script?sourceInstance={result.sourceInstance}&sourceDatabase={sourceDatabase}&sourceSchema={result.sourceSchema}&destInstance={result.destinationInstance}&destDatabase={destDatabase}&destSchema={result.destinationSchema}&wrapOption={selectedWrapOption}&includeDrops={includeDrops}"
+                       class="btn btn-sm btn-light">
+                        <i class="bi bi-download me-1"></i>Download .sql
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <pre class="bg-dark text-light p-3 rounded mb-0" style="max-height: 400px; overflow-y: auto;"><code>{script.script}</code></pre>
+            </div>
+            {#if script.warnings && !script.warnings.isEmpty()}
+            <div class="card-footer bg-warning-subtle">
+                <strong><i class="bi bi-exclamation-triangle me-1"></i>Warnings:</strong>
+                <ul class="mb-0 mt-2">
+                    {#for warning in script.warnings}
+                    <li>{warning}</li>
+                    {/for}
+                </ul>
+            </div>
+            {/if}
+        </div>
+    </div>
+</div>
+{/if}
+
+<!-- Differences -->
+{#if result.differences.isEmpty()}
+<div class="alert alert-success" role="alert">
+    <i class="bi bi-check-circle me-2"></i>
+    <strong>Schemas are identical!</strong> No differences found between the two databases.
+</div>
+{#else}
+
+<!-- Filter buttons -->
+<div class="row mb-3">
+    <div class="col">
+        <div class="btn-group btn-group-sm" role="group" id="severityFilter">
+            <button type="button" class="btn btn-outline-danger active" data-filter="BREAKING">
+                <i class="bi bi-exclamation-octagon me-1"></i>Breaking ({result.breakingCount})
+            </button>
+            <button type="button" class="btn btn-outline-warning active" data-filter="WARNING">
+                <i class="bi bi-exclamation-triangle me-1"></i>Warning ({result.warningCount})
+            </button>
+            <button type="button" class="btn btn-outline-info active" data-filter="INFO">
+                <i class="bi bi-info-circle me-1"></i>Info ({result.infoCount})
+            </button>
+        </div>
+
+        <input type="text" class="form-control form-control-sm d-inline-block ms-3" style="width: 250px;"
+               placeholder="Search differences..." id="diffSearch">
+    </div>
+</div>
+
+<!-- Differences List -->
+<div class="accordion" id="differencesAccordion">
+    {#for diff in result.differences}
+    <div class="accordion-item difference-item" data-severity="{diff.severity}" data-name="{diff.objectName.toLowerCase()}">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#diff-{diff_index}">
+                <span class="badge {diff.differenceType.cssClass} me-2">{diff.differenceType.displayName}</span>
+                <span class="badge {diff.severity.cssClass} me-2">{diff.severity.displayName}</span>
+                <i class="bi {diff.objectType.iconClass} me-2"></i>
+                <span class="me-2">{diff.objectType.displayName}:</span>
+                <strong>{diff.objectName}</strong>
+            </button>
+        </h2>
+        <div id="diff-{diff_index}" class="accordion-collapse collapse" data-bs-parent="#differencesAccordion">
+            <div class="accordion-body">
+                {#if diff.attributeDifferences && !diff.attributeDifferences.isEmpty()}
+                <h6>Attribute Differences</h6>
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Attribute</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#for attr in diff.attributeDifferences}
+                        <tr>
+                            <td><code>{attr.attributeName}</code></td>
+                            <td class="bg-success-subtle"><code>{attr.sourceValue ?: '(null)'}</code></td>
+                            <td class="bg-danger-subtle"><code>{attr.destinationValue ?: '(null)'}</code></td>
+                        </tr>
+                        {/for}
+                    </tbody>
+                </table>
+                {/if}
+
+                {#if diff.sourceDefinition}
+                <h6 class="mt-3">Source Definition</h6>
+                <pre class="bg-dark text-light p-3 rounded"><code>{diff.sourceDefinition}</code></pre>
+                {/if}
+
+                {#if diff.destinationDefinition}
+                <h6 class="mt-3">Destination Definition</h6>
+                <pre class="bg-dark text-light p-3 rounded"><code>{diff.destinationDefinition}</code></pre>
+                {/if}
+            </div>
+        </div>
+    </div>
+    {/for}
+</div>
+{/if}
+
+</div>
+
+<!-- Migration Script Modal -->
+<div class="modal fade" id="migrationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-code me-2"></i>Generate Migration Script</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/database-diff/generate-migration" method="post">
+                <input type="hidden" name="sourceInstance" value="{result.sourceInstance}">
+                <input type="hidden" name="sourceDatabase" value="{sourceDatabase}">
+                <input type="hidden" name="sourceSchema" value="{result.sourceSchema}">
+                <input type="hidden" name="destInstance" value="{result.destinationInstance}">
+                <input type="hidden" name="destDatabase" value="{destDatabase}">
+                <input type="hidden" name="destSchema" value="{result.destinationSchema}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Transaction Wrapping</label>
+                        <select class="form-select" name="wrapOption">
+                            {#for opt in wrapOptions}
+                            <option value="{opt.name()}">{opt.displayName} - {opt.description}</option>
+                            {/for}
+                        </select>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="includeDrops" id="includeDrops" value="true">
+                        <label class="form-check-label text-danger" for="includeDrops">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Include DROP statements (potential data loss)
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-code-slash me-1"></i>Generate Script
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Filter functionality
+document.querySelectorAll('#severityFilter button').forEach(btn => {
+    btn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        filterDifferences();
+    });
+});
+
+document.getElementById('diffSearch')?.addEventListener('input', filterDifferences);
+
+function filterDifferences() {
+    const activeFilters = Array.from(document.querySelectorAll('#severityFilter button.active'))
+        .map(btn => btn.dataset.filter);
+    const searchTerm = document.getElementById('diffSearch')?.value.toLowerCase() || '';
+
+    document.querySelectorAll('.difference-item').forEach(item => {
+        const severity = item.dataset.severity;
+        const name = item.dataset.name;
+        const matchesSeverity = activeFilters.includes(severity);
+        const matchesSearch = name.includes(searchTerm);
+        item.style.display = matchesSeverity && matchesSearch ? '' : 'none';
+    });
+}
+</script>
+
+{/include}

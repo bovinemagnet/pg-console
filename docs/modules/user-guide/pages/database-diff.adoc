@@ -1,0 +1,660 @@
+= Database Diff
+Paul Snow
+0.0.0
+:description: Guide to comparing database schemas across different PostgreSQL instances and databases using the Database Diff feature
+:keywords: database diff, schema comparison, migration, DDL, database drift, cross-database
+
+[abstract]
+This guide covers the Database Diff feature in pg-console, which enables cross-database and cross-instance schema comparison. Use this tool to identify schema differences between environments (dev vs production), detect schema drift, validate database migrations, and generate migration scripts.
+
+== Overview
+
+The Database Diff feature provides comprehensive schema comparison capabilities across different PostgreSQL databases and instances. Unlike simple table comparisons, Database Diff analyses the complete database schema including:
+
+* Tables (columns, data types, constraints)
+* Views and their definitions
+* Functions and stored procedures
+* Sequences
+* Custom types (ENUM, COMPOSITE)
+* Extensions
+* Indexes
+* Triggers
+* Constraints (PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK)
+
+This tool is particularly valuable when:
+
+* Validating schema consistency between development, staging, and production environments
+* Detecting unintended schema drift over time
+* Planning database migrations or upgrades
+* Ensuring replicas have identical schemas
+* Documenting schema changes between releases
+
+== Accessing Database Diff
+
+Navigate to *Enterprise* > *Database Diff* in the sidebar.
+
+[NOTE]
+====
+The Database Diff feature may be disabled by configuration. If you cannot see this menu item, contact your administrator to enable it via the `PG_CONSOLE_DASH_DATABASE_DIFF` environment variable.
+====
+
+== Comparing Databases
+
+=== Selecting Source and Destination
+
+Database Diff uses cascading dropdown menus to select source and destination databases:
+
+1. *Instance* - Select the PostgreSQL instance (if multiple instances are configured)
+2. *Database* - Select the database name within the instance
+3. *Schema* - Select the schema to compare (typically `public`)
+
+Complete this process for both the source and destination:
+
+* *Source* - The baseline or reference schema
+* *Destination* - The schema to compare against the source
+
+==== Example Comparisons
+
+* *Environment comparison*: Source `prod.myapp.public` vs Destination `staging.myapp.public`
+* *Replica verification*: Source `primary.myapp.public` vs Destination `replica.myapp.public`
+* *Cross-database comparison*: Source `instance1.app_v1.public` vs Destination `instance2.app_v2.public`
+
+=== Manual Database Entry
+
+For databases not appearing in the dropdown lists, use the manual entry option:
+
+1. Click the *pencil icon* (✏️) next to the dropdown
+2. Enter the full database identifier manually in the format:
++
+[source,text]
+----
+instance.database.schema
+----
+
+3. Click *Confirm*
+
+This is useful for:
+
+* Databases with special characters in names
+* Remote databases not yet configured in pg-console
+* Ad-hoc comparisons without configuration changes
+
+== Filtering Comparison
+
+=== Object Type Filters
+
+Control which schema objects are compared by selecting from the available filters:
+
+[cols="1,3"]
+|===
+|Object Type |Description
+
+|*Tables*
+|Table definitions including columns, data types, and defaults
+
+|*Views*
+|View definitions and their SQL queries
+
+|*Functions*
+|Stored functions and procedures with signatures
+
+|*Sequences*
+|Sequence definitions and current values
+
+|*Types*
+|Custom types (ENUM, COMPOSITE, DOMAIN)
+
+|*Extensions*
+|Installed PostgreSQL extensions and versions
+
+|*Indexes*
+|Index definitions, types, and indexed columns
+
+|*Triggers*
+|Trigger definitions and firing conditions
+
+|*Constraints*
+|Primary keys, foreign keys, unique constraints, check constraints
+|===
+
+By default, all object types are included in the comparison.
+
+=== Filter Presets
+
+Database Diff provides convenient preset filters for common comparison scenarios:
+
+==== Schema Structure Only
+
+Compares the structural elements without data-dependent objects:
+
+* *Includes*: Tables, types, extensions
+* *Excludes*: Views, functions, sequences, indexes, triggers, constraints
+
+Use this preset for:
+
+* High-level schema overview
+* Initial schema comparison
+* Comparing core structure between significantly different databases
+
+==== Code & Logic
+
+Compares programmatic elements and business logic:
+
+* *Includes*: Views, functions, triggers
+* *Excludes*: Tables, sequences, types, extensions, indexes, constraints
+
+Use this preset for:
+
+* Reviewing code-level changes
+* Validating stored procedure migrations
+* Comparing business logic between versions
+
+==== Performance Objects
+
+Compares performance-related schema elements:
+
+* *Includes*: Indexes, constraints, sequences
+* *Excludes*: Tables, views, functions, types, extensions, triggers
+
+Use this preset for:
+
+* Performance tuning validation
+* Index migration verification
+* Constraint consistency checking
+
+==== Custom Filter
+
+Select individual object types to create a custom filter:
+
+1. Click *Custom Filter*
+2. Toggle individual object types on/off
+3. Click *Apply Custom Filter*
+
+== Understanding Comparison Results
+
+After clicking *Compare*, Database Diff categorises schema objects into four groups:
+
+=== Result Categories
+
+[cols="1,1,3"]
+|===
+|Category |Indicator |Description
+
+|*Matching*
+|Green ✓
+|Objects exist in both schemas with identical definitions
+
+|*Missing*
+|Red ✗
+|Objects exist in source but not in destination
+
+|*Extra*
+|Orange +
+|Objects exist in destination but not in source
+
+|*Modified*
+|Amber Δ
+|Objects exist in both schemas but have different definitions
+|===
+
+=== Severity Levels
+
+Differences are assigned severity levels to help prioritise remediation:
+
+[cols="1,1,3"]
+|===
+|Severity |Colour |Description
+
+|*BREAKING*
+|Red
+|Critical differences that break compatibility (e.g., missing table, incompatible data type change)
+
+|*WARNING*
+|Amber
+|Significant differences requiring attention (e.g., missing index, modified constraint)
+
+|*INFO*
+|Blue
+|Informational differences with minimal impact (e.g., comment changes, extension version differences)
+|===
+
+=== Detailed Difference Information
+
+Click on any object in the results to view detailed differences:
+
+* *Side-by-side comparison* - Source and destination definitions displayed side-by-side
+* *Highlighted changes* - Differences highlighted for easy identification
+* *DDL statements* - Complete CREATE/ALTER statements shown
+* *Difference summary* - Description of what changed
+
+==== Example: Modified Table
+
+[source,sql]
+----
+-- Source: prod.myapp.public.orders
+CREATE TABLE orders (
+  id bigserial PRIMARY KEY,
+  customer_id bigint NOT NULL,
+  total numeric(10,2),
+  created_at timestamp DEFAULT now()
+);
+
+-- Destination: staging.myapp.public.orders
+CREATE TABLE orders (
+  id bigserial PRIMARY KEY,
+  customer_id bigint NOT NULL,
+  total numeric(12,2),        -- ← MODIFIED: precision changed
+  status varchar(20),          -- ← ADDED: new column
+  created_at timestamp DEFAULT now()
+);
+----
+
+*Severity*: WARNING (schema modification with data type change)
+
+== Generating Migration Scripts
+
+Database Diff can generate DDL migration scripts to synchronise the destination schema with the source.
+
+=== Creating a Migration Script
+
+1. Complete a schema comparison
+2. Review the differences
+3. Click *Generate Migration Script*
+4. Select the wrap option (see below)
+5. Click *Generate*
+
+The generated script includes DDL statements to:
+
+* Create missing objects in the destination
+* Modify objects with differences
+* Optionally drop extra objects (configurable)
+
+=== Wrap Options
+
+Choose how the migration script should handle transactions:
+
+[cols="1,3"]
+|===
+|Option |Description
+
+|*Single Transaction*
+|Wraps all DDL statements in a single `BEGIN...COMMIT` block +
+*Pros*: All-or-nothing migration; automatic rollback on error +
+*Cons*: Some DDL operations cannot run in transactions (e.g., `CREATE INDEX CONCURRENTLY`)
+
+|*Individual Statements*
+|Executes each DDL statement independently without transactions +
+*Pros*: Compatible with all DDL operations; partial migration possible +
+*Cons*: No automatic rollback; requires manual recovery if errors occur
+
+|*Savepoints*
+|Uses savepoints for granular rollback control +
+*Pros*: Per-statement rollback capability; detailed error recovery +
+*Cons*: More complex; requires PostgreSQL savepoint support
+|===
+
+[IMPORTANT]
+====
+Review all generated migration scripts carefully before execution. Database Diff generates syntactically correct DDL, but cannot account for:
+
+* Data migration requirements
+* Application compatibility
+* Downtime windows
+* Concurrent access patterns
+
+Always test migration scripts in a non-production environment first.
+====
+
+=== Migration Script Contents
+
+A typical migration script includes:
+
+[source,sql]
+----
+-- Database Diff Migration Script
+-- Source: prod.myapp.public
+-- Destination: staging.myapp.public
+-- Generated: 2025-12-28 10:30:00
+
+BEGIN;  -- (if Single Transaction selected)
+
+-- Missing tables
+CREATE TABLE orders (
+  id bigserial PRIMARY KEY,
+  customer_id bigint NOT NULL,
+  total numeric(10,2),
+  created_at timestamp DEFAULT now()
+);
+
+-- Missing indexes
+CREATE INDEX idx_orders_customer ON orders(customer_id);
+
+-- Modified functions
+DROP FUNCTION IF EXISTS calculate_total(bigint);
+CREATE FUNCTION calculate_total(order_id bigint) RETURNS numeric AS $$
+  SELECT SUM(quantity * price) FROM order_items WHERE order_id = $1;
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- Modified constraints
+ALTER TABLE order_items DROP CONSTRAINT fk_order_id;
+ALTER TABLE order_items ADD CONSTRAINT fk_order_id
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+
+COMMIT;  -- (if Single Transaction selected)
+----
+
+=== Downloading Migration Scripts
+
+After generating a migration script:
+
+1. Click *Download Script* to save the SQL file locally
+2. The filename includes timestamp and database identifiers for tracking:
++
+[source,text]
+----
+migration_prod_to_staging_20251228_103000.sql
+----
+
+== Exporting Comparison Results
+
+Database Diff supports exporting comparison results in multiple formats for documentation and reporting.
+
+=== Export Formats
+
+==== HTML Export
+
+Click *Export HTML* to generate a standalone HTML report:
+
+* Styled, printable format
+* Includes summary statistics
+* Collapsible difference sections
+* Colour-coded severity indicators
+* Embeds CSS for offline viewing
+
+Use HTML exports for:
+
+* Management reports
+* Audit documentation
+* Email distribution
+* Print archives
+
+==== Markdown Export
+
+Click *Export Markdown* to generate a GitHub-flavoured Markdown report:
+
+* Plain text format
+* Version control friendly
+* Compatible with Git, GitHub, GitLab
+* Includes tables and code blocks
+
+Use Markdown exports for:
+
+* Version control commits
+* README documentation
+* Wiki pages
+* Change logs
+
+==== PDF Export
+
+Click *Export PDF* to generate a professional PDF report:
+
+* Formatted for printing
+* Includes table of contents
+* Page numbers and headers
+* Professional styling
+
+Use PDF exports for:
+
+* Compliance documentation
+* Formal reports
+* Long-term archival
+* Stakeholder distribution
+
+=== Export Contents
+
+All export formats include:
+
+* *Summary* - Total objects compared, differences found, severity breakdown
+* *Comparison metadata* - Source, destination, timestamp, filter settings
+* *Detailed results* - Complete object-by-object comparison
+* *DDL statements* - Full CREATE/ALTER statements for differences
+* *Recommendations* - Suggested actions for remediation
+
+== Use Cases
+
+=== Development vs Production Comparison
+
+*Scenario*: Ensure production database matches the latest development schema before deployment.
+
+*Process*:
+
+1. Select Source: `dev.myapp.public`
+2. Select Destination: `prod.myapp.public`
+3. Click *Compare*
+4. Review *Missing* and *Modified* objects
+5. Generate migration script with *Single Transaction* wrap
+6. Test migration script in staging environment
+7. Apply to production during maintenance window
+
+*Expected Outcome*: Production schema updated to match development without data loss or downtime issues.
+
+=== Database Migration Validation
+
+*Scenario*: Validate that a migration script correctly updated all target databases.
+
+*Process*:
+
+1. Run migration script on target databases
+2. Select Source: `reference.myapp.public` (known good schema)
+3. Select Destination: `target.myapp.public` (recently migrated)
+4. Click *Compare*
+5. Verify *Matching* category contains all expected objects
+6. Investigate any *Missing* or *Modified* objects
+
+*Expected Outcome*: All objects match, confirming successful migration.
+
+=== Schema Drift Detection
+
+*Scenario*: Detect unintended schema changes over time in multiple replicas.
+
+*Process*:
+
+1. Select Source: `primary.myapp.public`
+2. For each replica:
+   a. Select Destination: `replica_N.myapp.public`
+   b. Click *Compare*
+   c. Export results as Markdown
+   d. Check for *Extra* or *Modified* objects (drift indicators)
+3. Review Markdown exports in version control to track drift over time
+
+*Expected Outcome*: Early detection of schema drift before replication issues occur.
+
+=== Multi-Environment Schema Tracking
+
+*Scenario*: Maintain consistent schemas across dev, staging, UAT, and production environments.
+
+*Process*:
+
+1. Define `prod.myapp.public` as canonical source
+2. Compare prod against each environment:
+   * `dev.myapp.public`
+   * `staging.myapp.public`
+   * `uat.myapp.public`
+3. Generate migration scripts for any differences
+4. Apply scripts to align all environments with production
+5. Schedule weekly comparisons to prevent drift
+
+*Expected Outcome*: All environments maintain schema parity with production, reducing deployment surprises.
+
+== Troubleshooting
+
+=== Database Not Appearing in Dropdown
+
+If a database is not listed in the dropdown:
+
+1. *Verify connection* - Ensure pg-console can connect to the instance
+2. *Check permissions* - Verify the pg-console database user has access to the database
+3. *Refresh metadata* - Reload the Database Diff page to refresh database list
+4. *Use manual entry* - Enter the database identifier manually using the pencil icon
+
+=== Comparison Returns No Results
+
+If the comparison shows no objects:
+
+1. *Check schema selection* - Verify the correct schema is selected (e.g., `public`, not `pg_catalog`)
+2. *Verify object filters* - Ensure at least one object type filter is selected
+3. *Review permissions* - Confirm the database user has privileges to view schema objects:
++
+[source,sql]
+----
+-- Check schema access
+SELECT has_schema_privilege('public', 'USAGE');
+
+-- Check table access
+SELECT has_table_privilege('public.orders', 'SELECT');
+----
+
+=== Migration Script Fails to Execute
+
+If a generated migration script fails during execution:
+
+1. *Review error message* - Identify the specific DDL statement that failed
+2. *Check dependencies* - Verify object creation order (e.g., tables before foreign keys)
+3. *Validate data compatibility* - Ensure data type changes are compatible with existing data
+4. *Check concurrent access* - Ensure no locks are blocking DDL operations
+5. *Use Individual Statements wrap* - Retry with individual statements to identify problematic DDL
+
+Common issues:
+
+* *Data type mismatch* - Existing data incompatible with new data type
+* *Constraint violations* - Existing data violates new constraint
+* *Concurrent locks* - Active queries holding locks on objects being modified
+
+[TIP]
+====
+For complex migrations, consider:
+
+* Breaking the script into multiple phases
+* Using `ALTER TABLE ... ALTER COLUMN ... USING` for data type conversions
+* Creating indexes `CONCURRENTLY` to avoid blocking writes
+* Scheduling migrations during low-traffic maintenance windows
+====
+
+=== Comparison Takes Too Long
+
+For very large schemas, comparisons may be slow:
+
+1. *Reduce object types* - Use filter presets to compare only necessary objects
+2. *Compare specific schemas* - Avoid comparing entire databases; focus on specific schemas
+3. *Review instance resources* - Ensure PostgreSQL has adequate CPU and memory
+4. *Check network latency* - Verify fast network connectivity between instances
+
+=== Permission Denied Errors
+
+If you encounter permission errors:
+
+[source,sql]
+----
+-- Grant necessary privileges for schema comparison
+GRANT USAGE ON SCHEMA public TO pgconsole_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgconsole_user;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO pgconsole_user;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO pgconsole_user;
+
+-- For pg_catalog access (metadata)
+GRANT SELECT ON pg_catalog.pg_class TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_attribute TO pgconsole_user;
+GRANT SELECT ON pg_catalog.pg_index TO pgconsole_user;
+-- (additional pg_catalog grants as needed)
+----
+
+== API Access
+
+Database Diff functionality is available via REST API for programmatic access and automation.
+
+See xref:api-reference:endpoints.adoc#database-diff-endpoints[Database Diff Endpoints] for complete API documentation.
+
+Example API usage:
+
+[source,bash]
+----
+# List databases for an instance
+curl "http://localhost:8080/database-diff/databases?instance=production"
+
+# List schemas for a database
+curl "http://localhost:8080/database-diff/schemas?instance=prod&database=myapp"
+
+# Execute comparison
+curl -X POST "http://localhost:8080/database-diff/compare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": {"instance": "prod", "database": "myapp", "schema": "public"},
+    "destination": {"instance": "staging", "database": "myapp", "schema": "public"},
+    "filters": ["TABLES", "INDEXES", "CONSTRAINTS"]
+  }'
+
+# Generate migration script
+curl -X POST "http://localhost:8080/database-diff/generate-migration" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "comparisonId": "abc123",
+    "wrapOption": "SINGLE_TRANSACTION",
+    "includeDrops": false
+  }'
+
+# Export comparison as PDF
+curl "http://localhost:8080/database-diff/export/pdf?comparisonId=abc123" \
+  -o comparison_report.pdf
+----
+
+== Best Practices
+
+=== Comparison Workflow
+
+1. *Define source of truth* - Designate one environment (typically production or main branch schema) as canonical
+2. *Regular comparisons* - Schedule weekly or monthly comparisons to detect drift early
+3. *Version control exports* - Commit Markdown exports to Git for change tracking
+4. *Test migrations thoroughly* - Always test generated scripts in non-production environments
+5. *Document differences* - Use export features to document planned and actual schema changes
+
+=== Migration Script Safety
+
+1. *Review before execution* - Manually review all DDL statements
+2. *Backup first* - Take database backups before applying migration scripts
+3. *Test in staging* - Execute scripts in staging environment first
+4. *Incremental application* - For large migrations, apply changes incrementally
+5. *Monitor during execution* - Watch for locks, errors, and performance impact
+6. *Rollback plan* - Prepare rollback scripts before applying migrations
+
+=== Performance Optimisation
+
+1. *Filter unnecessary objects* - Use presets to exclude irrelevant object types
+2. *Compare during off-peak hours* - Schedule comparisons when database load is low
+3. *Limit comparison scope* - Compare specific schemas rather than entire instances
+4. *Cache results* - Save comparison exports for later reference instead of re-running
+
+=== Security Considerations
+
+1. *Restrict access* - Limit Database Diff access to authorised users only
+2. *Audit exports* - Track who generates migration scripts and when
+3. *Sanitise exports* - Remove sensitive information from exported reports before sharing
+4. *Secure migration scripts* - Store generated scripts securely; treat as sensitive code
+
+== Configuration
+
+Database Diff behaviour can be customised via configuration. See xref:admin-guide:configuration.adoc#database-diff-configuration[Database Diff Configuration] for details.
+
+Key configuration options:
+
+* *Enable/disable feature* - `PG_CONSOLE_DASH_DATABASE_DIFF`
+* *Comparison timeout* - Maximum time allowed for comparison operations
+* *Export formats* - Enable/disable specific export formats
+* *Default filters* - Preset default object type filters
+* *Instance list* - Configure available PostgreSQL instances for comparison
+
+== Next Steps
+
+* Explore xref:dashboards.adoc#schema-documentation[Schema Documentation] to generate comprehensive data dictionaries
+* Review xref:diagnostics.adoc[Advanced Diagnostics] for schema health monitoring
+* Learn about xref:admin-guide:multi-instance.adoc[Multi-Instance Configuration] to compare across multiple PostgreSQL clusters
+* Consult xref:troubleshooting.adoc[Troubleshooting Guide] for common schema comparison issues
