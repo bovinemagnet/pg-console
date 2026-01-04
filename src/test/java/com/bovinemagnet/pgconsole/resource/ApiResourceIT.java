@@ -4,7 +4,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +20,9 @@ import static org.hamcrest.Matchers.*;
  * <p>
  * Note: For full PostgreSQL integration tests, use the CI/CD pipeline
  * which has Docker available for Testcontainers.
+ * <p>
+ * Note: Quarkus does not support @Nested test classes with @TestProfile,
+ * so all tests are in the outer class.
  *
  * @author Paul Snow
  * @version 0.0.0
@@ -47,61 +49,52 @@ class ApiResourceIT {
         }
     }
 
-    @Nested
-    @DisplayName("Static resources")
-    class StaticResourceTests {
+    // ========== Static Resources ==========
 
-        @Test
-        @DisplayName("GET /sw.js returns service worker JavaScript")
-        void serviceWorkerAvailable() {
-            given()
-                .when()
-                .get("/sw.js")
-                .then()
-                .statusCode(200)
-                .contentType(containsString("javascript"));
-        }
+    @Test
+    @DisplayName("GET /sw.js returns service worker JavaScript")
+    void serviceWorkerAvailable() {
+        given()
+            .when()
+            .get("/sw.js")
+            .then()
+            .statusCode(200)
+            .contentType(containsString("javascript"));
     }
 
-    @Nested
-    @DisplayName("Metrics endpoint")
-    class MetricsEndpointTests {
+    // ========== Metrics Endpoint ==========
 
-        @Test
-        @DisplayName("GET /q/metrics returns Prometheus metrics")
-        void metricsEndpointReturnsPrometheus() {
-            given()
-                .when()
-                .get("/q/metrics")
-                .then()
-                .statusCode(anyOf(equalTo(200), equalTo(404))); // May or may not be configured
-        }
+    @Test
+    @DisplayName("GET /q/metrics returns Prometheus metrics")
+    void metricsEndpointReturnsPrometheus() {
+        given()
+            .when()
+            .get("/q/metrics")
+            .then()
+            .statusCode(anyOf(equalTo(200), equalTo(404))); // May or may not be configured
     }
 
-    @Nested
-    @DisplayName("Dashboard endpoint")
-    class DashboardEndpointTests {
+    // ========== Dashboard Endpoints ==========
 
-        @Test
-        @DisplayName("GET / returns response (may be 500 without PostgreSQL)")
-        void dashboardReturnsResponse() {
-            // Dashboard will fail with H2 since it uses PostgreSQL-specific queries
-            // In CI/CD with Docker, this would pass with PostgresTestResource
-            given()
-                .when()
-                .get("/")
-                .then()
-                .statusCode(anyOf(equalTo(200), equalTo(500)));
-        }
+    @Test
+    @DisplayName("GET / returns response (may be 500 without PostgreSQL)")
+    void dashboardReturnsResponse() {
+        // Dashboard will fail with H2 since it uses PostgreSQL-specific queries
+        // In CI/CD with Docker, this would pass with PostgresTestResource
+        given()
+            .when()
+            .get("/")
+            .then()
+            .statusCode(anyOf(equalTo(200), equalTo(500)));
+    }
 
-        @Test
-        @DisplayName("GET /about returns response")
-        void aboutPageReturnsResponse() {
-            given()
-                .when()
-                .get("/about")
-                .then()
-                .statusCode(anyOf(equalTo(200), equalTo(500)));
-        }
+    @Test
+    @DisplayName("GET /about returns response")
+    void aboutPageReturnsResponse() {
+        given()
+            .when()
+            .get("/about")
+            .then()
+            .statusCode(anyOf(equalTo(200), equalTo(500)));
     }
 }
