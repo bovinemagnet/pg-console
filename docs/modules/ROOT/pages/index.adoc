@@ -1,48 +1,367 @@
-= Welcome to pg-console
+= pg-console
 Paul Snow
 0.0.0
-:description: PostgreSQL monitoring and performance dashboard built with Quarkus, Qute, and htmx
-:keywords: PostgreSQL, monitoring, dashboard, performance, pg_stat_statements
+:description: A lightweight, self-hosted web dashboard for PostgreSQL operational insight and performance monitoring
+:keywords: PostgreSQL, monitoring, dashboard, performance, pg_stat_statements, Quarkus
 
-pg-console is a lightweight PostgreSQL monitoring and performance dashboard that provides real-time insights into your database activity, query performance, and system health.
+A lightweight, self-hosted web dashboard for PostgreSQL operational insight and performance monitoring.
 
-== What is pg-console?
+== Features
 
-pg-console is a web-based monitoring dashboard for PostgreSQL databases that leverages PostgreSQL's built-in statistics views to provide comprehensive insights without requiring additional database modifications or extensions beyond `pg_stat_statements`.
+=== Monitoring Dashboards
 
-Built with modern web technologies including Quarkus, Qute templating, and htmx, pg-console delivers a responsive, server-side rendered interface that works seamlessly with or without JavaScript enabled.
+* *Overview Dashboard* - Live widgets showing connections, active/blocked queries, cache hit ratio, database size, and top tables/indexes
+* *Slow Queries* - Query performance from `pg_stat_statements` with sortable columns, hover tooltips, and detailed statistics
+* *Activity Monitor* - Real-time view of current database connections, running queries, and wait events
+* *Lock Analysis* - Blocking tree visualisation, lock contention detection, and idle-in-transaction highlighting
+* *Wait Events* - Session wait state breakdown with type summaries and detailed event table
+* *Table Statistics* - Table sizes, sequential vs index scans, bloat indicators, and tuple counts
+* *Database Metrics* - Per-database statistics from `pg_stat_database` with comparison view and detailed breakdowns
+* *Replication Dashboard* - Streaming replication monitoring, replica lag, replication slot status, and WAL configuration
+* *Infrastructure* - Vacuum progress, background processes, checkpoint statistics, and storage insights
 
-== Key Features
+=== Advanced Diagnostics
 
-* *Real-time Monitoring* - Live dashboard with configurable auto-refresh (5s/10s/30s/60s intervals)
-* *Query Performance Analysis* - Identify and analyse slow queries using `pg_stat_statements` metrics
-* *Active Connections* - Monitor current database activity, connections, and running queries
-* *Lock Contention Detection* - Visualise blocking trees and identify problematic locks
-* *Table Statistics* - Track table sizes, bloat indicators, and access patterns
-* *Database Metrics* - Compare metrics across multiple databases with sparkline visualisations
-* *Historical Tracking* - Automatic sampling and retention of performance metrics over time
-* *Dark Mode Support* - Built-in dark/light theme toggle with persistent preferences
-* *No Client-side Dependencies* - Progressive enhancement with htmx; full functionality without JavaScript
-* *Simple Deployment* - Single JAR deployment with minimal configuration required
+* *Diagnostics Index* - Central overview of all diagnostic tools with summary counts and quick navigation
+* *Query Fingerprinting* - Group similar queries by normalised structure for aggregated analysis
+* *Explain Plan* - Generate EXPLAIN/ANALYZE/BUFFERS plans for queries directly from the Query Detail page
+* *Incident Reports* - Capture point-in-time snapshots of database state for troubleshooting
+* *Alerting* - Webhook notifications when thresholds are exceeded (connections, blocked queries, cache hit ratio)
 
-== Getting Started
+=== Query & Index Optimisation
 
-Ready to start monitoring your PostgreSQL databases?
+* *Index Advisor* - Recommendations for missing indexes (high seq scan ratio), unused indexes, and duplicate indexes
+* *Query Regression Detection* - Compare query performance across time windows, flag significant slowdowns with severity levels
+* *Table Maintenance* - Vacuum/Analyse recommendations based on dead tuple ratios and bloat estimation
+* *Statements Baselines* - Period-over-period query comparisons with top movers report
 
-* xref:quick-start.adoc[Quick Start Guide] - Get up and running in minutes
-* xref:user-guide:index.adoc[User Guide] - Detailed usage instructions and dashboard features
-* xref:admin-guide:index.adoc[Administration Guide] - Configuration, deployment, and maintenance
+=== User Experience
 
-== Documentation Modules
+* *Dark Mode* - Toggle between light and dark themes (persisted in browser)
+* *Auto-Refresh* - Configurable refresh intervals (Off/5s/10s/30s/60s)
+* *Sortable Tables* - Click column headers to sort data
+* *Query Tooltips* - Hover to view full SQL queries
+* *pg_stat_statements Indicator* - Visual badge showing extension availability
+* *SVG Sparklines* - Inline trend charts showing historical metrics (connections, queries, cache hit ratio)
 
-The pg-console documentation is organised into the following modules:
+=== Multi-Instance Support
 
-* *User Guide* - Learn how to use the dashboard, interpret metrics, and analyse query performance
-* *Administration Guide* - Configure, deploy, and maintain pg-console in production environments
-* *Developer Guide* - Architecture, development setup, and contributing guidelines
+* *Instance Selector* - Monitor multiple PostgreSQL instances from one dashboard
+* *Instance-aware History* - Historical metrics stored per instance
+
+=== Security & Admin Actions
+
+* *HTTP Basic Authentication* - Optional security via Quarkus Elytron
+* *Role-based Access* - Admin role required for dangerous actions
+* *Cancel Query* - Cancel running queries (admin only)
+* *Terminate Connection* - Force-terminate backend connections (admin only)
+* *Confirmation Dialogs* - Dangerous actions require confirmation
+
+=== Data Export
+
+* *CSV Export* - Download slow queries as CSV files
+* *Incident Reports* - Point-in-time database state snapshots
+
+=== Enterprise Features
+
+* *REST API* - Full JSON API at `/api/v1/*` for external integrations
+* *Prometheus Metrics* - Metrics endpoint at `/q/metrics` for Grafana dashboards
+* *Audit Logging* - Track admin actions (cancel/terminate queries, settings changes)
+* *Query Bookmarks* - Bookmark slow queries with notes, tags, priority, and status
+* *Instance Comparison* - Side-by-side comparison of metrics across instances
+* *Scheduled Reports* - Automated daily/weekly email reports with top queries and recommendations
+
+=== Data Control & Schema Management
+
+* *Logical Replication* - Publication browser, subscription status, replication origins, and statistics
+* *Change Data Capture* - Table change activity tracking (INSERT/UPDATE/DELETE rates), high-churn table identification, WAL generation estimates
+* *Data Lineage* - Foreign key relationship display, view dependencies, function dependencies
+* *Event Triggers* - DDL event trigger monitoring (CREATE, ALTER, DROP events)
+* *Table Partitioning* - Partition tree visualisation, size distribution analysis, orphan partition detection, imbalance warnings
+
+== Technology Stack
+
+* *Quarkus 3.16.3* + *Java 21*
+* *Qute* templating engine (server-side rendering)
+* *htmx* for dynamic interactions (no Node.js required)
+* *Bootstrap 5* for CSS styling (CDN)
+* *Plain JDBC* for database connectivity
+* *AsciiDoc* + *Antora* for documentation
+
+== Prerequisites
+
+* Java 21 or higher
+* PostgreSQL 12+ with `pg_stat_statements` extension enabled
+* Docker and Docker Compose (optional, for local testing)
+
+== Quick Start
+
+=== Using Docker Compose (Recommended for Development)
+
+[source,bash]
+----
+# Clone the repository
+git clone https://github.com/bovinemagnet/pg-console.git
+cd pg-console
+
+# Start PostgreSQL with pg_stat_statements enabled
+docker-compose up -d
+
+# Run the application in development mode
+./gradlew quarkusDev
+----
+
+Open http://localhost:8080 in your browser.
+
+=== Connecting to an Existing Database
+
+[source,bash]
+----
+# Set environment variables
+export POSTGRES_URL=jdbc:postgresql://your-host:5432/your-database
+export POSTGRES_USER=your-username
+export POSTGRES_PASSWORD=your-password
+
+# Run the application
+./gradlew quarkusDev
+----
+
+== Configuration
+
+=== Environment Variables
+
+[cols="2,3,1"]
+|===
+|Variable |Description |Default
+
+|`POSTGRES_URL`
+|JDBC connection URL
+|`jdbc:postgresql://localhost:5432/postgres`
+
+|`POSTGRES_USER`
+|Database username
+|`postgres`
+
+|`POSTGRES_PASSWORD`
+|Database password
+|`postgres`
+
+|`PG_CONSOLE_DATABASES`
+|Comma-separated list of databases to monitor
+|(all databases)
+
+|`PG_CONSOLE_HISTORY_ENABLED`
+|Enable/disable history sampling
+|`true`
+
+|`PG_CONSOLE_HISTORY_INTERVAL`
+|Sampling interval in seconds
+|`60`
+
+|`PG_CONSOLE_HISTORY_RETENTION`
+|Days to retain history data
+|`7`
+
+|`PG_CONSOLE_HISTORY_TOP_QUERIES`
+|Number of top queries to sample
+|`50`
+
+|`PG_CONSOLE_INSTANCES`
+|Comma-separated list of instance names
+|`default`
+
+|`PG_CONSOLE_SECURITY_ENABLED`
+|Enable HTTP Basic authentication
+|`false`
+
+|`PG_CONSOLE_ALERTING_ENABLED`
+|Enable alerting
+|`false`
+
+|`PG_CONSOLE_WEBHOOK_URL`
+|Webhook URL for alerts
+|(none)
+|===
+
+For complete configuration options, see xref:admin-guide:configuration.adoc[Configuration Reference].
+
+== PostgreSQL Setup
+
+=== Enable pg_stat_statements
+
+The `pg_stat_statements` extension is required for slow query monitoring:
+
+1. Add to `postgresql.conf`:
++
+[source]
+----
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = all
+----
+
+2. Restart PostgreSQL
+
+3. Create the extension in your database:
++
+[source,sql]
+----
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+----
+
+=== Database Permissions
+
+The connecting user needs access to PostgreSQL system views:
+
+[source,sql]
+----
+-- Minimum required permissions
+GRANT pg_read_all_stats TO your_user;
+
+-- Or for pg_stat_statements specifically
+GRANT SELECT ON pg_stat_statements TO your_user;
+----
+
+== Dashboard Pages
+
+[cols="1,2"]
+|===
+|Path |Description
+
+|`/`
+|Overview dashboard with live metrics
+
+|`/slow-queries`
+|Query performance from pg_stat_statements
+
+|`/slow-queries?view=grouped`
+|Queries grouped by fingerprint
+
+|`/slow-queries/{id}`
+|Detailed query statistics with Explain Plan
+
+|`/activity`
+|Current database connections and queries
+
+|`/locks`
+|Lock contention and blocking tree
+
+|`/wait-events`
+|Session wait state breakdown
+
+|`/tables`
+|Table statistics and bloat indicators
+
+|`/databases`
+|Per-database metrics comparison
+
+|`/databases/{name}`
+|Detailed metrics for a single database
+
+|`/index-advisor`
+|Index recommendations (missing, unused, duplicates)
+
+|`/query-regressions`
+|Query performance regression detection
+
+|`/table-maintenance`
+|Vacuum and analyse recommendations
+
+|`/statements-management`
+|Query baselines and top movers report
+
+|`/replication`
+|Streaming replication status and lag monitoring
+
+|`/infrastructure`
+|Vacuum progress, background processes, and storage
+
+|`/diagnostics`
+|Diagnostics index with summary of all diagnostic tools
+
+|`/comparison`
+|Side-by-side instance comparison
+
+|`/bookmarks`
+|Query bookmarks and annotations
+
+|`/audit-log`
+|Admin action audit log
+
+|`/schema-docs`
+|Schema documentation generation
+
+|`/database-diff`
+|Cross-database schema comparison
+
+|`/logical-replication`
+|Publications, subscriptions, and replication origins
+
+|`/cdc`
+|Change data capture dashboard with table activity
+
+|`/data-lineage`
+|Foreign keys, views, and function dependencies
+
+|`/partitions`
+|Table partitioning insights and health
+
+|`/about`
+|Application and PostgreSQL server info
+
+|`/api/v1/*`
+|REST API for metrics (JSON)
+
+|`/q/metrics`
+|Prometheus metrics endpoint
+|===
+
+== Visual Indicators
+
+* *Cache Hit Ratio* - Green (≥90%), Yellow (<90%) - indicates buffer cache effectiveness
+* *Commit Ratio* - Percentage of committed vs rolled back transactions
+* *Deadlocks* - Red highlighting when deadlocks detected
+* *Blocking Queries* - Red highlighting in activity view
+* *pg_stat_statements Badge* - Green icon indicates the extension is available
+
+== Documentation
+
+Comprehensive documentation is available organised into the following modules:
+
+[cols="1,2,1"]
+|===
+|Module |Description |Location
+
+|*User Guide*
+|Installation, configuration, and dashboard usage
+|xref:user-guide:index.adoc[User Guide]
+
+|*Admin Guide*
+|Deployment, security, alerting, and multi-instance setup
+|xref:admin-guide:index.adoc[Admin Guide]
+
+|*Developer Guide*
+|Architecture, database schema, and testing
+|xref:developer-guide:index.adoc[Developer Guide]
+
+|*API Reference*
+|REST API endpoints and response formats
+|xref:api-reference:index.adoc[API Reference]
+|===
+
+=== Key Documentation Pages
+
+* xref:user-guide:installation.adoc[Installation Guide] - Getting started with pg-console
+* xref:user-guide:configuration.adoc[Configuration] - Environment variables and settings
+* xref:user-guide:dashboards.adoc[Using Dashboards] - Dashboard features, keyboard shortcuts, and custom dashboards
+* xref:user-guide:diagnostics.adoc[Advanced Diagnostics] - Diagnostic tools and analysis
+* xref:admin-guide:deployment.adoc[Deployment Guide] - Production deployment options
+* xref:admin-guide:alerting.adoc[Alerting Configuration] - Webhook and email notifications
+* xref:admin-guide:multi-instance.adoc[Multi-Instance Setup] - Monitoring multiple PostgreSQL instances
+* xref:api-reference:endpoints.adoc[REST API Endpoints] - Complete API reference
+* xref:developer-guide:architecture.adoc[Architecture Overview] - System design and components
 
 == Need Help?
 
 * Check the xref:user-guide:troubleshooting.adoc[Troubleshooting Guide] for common issues
 * Review the xref:admin-guide:configuration.adoc[Configuration Reference] for environment variables
-* Visit the project repository for issue tracking and contributions
+* Visit the https://github.com/bovinemagnet/pg-console[project repository] for issue tracking and contributions

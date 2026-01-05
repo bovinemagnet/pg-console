@@ -20,6 +20,70 @@ The diagnostics section provides specialised monitoring capabilities beyond basi
 
 All diagnostics dashboards are accessible from the main navigation under the *Diagnostics* dropdown menu.
 
+[[diagnostics-index]]
+== Diagnostics Index Page
+
+The diagnostics index page (`/diagnostics`) provides a central overview of all diagnostic tools with summary counts and quick navigation.
+
+=== Accessing the Index
+
+Navigate to `/diagnostics` or click on the Diagnostics section header in the navigation menu.
+
+=== Summary Dashboard
+
+The index page displays cards for each diagnostic tool, organised into three categories:
+
+==== Performance Diagnostics
+
+* *Pipeline Risk* - Count of queue/pipeline tables with processing backlogs
+* *Statistical Freshness* - Count of tables with stale statistics
+* *Write/Read Ratio* - Count of write-heavy tables
+* *HOT Efficiency* - Count of tables with low HOT update efficiency
+
+==== Storage & Indexes
+
+* *TOAST Bloat* - Count of tables with significant TOAST bloat
+* *Index Redundancy* - Count of redundant or overlapping indexes
+* *Correlation* - Count of columns where CLUSTER is recommended
+
+==== Health Monitoring
+
+* *XID Wraparound* - Count of databases at risk of transaction ID wraparound
+* *Live Charts* - Link to real-time metric visualisation
+
+=== Issue Indicators
+
+Each card displays a colour-coded badge showing the count of issues:
+
+[cols="1,3"]
+|===
+|Badge Colour |Meaning
+
+|Green (`bg-success`)
+|No issues detected - healthy state
+
+|Yellow (`bg-warning`)
+|1-5 issues detected - review recommended
+
+|Red (`bg-danger`)
+|More than 5 issues or critical status - attention required
+|===
+
+When issues are detected, a warning banner appears at the top of the page showing the total count across all diagnostics.
+
+=== Quick Navigation
+
+Each diagnostic card includes a "View Details" link that navigates directly to the full diagnostic page for detailed analysis and recommendations.
+
+=== Use Cases
+
+The diagnostics index page is useful for:
+
+* *Daily health checks* - Quick overview of database health status
+* *Triage* - Identify which areas need attention first
+* *Dashboarding* - Entry point to the diagnostics subsystem
+* *Monitoring integration* - Central location for health status
+
 == Enabling Diagnostics
 
 Individual diagnostic features can be toggled on or off through configuration. See xref:admin-guide:configuration.adoc#diagnostics-configuration[Diagnostics Configuration] for full details.

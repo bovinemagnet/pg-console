@@ -334,6 +334,7 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 | `/statements-management` | Query baselines and top movers report |
 | `/replication` | Streaming replication status and lag monitoring |
 | `/infrastructure` | Vacuum progress, background processes, and storage |
+| `/diagnostics` | Diagnostics index with summary of all diagnostic tools |
 | `/comparison` | Side-by-side instance comparison |
 | `/bookmarks` | Query bookmarks and annotations |
 | `/audit-log` | Admin action audit log |
