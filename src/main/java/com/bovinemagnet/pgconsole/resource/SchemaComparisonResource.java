@@ -195,7 +195,8 @@ public class SchemaComparisonResource {
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles())
-                .data("instances", dataSourceManager.getInstanceInfoList());
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("currentInstance", sourceInstance);
     }
 
     /**
@@ -215,7 +216,8 @@ public class SchemaComparisonResource {
                     .data("profiles", profileService.findAll())
                     .data("filterPresets", ComparisonFilter.FilterPreset.values())
                     .data("schemaEnabled", config.schema().enabled())
-                .data("toggles", featureToggleService.getAllToggles());
+                    .data("toggles", featureToggleService.getAllToggles())
+                    .data("currentInstance", "default");
         }
 
         ComparisonProfile profile = profileOpt.get();
@@ -241,7 +243,8 @@ public class SchemaComparisonResource {
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles())
-                .data("instances", dataSourceManager.getInstanceInfoList());
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("currentInstance", profile.getSourceInstance());
     }
 
     /**
@@ -280,7 +283,8 @@ public class SchemaComparisonResource {
                 .data("includeDrops", includeDrops)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles())
-                .data("instances", dataSourceManager.getInstanceInfoList());
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("currentInstance", sourceInstance);
     }
 
     /**

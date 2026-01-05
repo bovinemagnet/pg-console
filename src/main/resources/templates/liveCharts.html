@@ -18,10 +18,10 @@
                     Interval: <span id="intervalDisplay">5s</span>
                 </button>
                 <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="#" onclick="setInterval(3000)">3 seconds</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="setInterval(5000)">5 seconds</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="setInterval(10000)">10 seconds</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="setInterval(30000)">30 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setRefreshInterval(3000)">3 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setRefreshInterval(5000)">5 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setRefreshInterval(10000)">10 seconds</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setRefreshInterval(30000)">30 seconds</a></li>
                 </ul>
             </div>
         </div>
@@ -300,7 +300,7 @@
         }
     }
 
-    function setInterval(ms) {
+    function setRefreshInterval(ms) {
         refreshInterval = ms;
         document.getElementById('intervalDisplay').textContent = (ms / 1000) + 's';
         if (intervalId) clearInterval(intervalId);
