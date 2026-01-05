@@ -14,25 +14,64 @@ package com.bovinemagnet.pgconsole.model;
 public class WriteReadRatio {
 
     /**
-     * Workload pattern classification.
+     * Workload pattern classification based on the ratio of write to read operations.
+     * <p>
+     * Patterns are determined by analysing the percentage of write operations:
+     * <ul>
+     * <li>WRITE_HEAVY: &gt;= 70% writes - tables with high INSERT/UPDATE/DELETE activity</li>
+     * <li>READ_HEAVY: &lt;= 30% writes - tables with high SELECT activity</li>
+     * <li>BALANCED: 30-70% writes - mixed read/write workload</li>
+     * <li>IDLE: &lt; 100 total operations - low activity tables</li>
+     * </ul>
+     * </p>
+     *
+     * @see #getWorkloadPattern()
      */
     public enum WorkloadPattern {
-        READ_HEAVY,     // Predominantly reads
-        WRITE_HEAVY,    // Predominantly writes
-        BALANCED,       // Mixed workload
-        IDLE            // Very low activity
+        /** Predominantly read operations (&lt;= 30% writes). Optimise for query performance and indexing. */
+        READ_HEAVY,
+
+        /** Predominantly write operations (&gt;= 70% writes). Optimise for write throughput and vacuum tuning. */
+        WRITE_HEAVY,
+
+        /** Mixed workload (30-70% writes). Balance between read and write optimisations. */
+        BALANCED,
+
+        /** Very low activity (&lt; 100 total operations). May not require optimisation. */
+        IDLE
     }
 
+    /** Schema name of the table. */
     private String schemaName;
+
+    /** Table name without schema qualification. */
     private String tableName;
+
+    /** Number of sequential scans initiated on this table (from pg_stat_user_tables.seq_scan). */
     private long seqScan;
+
+    /** Number of live tuples fetched by sequential scans (from pg_stat_user_tables.seq_tup_read). */
     private long seqTupRead;
+
+    /** Number of index scans initiated on this table (from pg_stat_user_tables.idx_scan). */
     private long idxScan;
+
+    /** Number of live tuples fetched by index scans (from pg_stat_user_tables.idx_tup_fetch). */
     private long idxTupFetch;
+
+    /** Number of tuples inserted (from pg_stat_user_tables.n_tup_ins). */
     private long nTupIns;
+
+    /** Number of tuples updated (from pg_stat_user_tables.n_tup_upd). */
     private long nTupUpd;
+
+    /** Number of tuples deleted (from pg_stat_user_tables.n_tup_del). */
     private long nTupDel;
+
+    /** Number of tuples HOT (Heap-Only Tuple) updated (from pg_stat_user_tables.n_tup_hot_upd). */
     private long nTupHotUpd;
+
+    /** Estimated number of live tuples (from pg_stat_user_tables.n_live_tup). */
     private long nLiveTup;
 
     public WriteReadRatio() {}

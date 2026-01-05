@@ -1,0 +1,208 @@
+{#include base}
+{#title}Checkpoints & WAL - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/checkpoints?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Checkpoints & WAL</h1>
+        <p class="text-muted">Background writer and checkpoint metrics with I/O analysis</p>
+    </div>
+</div>
+
+<!-- Checkpoint Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Total Checkpoints</h6>
+                <h2 class="mb-0">{stats.totalCheckpoints}</h2>
+                <small class="text-muted">since stats reset</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 {#if stats.requestedCheckpointRatio > 10}border-warning{/if}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Forced Checkpoint %</h6>
+                <h2 class="mb-0 {#if stats.requestedCheckpointRatio > 10}text-warning{#else}text-success{/if}">
+                    {stats.requestedCheckpointRatioFormatted}%
+                </h2>
+                <small class="text-muted">{stats.checkpointsReq} requested / {stats.checkpointsTimed} timed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Write Time</h6>
+                <h2 class="mb-0">{stats.checkpointWriteTimeFormatted}</h2>
+                <small class="text-muted">cumulative</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Sync Time</h6>
+                <h2 class="mb-0">{stats.checkpointSyncTimeFormatted}</h2>
+                <small class="text-muted">cumulative</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interpretation & Recommendations -->
+{#if stats.requestedCheckpointRatio > 10 || stats.buffersBackend > stats.buffersCheckpoint || stats.maxwrittenClean > 0}
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Recommendations</h5>
+    </div>
+    <div class="card-body">
+        <ul class="mb-0">
+            {#if stats.requestedCheckpointRatio > 10}
+            <li class="mb-2">
+                <strong>High forced checkpoint ratio ({stats.requestedCheckpointRatioFormatted}%)</strong>
+                <br><small class="text-muted">
+                    Too many checkpoints are being forced before the timeout. Consider increasing <code>max_wal_size</code>
+                    or reducing write volume. Frequent forced checkpoints cause I/O spikes.
+                </small>
+            </li>
+            {/if}
+            {#if stats.buffersBackend > stats.buffersCheckpoint}
+            <li class="mb-2">
+                <strong>Backend write pressure detected</strong>
+                <br><small class="text-muted">
+                    Backends are writing more buffers ({stats.buffersBackend}) than the checkpointer ({stats.buffersCheckpoint}).
+                    This indicates <code>shared_buffers</code> pressure. Consider increasing shared_buffers or bgwriter_lru_maxpages.
+                </small>
+            </li>
+            {/if}
+            {#if stats.maxwrittenClean > 0}
+            <li class="mb-2">
+                <strong>BGWriter hitting limits</strong>
+                <br><small class="text-muted">
+                    Background writer stopped {stats.maxwrittenClean} times due to bgwriter_lru_maxpages limit.
+                    Consider increasing <code>bgwriter_lru_maxpages</code>.
+                </small>
+            </li>
+            {/if}
+            {#if stats.buffersBackendFsync > 0}
+            <li class="mb-2">
+                <strong class="text-danger">Backend fsync detected!</strong>
+                <br><small class="text-muted">
+                    Backends had to perform {stats.buffersBackendFsync} fsync operations directly.
+                    This is a critical performance issue - the checkpointer is not keeping up.
+                </small>
+            </li>
+            {/if}
+        </ul>
+    </div>
+</div>
+{#else}
+<div class="alert alert-success mb-4">
+    <i class="bi bi-check-circle me-2"></i>
+    <strong>Checkpoint health looks good!</strong> No issues detected with checkpoint or background writer behaviour.
+</div>
+{/if}
+
+<!-- Detailed Metrics -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i>Checkpoint Metrics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Timed Checkpoints</th>
+                            <td>{stats.checkpointsTimed}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Requested Checkpoints</th>
+                            <td class="{#if stats.requestedCheckpointRatio > 10}text-warning{/if}">{stats.checkpointsReq}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Written (checkpoint)</th>
+                            <td>{stats.buffersCheckpoint}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Checkpoint Write Time</th>
+                            <td>{stats.checkpointWriteTimeFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Checkpoint Sync Time</th>
+                            <td>{stats.checkpointSyncTimeFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-hdd me-2"></i>Background Writer Metrics</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Buffers Cleaned (bgwriter)</th>
+                            <td>{stats.buffersClean}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Max Written Clean (stops)</th>
+                            <td class="{#if stats.maxwrittenClean > 0}text-warning{/if}">{stats.maxwrittenClean}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Written (backends)</th>
+                            <td class="{#if stats.buffersBackend > stats.buffersCheckpoint}text-warning{/if}">{stats.buffersBackend}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Backend Fsync</th>
+                            <td class="{#if stats.buffersBackendFsync > 0}text-danger{/if}">{stats.buffersBackendFsync}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Allocated</th>
+                            <td>{stats.buffersAlloc}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metric Explanations -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Understanding These Metrics</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Checkpoint Behaviour</h6>
+                <ul class="small">
+                    <li><strong>Timed checkpoints</strong> occur on schedule (checkpoint_timeout)</li>
+                    <li><strong>Requested checkpoints</strong> are forced when max_wal_size is reached</li>
+                    <li>High forced ratio (&gt;10%) indicates WAL pressure - increase max_wal_size</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Buffer Write Sources</h6>
+                <ul class="small">
+                    <li><strong>Checkpoint buffers</strong>: Ideal - checkpointer writes dirty buffers</li>
+                    <li><strong>Backend buffers</strong>: Undesirable - queries must write their own</li>
+                    <li><strong>Backend fsync</strong>: Critical issue - backends forced to sync to disk</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

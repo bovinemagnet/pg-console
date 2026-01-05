@@ -1,0 +1,122 @@
+{#include base}
+{#title}Health Check - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/health-check?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>
+            <i class="bi {overallStatus.iconClass} me-2 {overallStatus.textCssClass}"></i>
+            Health Check
+        </h1>
+        <p class="text-muted">Quick status overview of PostgreSQL health</p>
+    </div>
+</div>
+
+<!-- Overall Status Banner -->
+<div class="alert {#if overallStatus.name == 'OK'}alert-success{#else if overallStatus.name == 'WARNING'}alert-warning{#else}alert-danger{/if} mb-4">
+    <div class="d-flex align-items-center">
+        <i class="bi {overallStatus.iconClass} fs-1 me-3"></i>
+        <div>
+            <h4 class="alert-heading mb-1">Overall Status: {overallStatus.displayName}</h4>
+            <p class="mb-0">
+                <span class="badge bg-success">{okCount} OK</span>
+                <span class="badge bg-warning text-dark ms-1">{warningCount} Warnings</span>
+                <span class="badge bg-danger ms-1">{criticalCount} Critical</span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Health Checks by Category -->
+{#for entry in groupedChecks.entrySet()}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi {entry.key.iconClass} me-2"></i>
+            {entry.key.displayName}
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 5%"></th>
+                        <th style="width: 20%">Check</th>
+                        <th style="width: 20%">Current Value</th>
+                        <th style="width: 15%">Warning</th>
+                        <th style="width: 15%">Critical</th>
+                        <th>Recommendation</th>
+                        <th style="width: 10%"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for check in entry.value}
+                    <tr class="{#if check.status.name == 'CRITICAL'}table-danger{#else if check.status.name == 'WARNING'}table-warning{/if}">
+                        <td class="text-center">
+                            <i class="bi {check.statusIconClass} {check.statusTextClass}"></i>
+                        </td>
+                        <td>
+                            <strong>{check.name}</strong>
+                            <br>
+                            <small class="text-muted">{check.description}</small>
+                        </td>
+                        <td>
+                            <span class="{check.statusTextClass} fw-bold">{check.currentValue}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">{check.warningThreshold ?: '-'}</small>
+                        </td>
+                        <td>
+                            <small class="text-muted">{check.criticalThreshold ?: '-'}</small>
+                        </td>
+                        <td>
+                            {#if check.hasRecommendation}
+                            <small class="{check.statusTextClass}">{check.recommendation}</small>
+                            {#else}
+                            <small class="text-muted">-</small>
+                            {/if}
+                        </td>
+                        <td>
+                            {#if check.hasDetailsLink}
+                            <a href="{check.detailsLink}?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary">
+                                Details
+                            </a>
+                            {/if}
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{/for}
+
+<!-- Legend -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Understanding Health Checks</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6><i class="bi bi-check-circle-fill text-success me-2"></i>OK</h6>
+                <p class="small text-muted">Metric is within acceptable range. No action required.</p>
+            </div>
+            <div class="col-md-4">
+                <h6><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Warning</h6>
+                <p class="small text-muted">Metric approaching threshold. Monitor closely and plan remediation.</p>
+            </div>
+            <div class="col-md-4">
+                <h6><i class="bi bi-x-circle-fill text-danger me-2"></i>Critical</h6>
+                <p class="small text-muted">Immediate attention required. May impact database performance or availability.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

@@ -6,25 +6,69 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Unified recommendation from all recommendation sources.
+ * Unified recommendation from all recommendation sources within PG Console.
  * <p>
- * Aggregates recommendations from Index Advisor, Table Maintenance,
- * Query Regression, Config Tuning, and Anomaly Detection into a
- * single prioritised list.
+ * Aggregates recommendations from Index Adviser, Table Maintenance,
+ * Query Regression, Configuration Tuning, and Anomaly Detection into a
+ * single prioritised list for actionable database optimisation insights.
+ * <p>
+ * This model supports the full lifecycle of a recommendation from creation
+ * through application or dismissal, including effectiveness tracking to
+ * measure the actual impact of applied recommendations.
+ * <p>
+ * Each recommendation includes:
+ * <ul>
+ *   <li>Priority scoring based on severity, impact, and effort</li>
+ *   <li>Suggested SQL or configuration changes</li>
+ *   <li>Rollback capability for safety</li>
+ *   <li>Status tracking (open, in progress, applied, dismissed, deferred)</li>
+ *   <li>Pre/post metrics for effectiveness measurement</li>
+ * </ul>
+ * <p>
+ * Usage example:
+ * <pre>{@code
+ * UnifiedRecommendation rec = new UnifiedRecommendation();
+ * rec.setSource(Source.INDEX_ADVISOR);
+ * rec.setSeverity(Severity.HIGH);
+ * rec.setEstimatedImpact(Impact.HIGH);
+ * rec.setEstimatedEffort(Effort.MINIMAL);
+ * rec.setPriorityScore(
+ *     UnifiedRecommendation.calculatePriorityScore(
+ *         rec.getSeverity(),
+ *         rec.getEstimatedImpact(),
+ *         rec.getEstimatedEffort()
+ *     )
+ * );
+ * rec.setSuggestedSql("CREATE INDEX idx_users_email ON users(email)");
+ * }</pre>
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see com.bovinemagnet.pgconsole.service.PostgresService
  */
 public class UnifiedRecommendation {
 
     /**
-     * Source of the recommendation.
+     * Source system that generated the recommendation.
+     * <p>
+     * Each source represents a different analysis engine within PG Console,
+     * with its own display name, Bootstrap icon, and description for UI
+     * rendering purposes.
      */
     public enum Source {
+        /** Recommendations for missing or unused indices based on query patterns. */
         INDEX_ADVISOR("Index Advisor", "bi-list-ul", "Index-related recommendations"),
+
+        /** Recommendations for VACUUM, ANALYSE, and table bloat remediation. */
         TABLE_MAINTENANCE("Table Maintenance", "bi-tools", "Vacuum and analyse recommendations"),
+
+        /** Alerts for queries that have degraded in performance over time. */
         QUERY_REGRESSION("Query Regression", "bi-graph-down", "Performance degradation alerts"),
+
+        /** Suggestions for PostgreSQL configuration parameter tuning. */
         CONFIG_TUNING("Configuration", "bi-sliders", "PostgreSQL configuration suggestions"),
+
+        /** Anomalies detected in database metrics (connections, cache hits, etc.). */
         ANOMALY("Anomaly", "bi-exclamation-triangle", "Detected metric anomalies");
 
         private final String displayName;
@@ -37,26 +81,52 @@ public class UnifiedRecommendation {
             this.description = description;
         }
 
+        /**
+         * Returns the human-readable display name for this source.
+         *
+         * @return display name (e.g., "Index Advisor")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap Icons class name for this source.
+         *
+         * @return icon class (e.g., "bi-list-ul")
+         */
         public String getIcon() {
             return icon;
         }
 
+        /**
+         * Returns a brief description of this recommendation source.
+         *
+         * @return description text
+         */
         public String getDescription() {
             return description;
         }
     }
 
     /**
-     * Severity level.
+     * Severity level indicating the urgency of addressing the recommendation.
+     * <p>
+     * Severity contributes to priority scoring, with higher severities
+     * receiving more weight in the calculation. Each severity level includes
+     * a numeric weight (1-4) and Bootstrap CSS classes for UI styling.
      */
     public enum Severity {
+        /** Critical severity: immediate action required (weight: 4). */
         CRITICAL("Critical", "bg-danger", 4),
+
+        /** High severity: should be addressed soon (weight: 3). */
         HIGH("High", "bg-warning text-dark", 3),
+
+        /** Medium severity: address when convenient (weight: 2). */
         MEDIUM("Medium", "bg-info", 2),
+
+        /** Low severity: minor issue or optimisation (weight: 1). */
         LOW("Low", "bg-secondary", 1);
 
         private final String displayName;
@@ -69,25 +139,52 @@ public class UnifiedRecommendation {
             this.weight = weight;
         }
 
+        /**
+         * Returns the human-readable display name for this severity level.
+         *
+         * @return display name (e.g., "Critical", "High")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap CSS class for styling this severity level.
+         *
+         * @return CSS class (e.g., "bg-danger", "bg-warning text-dark")
+         */
         public String getCssClass() {
             return cssClass;
         }
 
+        /**
+         * Returns the numeric weight used in priority score calculation.
+         * <p>
+         * Higher weight values indicate greater urgency. Weight values
+         * range from 1 (LOW) to 4 (CRITICAL).
+         *
+         * @return weight value (1-4)
+         */
         public int getWeight() {
             return weight;
         }
     }
 
     /**
-     * Estimated impact of applying the recommendation.
+     * Estimated impact of applying the recommendation on database performance.
+     * <p>
+     * Impact represents the expected magnitude of improvement if the
+     * recommendation is applied. This is used in priority scoring to
+     * balance urgency (severity) with potential benefit (impact).
      */
     public enum Impact {
+        /** Significant improvement expected (e.g., 50%+ performance gain). */
         HIGH("High", "Significant improvement expected"),
+
+        /** Moderate improvement expected (e.g., 10-50% performance gain). */
         MEDIUM("Medium", "Moderate improvement expected"),
+
+        /** Minor improvement expected (e.g., <10% performance gain). */
         LOW("Low", "Minor improvement expected");
 
         private final String displayName;
@@ -98,22 +195,43 @@ public class UnifiedRecommendation {
             this.description = description;
         }
 
+        /**
+         * Returns the human-readable display name for this impact level.
+         *
+         * @return display name (e.g., "High", "Medium")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns a description of the expected improvement magnitude.
+         *
+         * @return description text
+         */
         public String getDescription() {
             return description;
         }
     }
 
     /**
-     * Estimated effort to apply the recommendation.
+     * Estimated effort required to apply the recommendation.
+     * <p>
+     * Effort represents the time, risk, and complexity involved in implementing
+     * the recommendation. Lower effort recommendations receive higher priority
+     * scores, encouraging quick wins. Effort is inversely related to priority.
      */
     public enum Effort {
+        /** Minimal effort: can be applied immediately with one-click (< 5 minutes, no risk). */
         MINIMAL("Minimal", "< 5 minutes, no risk"),
+
+        /** Low effort: quick implementation with minimal planning (< 30 minutes, low risk). */
         LOW("Low", "< 30 minutes, low risk"),
+
+        /** Medium effort: requires some planning and testing (< 2 hours, moderate planning needed). */
         MEDIUM("Medium", "< 2 hours, moderate planning needed"),
+
+        /** High effort: significant planning, testing, and potentially downtime required. */
         HIGH("High", "Significant planning and testing needed");
 
         private final String displayName;
@@ -124,23 +242,46 @@ public class UnifiedRecommendation {
             this.description = description;
         }
 
+        /**
+         * Returns the human-readable display name for this effort level.
+         *
+         * @return display name (e.g., "Minimal", "Low")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns a description of the time and risk associated with this effort level.
+         *
+         * @return description text including time estimate and risk level
+         */
         public String getDescription() {
             return description;
         }
     }
 
     /**
-     * Status of the recommendation.
+     * Current status of the recommendation in its lifecycle.
+     * <p>
+     * Recommendations progress through various states from creation (OPEN)
+     * to resolution (APPLIED or DISMISSED). Statuses include Bootstrap CSS
+     * classes for consistent UI rendering.
      */
     public enum Status {
+        /** Initial status: recommendation has been created but not yet acted upon. */
         OPEN("Open", "bg-primary", "Pending action"),
+
+        /** Work has begun on implementing this recommendation. */
         IN_PROGRESS("In Progress", "bg-info", "Currently being worked on"),
+
+        /** Recommendation has been successfully implemented. */
         APPLIED("Applied", "bg-success", "Successfully applied"),
+
+        /** User has dismissed this recommendation as not applicable or desirable. */
         DISMISSED("Dismissed", "bg-secondary", "Dismissed by user"),
+
+        /** Implementation has been postponed to a future date. */
         DEFERRED("Deferred", "bg-warning text-dark", "Scheduled for later");
 
         private final String displayName;
@@ -153,21 +294,42 @@ public class UnifiedRecommendation {
             this.description = description;
         }
 
+        /**
+         * Returns the human-readable display name for this status.
+         *
+         * @return display name (e.g., "Open", "Applied")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap CSS class for styling this status.
+         *
+         * @return CSS class (e.g., "bg-primary", "bg-success")
+         */
         public String getCssClass() {
             return cssClass;
         }
 
+        /**
+         * Returns a brief description of this status state.
+         *
+         * @return description text
+         */
         public String getDescription() {
             return description;
         }
     }
 
     /**
-     * Effectiveness rating after application.
+     * Effectiveness rating recorded after a recommendation has been applied.
+     * <p>
+     * This enum supports post-implementation feedback to track which types
+     * of recommendations deliver the most value. Effectiveness is determined
+     * by comparing pre-application and post-application metric values.
+     *
+     * @see #getImprovementPercent()
      */
     public enum Effectiveness {
         EXCELLENT("Excellent", "bg-success", "Exceeded expectations"),

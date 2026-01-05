@@ -32,6 +32,7 @@ import com.bovinemagnet.pgconsole.service.QueryFingerprintService;
 import com.bovinemagnet.pgconsole.service.QueryRegressionService;
 import com.bovinemagnet.pgconsole.service.SecurityAuditService;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
+import com.bovinemagnet.pgconsole.service.HealthCheckService;
 import com.bovinemagnet.pgconsole.service.SecurityRecommendationService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import com.bovinemagnet.pgconsole.service.ReplicationService;
@@ -124,6 +125,15 @@ public class DashboardResource {
     Template infrastructure;
 
     @Inject
+    Template configHealth;
+
+    @Inject
+    Template checkpoints;
+
+    @Inject
+    Template healthCheck;
+
+    @Inject
     Template auditLog;
 
     @Inject
@@ -194,6 +204,9 @@ public class DashboardResource {
 
     @Inject
     InfrastructureService infrastructureService;
+
+    @Inject
+    HealthCheckService healthCheckService;
 
     @Inject
     AuditService auditService;
@@ -1157,6 +1170,115 @@ public class DashboardResource {
                              .data("schemaEnabled", config.schema().enabled())
                              .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                              .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Renders the configuration health dashboard showing PostgreSQL settings
+     * with status assessments and recommendations.
+     * <p>
+     * Evaluates critical configuration parameters such as memory settings,
+     * connection limits, autovacuum settings, and monitoring configuration.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing configuration settings with health status
+     */
+    @GET
+    @Path("/config-health")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance configHealthPage(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var settings = postgresService.getConfigurationHealth(instance);
+
+        // Group by category for display
+        var groupedSettings = settings.stream()
+            .collect(java.util.stream.Collectors.groupingBy(
+                com.bovinemagnet.pgconsole.model.ConfigSetting::getCategory));
+
+        // Count issues by status
+        long criticalCount = settings.stream()
+            .filter(s -> s.getStatus() == com.bovinemagnet.pgconsole.model.ConfigSetting.Status.CRITICAL).count();
+        long warningCount = settings.stream()
+            .filter(s -> s.getStatus() == com.bovinemagnet.pgconsole.model.ConfigSetting.Status.WARNING).count();
+        long infoCount = settings.stream()
+            .filter(s -> s.getStatus() == com.bovinemagnet.pgconsole.model.ConfigSetting.Status.INFO).count();
+
+        return configHealth.data("settings", settings)
+                           .data("groupedSettings", groupedSettings)
+                           .data("criticalCount", criticalCount)
+                           .data("warningCount", warningCount)
+                           .data("infoCount", infoCount)
+                           .data("totalSettings", settings.size())
+                           .data("instances", dataSourceManager.getInstanceInfoList())
+                           .data("currentInstance", instance)
+                           .data("securityEnabled", config.security().enabled())
+                           .data("schemaEnabled", config.schema().enabled())
+                           .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                           .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Renders the checkpoints and WAL dashboard showing PostgreSQL checkpoint
+     * and background writer metrics with interpretation and recommendations.
+     * <p>
+     * Provides insights into checkpoint frequency, forced checkpoint ratios,
+     * buffer write distribution, and potential I/O bottlenecks.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing checkpoint and bgwriter statistics
+     */
+    @GET
+    @Path("/checkpoints")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance checkpointsPage(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var stats = infrastructureService.getBackgroundProcessStats(instance);
+
+        return checkpoints.data("stats", stats)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                          .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Renders the consolidated health check dashboard showing overall
+     * PostgreSQL health status with traffic light indicators.
+     * <p>
+     * Aggregates health status from connections, performance, maintenance,
+     * replication, and configuration into a quick overview.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing health check results grouped by category
+     */
+    @GET
+    @Path("/health-check")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance healthCheckPage(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var checks = healthCheckService.performHealthChecks(instance);
+        var groupedChecks = healthCheckService.groupByCategory(checks);
+        var overallStatus = healthCheckService.getOverallStatus(checks);
+        var statusCounts = healthCheckService.countByStatus(checks);
+
+        // Convert enum-keyed map to individual values for Qute template access
+        var okCount = statusCounts.getOrDefault(com.bovinemagnet.pgconsole.model.HealthCheck.Status.OK, 0L);
+        var warningCount = statusCounts.getOrDefault(com.bovinemagnet.pgconsole.model.HealthCheck.Status.WARNING, 0L);
+        var criticalCount = statusCounts.getOrDefault(com.bovinemagnet.pgconsole.model.HealthCheck.Status.CRITICAL, 0L);
+
+        return healthCheck.data("checks", checks)
+                          .data("groupedChecks", groupedChecks)
+                          .data("overallStatus", overallStatus)
+                          .data("okCount", okCount)
+                          .data("warningCount", warningCount)
+                          .data("criticalCount", criticalCount)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                          .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**

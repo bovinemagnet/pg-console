@@ -5,27 +5,64 @@ package com.bovinemagnet.pgconsole.model;
  * <p>
  * This model captures scan patterns, tuple operations, and bloat metrics
  * for a specific table. It is used to identify tables requiring maintenance
- * or indexing improvements.
+ * or indexing improvements. The statistics are gathered from PostgreSQL's
+ * system catalogue view {@code pg_stat_user_tables}, which tracks cumulative
+ * statistics for user-defined tables since the last statistics reset.
+ * </p>
+ * <p>
+ * High sequential scan ratios may indicate missing indices, whilst high dead
+ * tuple counts suggest the need for vacuuming. The bloat ratio can be
+ * calculated via {@link #getBloatRatio()} to assess maintenance requirements.
  * </p>
  *
  * @author Paul Snow
  * @version 0.0.0
  * @see TableMaintenanceRecommendation
  * @see IndexRecommendation
+ * @since 0.0.0
  */
 public class TableStats {
+
+    /** The schema name containing this table. */
     private String schemaName;
+
+    /** The table name. */
     private String tableName;
+
+    /** The number of sequential scans initiated on this table. */
     private long seqScan;
+
+    /** The number of live rows fetched by sequential scans. */
     private long seqTupRead;
+
+    /** The number of index scans initiated on this table. */
     private long idxScan;
+
+    /** The number of live rows fetched by index scans. */
     private long idxTupFetch;
+
+    /** The number of rows inserted into this table. */
     private long nTupIns;
+
+    /** The number of rows updated in this table. */
     private long nTupUpd;
+
+    /** The number of rows deleted from this table. */
     private long nTupDel;
+
+    /** The estimated number of live rows in this table. */
     private long nLiveTup;
+
+    /** The estimated number of dead rows in this table requiring vacuum. */
     private long nDeadTup;
 
+    /**
+     * Constructs a new TableStats instance with default values.
+     * <p>
+     * All numeric fields are initialised to 0, and string fields to null.
+     * This constructor is primarily used by JDBC result set mapping.
+     * </p>
+     */
     public TableStats() {}
 
     /**
@@ -185,11 +222,23 @@ public class TableStats {
     /**
      * Calculates the table bloat ratio as a percentage.
      * <p>
-     * Bloat indicates the proportion of dead tuples to total tuples.
-     * High bloat suggests the table needs vacuuming.
+     * Bloat indicates the proportion of dead tuples to total tuples
+     * (live + dead). High bloat suggests the table needs vacuuming to
+     * reclaim space and maintain query performance.
+     * </p>
+     * <p>
+     * Typical threshold values:
+     * </p>
+     * <ul>
+     *   <li>0-10%: Normal, no action required</li>
+     *   <li>10-20%: Consider scheduling vacuum during maintenance window</li>
+     *   <li>20%+: Immediate vacuum recommended to prevent performance degradation</li>
+     * </ul>
+     * <p>
+     * The calculation uses the formula: {@code (nDeadTup / (nLiveTup + nDeadTup)) * 100}
      * </p>
      *
-     * @return the bloat ratio as a percentage (0-100), or 0 if no live tuples
+     * @return the bloat ratio as a percentage (0-100), or 0.0 if there are no live tuples
      */
     public double getBloatRatio() {
         if (nLiveTup == 0) return 0.0;

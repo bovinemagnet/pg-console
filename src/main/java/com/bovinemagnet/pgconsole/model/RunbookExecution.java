@@ -9,43 +9,91 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents an execution of a runbook.
+ * Represents an execution of a runbook with full tracking of progress, results, and status.
  * <p>
- * Tracks the progress through runbook steps, results from each step,
- * and the overall status of the execution.
+ * This class captures all aspects of a runbook execution including:
+ * <ul>
+ * <li>Execution metadata (ID, instance, database scope)</li>
+ * <li>Timing information (start, completion, duration)</li>
+ * <li>Overall status and progress tracking</li>
+ * <li>Trigger context (manual, alert, anomaly, scheduled)</li>
+ * <li>Individual step results with detailed status</li>
+ * <li>User context and notes</li>
+ * </ul>
+ * <p>
+ * A runbook execution progresses through a series of steps defined in the associated
+ * {@link Runbook}. Each step's result is tracked in a {@link StepResult} object,
+ * allowing for detailed analysis of execution flow and troubleshooting of failures.
+ * <p>
+ * The execution can be scoped to a specific database or run against all databases
+ * in the monitored PostgreSQL instance.
  *
  * @author Paul Snow
  * @version 0.0.0
+ * @see Runbook
+ * @see StepResult
  */
 public class RunbookExecution {
 
     /**
-     * Status of the execution.
+     * Represents the overall status of a runbook execution.
+     * <p>
+     * Each status has associated display metadata including a display name,
+     * Bootstrap CSS class, and Bootstrap icon for UI rendering.
      */
     public enum Status {
+        /** Execution is currently in progress. */
         IN_PROGRESS("In Progress", "bg-primary", "bi-hourglass-split"),
+
+        /** Execution completed successfully with all steps finished. */
         COMPLETED("Completed", "bg-success", "bi-check-circle"),
+
+        /** Execution failed due to an error in one or more steps. */
         FAILED("Failed", "bg-danger", "bi-x-circle"),
+
+        /** Execution was cancelled by user or system before completion. */
         CANCELLED("Cancelled", "bg-secondary", "bi-slash-circle");
 
         private final String displayName;
         private final String cssClass;
         private final String icon;
 
+        /**
+         * Constructs a status with display metadata.
+         *
+         * @param displayName the human-readable status name
+         * @param cssClass the Bootstrap CSS class for styling (e.g., "bg-success")
+         * @param icon the Bootstrap icon class (e.g., "bi-check-circle")
+         */
         Status(String displayName, String cssClass, String icon) {
             this.displayName = displayName;
             this.cssClass = cssClass;
             this.icon = icon;
         }
 
+        /**
+         * Returns the human-readable display name for this status.
+         *
+         * @return the display name
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap CSS class for styling this status.
+         *
+         * @return the CSS class (e.g., "bg-success", "bg-danger")
+         */
         public String getCssClass() {
             return cssClass;
         }
 
+        /**
+         * Returns the Bootstrap icon class for this status.
+         *
+         * @return the icon class (e.g., "bi-check-circle", "bi-x-circle")
+         */
         public String getIcon() {
             return icon;
         }

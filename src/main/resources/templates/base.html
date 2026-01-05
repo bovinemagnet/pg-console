@@ -1368,6 +1368,18 @@
                         <span class="nav-link-text">Infrastructure</span>
                     </a>
                     {/if}
+                    <a class="nav-link" href="/config-health?instance={currentInstance ?: 'default'}" data-title="Configuration Health">
+                        <i class="bi bi-gear-wide-connected" aria-hidden="true"></i>
+                        <span class="nav-link-text">Config Health</span>
+                    </a>
+                    <a class="nav-link" href="/checkpoints?instance={currentInstance ?: 'default'}" data-title="Checkpoints & WAL">
+                        <i class="bi bi-journal-bookmark" aria-hidden="true"></i>
+                        <span class="nav-link-text">Checkpoints</span>
+                    </a>
+                    <a class="nav-link" href="/health-check?instance={currentInstance ?: 'default'}" data-title="Health Check">
+                        <i class="bi bi-heart-pulse" aria-hidden="true"></i>
+                        <span class="nav-link-text">Health Check</span>
+                    </a>
                 </div>
             </div>
             {/if}
