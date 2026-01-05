@@ -67,16 +67,16 @@ public class DatabaseDiffResource {
     public TemplateInstance index(@QueryParam("instance") @DefaultValue("default") String instance) {
         featureToggleService.requirePageEnabled("database-diff");
 
-        List<String> instances = dataSourceManager.getAvailableInstances();
-        String currentInstance = instances.isEmpty() ? "default" :
-                (instances.contains(instance) ? instance : instances.get(0));
+        List<String> instanceNames = dataSourceManager.getAvailableInstances();
+        String currentInstance = instanceNames.isEmpty() ? "default" :
+                (instanceNames.contains(instance) ? instance : instanceNames.get(0));
         List<String> databases = diffService.getDatabases(currentInstance);
         String currentDatabase = databases.isEmpty() ? "" : databases.get(0);
         List<String> schemas = currentDatabase.isEmpty() ? List.of() :
                 diffService.getSchemasForDatabase(currentInstance, currentDatabase);
 
         return databaseDiff
-                .data("instances", instances)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("databases", databases)
                 .data("schemas", schemas)
                 .data("currentInstance", currentInstance)
@@ -92,15 +92,41 @@ public class DatabaseDiffResource {
     @GET
     @Path("/databases")
     @Produces(MediaType.TEXT_HTML)
-    public String getDatabases(@QueryParam("instance") String instance) {
+    public String getDatabases(
+            @QueryParam("instance") String instance,
+            @QueryParam("sourceInstance") String sourceInstance,
+            @QueryParam("destInstance") String destInstance,
+            @QueryParam("side") @DefaultValue("source") String side) {
         featureToggleService.requirePageEnabled("database-diff");
 
-        List<String> databases = diffService.getDatabases(instance);
+        // Accept instance from any of the parameter names
+        String effectiveInstance = instance != null ? instance :
+                (sourceInstance != null ? sourceInstance : destInstance);
+
+        LOG.infof("getDatabases called: instance=%s, sourceInstance=%s, destInstance=%s, side=%s, effective=%s",
+                instance, sourceInstance, destInstance, side, effectiveInstance);
+
+        List<String> databases = diffService.getDatabases(effectiveInstance);
+        LOG.infof("getDatabases returning %d databases for instance %s: %s",
+                databases.size(), effectiveInstance, databases);
+
+        // Determine element IDs based on side
+        String selectId = "source".equals(side) ? "sourceDatabaseSelect" : "destDatabaseSelect";
+        String selectName = "source".equals(side) ? "sourceDatabase" : "destDatabase";
+        String schemaTarget = "source".equals(side) ? "#sourceSchemaContainer" : "#destSchemaContainer";
+        String instanceId = "source".equals(side) ? "#sourceInstance" : "#destInstance";
 
         StringBuilder sb = new StringBuilder();
+        sb.append(String.format(
+            "<select class=\"form-select\" id=\"%s\" name=\"%s\" required " +
+            "hx-get=\"/database-diff/schemas\" hx-target=\"%s\" hx-trigger=\"change\" " +
+            "hx-vals='{\"side\": \"%s\"}' hx-include=\"%s\">",
+            selectId, selectName, schemaTarget, side, instanceId));
+
         for (String db : databases) {
             sb.append(String.format("<option value=\"%s\">%s</option>", db, db));
         }
+        sb.append("</select>");
         return sb.toString();
     }
 
@@ -112,20 +138,48 @@ public class DatabaseDiffResource {
     @Produces(MediaType.TEXT_HTML)
     public String getSchemas(
             @QueryParam("instance") String instance,
-            @QueryParam("database") String database) {
+            @QueryParam("sourceInstance") String sourceInstance,
+            @QueryParam("destInstance") String destInstance,
+            @QueryParam("database") String database,
+            @QueryParam("sourceDatabase") String sourceDatabase,
+            @QueryParam("destDatabase") String destDatabase,
+            @QueryParam("side") @DefaultValue("source") String side) {
         featureToggleService.requirePageEnabled("database-diff");
 
-        if (database == null || database.isEmpty()) {
-            return "<option value=\"public\" selected>public</option>";
+        // Accept instance from any of the parameter names
+        String effectiveInstance = instance != null ? instance :
+                (sourceInstance != null ? sourceInstance : destInstance);
+
+        // Accept database from any of the parameter names
+        String effectiveDatabase = database != null ? database :
+                (sourceDatabase != null ? sourceDatabase : destDatabase);
+
+        // Determine element IDs based on side
+        String selectId = "source".equals(side) ? "sourceSchemaSelect" : "destSchemaSelect";
+        String selectName = "source".equals(side) ? "sourceSchema" : "destSchema";
+        String summaryTarget = "source".equals(side) ? "#sourceSummary" : "#destSummary";
+        String instanceId = "source".equals(side) ? "#sourceInstance" : "#destInstance";
+        String databaseId = "source".equals(side) ? "#sourceDatabaseSelect" : "#destDatabaseSelect";
+
+        List<String> schemas;
+        if (effectiveDatabase == null || effectiveDatabase.isEmpty()) {
+            schemas = List.of("public");
+        } else {
+            schemas = diffService.getSchemasForDatabase(effectiveInstance, effectiveDatabase);
         }
 
-        List<String> schemas = diffService.getSchemasForDatabase(instance, database);
-
         StringBuilder sb = new StringBuilder();
+        sb.append(String.format(
+            "<select class=\"form-select\" id=\"%s\" name=\"%s\" required " +
+            "hx-get=\"/database-diff/schema-summary\" hx-target=\"%s\" hx-trigger=\"change\" " +
+            "hx-include=\"%s, %s\">",
+            selectId, selectName, summaryTarget, instanceId, databaseId));
+
         for (String schema : schemas) {
             String selected = "public".equals(schema) ? " selected" : "";
             sb.append(String.format("<option value=\"%s\"%s>%s</option>", schema, selected, schema));
         }
+        sb.append("</select>");
         return sb.toString();
     }
 
@@ -240,7 +294,8 @@ public class DatabaseDiffResource {
                 .data("wrapOptions", MigrationScript.WrapOption.values())
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("currentInstance", sourceInstance);
     }
 
     /**
@@ -279,7 +334,8 @@ public class DatabaseDiffResource {
                 .data("includeDrops", includeDrops)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", featureToggleService.getAllToggles())
-                .data("instances", dataSourceManager.getAvailableInstances());
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("currentInstance", sourceInstance);
     }
 
     /**

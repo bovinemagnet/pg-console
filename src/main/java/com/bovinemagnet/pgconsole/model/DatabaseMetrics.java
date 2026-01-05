@@ -36,6 +36,7 @@ public class DatabaseMetrics {
     private String databaseSize;
     private long databaseSizeBytes;
     private boolean pgStatStatementsEnabled;
+    private boolean hasAccess = true;
 
     // Getters and Setters
     public long getDatid() {
@@ -268,6 +269,14 @@ public class DatabaseMetrics {
 
     public void setPgStatStatementsEnabled(boolean pgStatStatementsEnabled) {
         this.pgStatStatementsEnabled = pgStatStatementsEnabled;
+    }
+
+    public boolean isHasAccess() {
+        return hasAccess;
+    }
+
+    public void setHasAccess(boolean hasAccess) {
+        this.hasAccess = hasAccess;
     }
 
     // Calculated fields

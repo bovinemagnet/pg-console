@@ -28,9 +28,10 @@
                                 <select name="instance" id="instance" class="form-select"
                                         hx-get="/schema-docs/databases"
                                         hx-target="#databaseContainer"
-                                        hx-trigger="change">
+                                        hx-trigger="change"
+                                        hx-include="this">
                                     {#for inst in instances}
-                                    <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
+                                    <option value="{inst.name}" {#if inst.name == currentInstance}selected{/if}>{inst.displayName}</option>
                                     {/for}
                                 </select>
                             </div>

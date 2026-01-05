@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.testutil;
 
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -99,5 +100,21 @@ public final class PostgresTestContainer {
      */
     public static boolean isRunning() {
         return container != null && container.isRunning();
+    }
+
+    /**
+     * Checks if Docker is available on the system.
+     * <p>
+     * This can be used to skip integration tests when Docker is not available.
+     *
+     * @return true if Docker is available
+     */
+    public static boolean isDockerAvailable() {
+        try {
+            DockerClientFactory.instance().client();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

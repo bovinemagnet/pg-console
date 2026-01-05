@@ -1027,8 +1027,13 @@ public class PostgresService {
                 COALESCE(d.sessions_fatal, 0) as sessions_fatal,
                 COALESCE(d.sessions_killed, 0) as sessions_killed,
                 d.stats_reset::text as stats_reset,
-                pg_size_pretty(pg_database_size(d.datname)) as database_size,
-                pg_database_size(d.datname) as database_size_bytes,
+                has_database_privilege(d.datname, 'CONNECT') as has_access,
+                CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+                     THEN pg_size_pretty(pg_database_size(d.datname))
+                     ELSE 'N/A' END as database_size,
+                CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+                     THEN pg_database_size(d.datname)
+                     ELSE 0 END as database_size_bytes,
                 EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') as pg_stat_statements_enabled
             FROM pg_stat_database d
             JOIN pg_database db ON d.datid = db.oid
@@ -1105,8 +1110,13 @@ public class PostgresService {
                 COALESCE(d.sessions_fatal, 0) as sessions_fatal,
                 COALESCE(d.sessions_killed, 0) as sessions_killed,
                 d.stats_reset::text as stats_reset,
-                pg_size_pretty(pg_database_size(d.datname)) as database_size,
-                pg_database_size(d.datname) as database_size_bytes,
+                has_database_privilege(d.datname, 'CONNECT') as has_access,
+                CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+                     THEN pg_size_pretty(pg_database_size(d.datname))
+                     ELSE 'N/A' END as database_size,
+                CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+                     THEN pg_database_size(d.datname)
+                     ELSE 0 END as database_size_bytes,
                 EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') as pg_stat_statements_enabled
             FROM pg_stat_database d
             WHERE d.datname = ?
@@ -1181,6 +1191,7 @@ public class PostgresService {
         m.setDatabaseSize(rs.getString("database_size"));
         m.setDatabaseSizeBytes(rs.getLong("database_size_bytes"));
         m.setPgStatStatementsEnabled(rs.getBoolean("pg_stat_statements_enabled"));
+        m.setHasAccess(rs.getBoolean("has_access"));
         return m;
     }
 

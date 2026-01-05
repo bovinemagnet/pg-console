@@ -137,7 +137,7 @@
                         <label for="sourceInstance" class="form-label">Source Instance</label>
                         <select class="form-select" id="sourceInstance" name="sourceInstance" required>
                             {#for inst in instances}
-                            <option value="{inst}">{inst}</option>
+                            <option value="{inst.name}">{inst.displayName}</option>
                             {/for}
                         </select>
                     </div>
@@ -152,7 +152,7 @@
                         <label for="destInstance" class="form-label">Destination Instance</label>
                         <select class="form-select" id="destInstance" name="destInstance" required>
                             {#for inst in instances}
-                            <option value="{inst}">{inst}</option>
+                            <option value="{inst.name}">{inst.displayName}</option>
                             {/for}
                         </select>
                     </div>

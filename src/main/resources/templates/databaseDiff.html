@@ -40,9 +40,10 @@
                                                 hx-get="/database-diff/databases"
                                                 hx-target="#sourceDatabaseContainer"
                                                 hx-trigger="change"
-                                                hx-vals='{"side": "source"}'>
+                                                hx-vals='{"side": "source"}'
+                                                hx-include="this">
                                             {#for inst in instances}
-                                            <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
+                                            <option value="{inst.name}" {#if inst.name == currentInstance}selected{/if}>{inst.displayName}</option>
                                             {/for}
                                         </select>
                                     </div>
@@ -63,7 +64,7 @@
                                                     hx-target="#sourceSchemaContainer"
                                                     hx-trigger="change"
                                                     hx-vals='{"side": "source"}'
-                                                    hx-include="#sourceInstance">
+                                                    hx-include="this, #sourceInstance">
                                                 {#for db in databases}
                                                 <option value="{db}" {#if db == currentDatabase}selected{/if}>{db}</option>
                                                 {/for}
@@ -114,9 +115,10 @@
                                                 hx-get="/database-diff/databases"
                                                 hx-target="#destDatabaseContainer"
                                                 hx-trigger="change"
-                                                hx-vals='{"side": "dest"}'>
+                                                hx-vals='{"side": "dest"}'
+                                                hx-include="this">
                                             {#for inst in instances}
-                                            <option value="{inst}">{inst}</option>
+                                            <option value="{inst.name}">{inst.displayName}</option>
                                             {/for}
                                         </select>
                                     </div>
@@ -137,7 +139,7 @@
                                                     hx-target="#destSchemaContainer"
                                                     hx-trigger="change"
                                                     hx-vals='{"side": "dest"}'
-                                                    hx-include="#destInstance">
+                                                    hx-include="this, #destInstance">
                                                 {#for db in databases}
                                                 <option value="{db}">{db}</option>
                                                 {/for}

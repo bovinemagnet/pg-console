@@ -20,11 +20,22 @@
 <div class="row mb-4">
     {#for db in databases}
     <div class="col-md-4 col-lg-3 mb-3">
-        <div class="card h-100">
+        <div class="card h-100 {#if !db.hasAccess}border-secondary opacity-75{/if}">
             <div class="card-header">
                 <h6 class="mb-0">
+                    {#if db.hasAccess}
                     <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}" class="text-decoration-none">{db.datname}</a>
-                    {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
+                    {#else}
+                    <span class="text-muted">{db.datname}</span>
+                    <span class="badge bg-secondary ms-1" title="No CONNECT permission on this database"><i class="bi bi-lock-fill"></i></span>
+                    {/if}
+                    {#if !db.hasAccess}
+                    <span class="badge bg-secondary ms-1" title="pg_stat_statements: Unknown (no access)"><i class="bi bi-bar-chart-fill"></i></span>
+                    {#else if db.pgStatStatementsEnabled}
+                    <span class="badge bg-success ms-1" title="pg_stat_statements: Enabled"><i class="bi bi-bar-chart-fill"></i></span>
+                    {#else}
+                    <span class="badge bg-danger ms-1" title="pg_stat_statements: Not enabled"><i class="bi bi-bar-chart-fill"></i></span>
+                    {/if}
                 </h6>
             </div>
             <div class="card-body">
@@ -51,7 +62,11 @@
                 </div>
             </div>
             <div class="card-footer">
+                {#if db.hasAccess}
                 <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+                {#else}
+                <span class="btn btn-sm btn-outline-secondary w-100 disabled" title="No permission to access this database">No Access</span>
+                {/if}
             </div>
         </div>
     </div>
@@ -85,10 +100,21 @@
                         </thead>
                         <tbody>
                             {#for db in databases}
-                            <tr>
+                            <tr class="{#if !db.hasAccess}text-muted{/if}">
                                 <td>
+                                    {#if db.hasAccess}
                                     <a href="/databases/{db.datname}?instance={currentInstance ?: 'default'}"><code>{db.datname}</code></a>
-                                    {#if db.pgStatStatementsEnabled}<span class="badge bg-success ms-1" title="pg_stat_statements enabled">📊</span>{/if}
+                                    {#else}
+                                    <code>{db.datname}</code>
+                                    <span class="badge bg-secondary ms-1" title="No CONNECT permission"><i class="bi bi-lock-fill"></i></span>
+                                    {/if}
+                                    {#if !db.hasAccess}
+                                    <span class="badge bg-secondary ms-1" title="pg_stat_statements: Unknown"><i class="bi bi-bar-chart-fill"></i></span>
+                                    {#else if db.pgStatStatementsEnabled}
+                                    <span class="badge bg-success ms-1" title="pg_stat_statements: Enabled"><i class="bi bi-bar-chart-fill"></i></span>
+                                    {#else}
+                                    <span class="badge bg-danger ms-1" title="pg_stat_statements: Not enabled"><i class="bi bi-bar-chart-fill"></i></span>
+                                    {/if}
                                 </td>
                                 <td class="text-end">{db.databaseSize}</td>
                                 <td class="text-end">{db.numBackends}</td>
@@ -132,8 +158,8 @@
                         </thead>
                         <tbody>
                             {#for db in databases}
-                            <tr>
-                                <td><code>{db.datname}</code></td>
+                            <tr class="{#if !db.hasAccess}text-muted{/if}">
+                                <td><code>{db.datname}</code>{#if !db.hasAccess} <span class="badge bg-secondary ms-1" title="No CONNECT permission"><i class="bi bi-lock-fill"></i></span>{/if}</td>
                                 <td class="text-end">{db.tupReturned}</td>
                                 <td class="text-end">{db.tupFetched}</td>
                                 <td class="text-end">{db.tupInserted}</td>
@@ -173,8 +199,8 @@
                         </thead>
                         <tbody>
                             {#for db in databases}
-                            <tr>
-                                <td><code>{db.datname}</code></td>
+                            <tr class="{#if !db.hasAccess}text-muted{/if}">
+                                <td><code>{db.datname}</code>{#if !db.hasAccess} <span class="badge bg-secondary ms-1" title="No CONNECT permission"><i class="bi bi-lock-fill"></i></span>{/if}</td>
                                 <td class="text-end">{db.sessions}</td>
                                 <td class="text-end {#if db.sessionsAbandoned > 0}text-warning{/if}">{db.sessionsAbandoned}</td>
                                 <td class="text-end {#if db.sessionsFatal > 0}text-danger{/if}">{db.sessionsFatal}</td>
@@ -213,8 +239,8 @@
                         </thead>
                         <tbody>
                             {#for db in databases}
-                            <tr>
-                                <td><code>{db.datname}</code></td>
+                            <tr class="{#if !db.hasAccess}text-muted{/if}">
+                                <td><code>{db.datname}</code>{#if !db.hasAccess} <span class="badge bg-secondary ms-1" title="No CONNECT permission"><i class="bi bi-lock-fill"></i></span>{/if}</td>
                                 <td class="text-end">{db.blkReadTimeFormatted}</td>
                                 <td class="text-end">{db.blkWriteTimeFormatted}</td>
                                 <td class="text-end">{db.tempBytesFormatted}</td>
@@ -224,6 +250,43 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="row mt-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Legend</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-2">Database Access</h6>
+                        <div class="d-flex flex-wrap gap-3">
+                            <span><span class="badge bg-secondary"><i class="bi bi-lock-fill"></i></span> No CONNECT permission</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-2">pg_stat_statements Extension</h6>
+                        <div class="d-flex flex-wrap gap-3">
+                            <span><span class="badge bg-success"><i class="bi bi-bar-chart-fill"></i></span> Enabled</span>
+                            <span><span class="badge bg-danger"><i class="bi bi-bar-chart-fill"></i></span> Not enabled</span>
+                            <span><span class="badge bg-secondary"><i class="bi bi-bar-chart-fill"></i></span> Unknown (no access)</span>
+                        </div>
+                    </div>
+                </div>
+                <hr class="my-3">
+                <small class="text-muted">
+                    <i class="bi bi-lightbulb me-1"></i>
+                    <strong>Note:</strong> pg_stat_statements status is checked against the currently connected database.
+                    For accurate per-database extension status, connect directly to each database.
+                    The extension requires <code>shared_preload_libraries = 'pg_stat_statements'</code> in postgresql.conf
+                    and <code>CREATE EXTENSION pg_stat_statements</code> in each database.
+                </small>
             </div>
         </div>
     </div>

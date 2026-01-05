@@ -57,9 +57,9 @@ public class SchemaDocResource {
     public TemplateInstance showPage(@QueryParam("instance") @DefaultValue("default") String instance) {
         toggleService.requirePageEnabled("schema-docs");
 
-        List<String> instances = dataSourceManager.getAvailableInstances();
-        String currentInstance = instances.isEmpty() ? "default" :
-                (instances.contains(instance) ? instance : instances.get(0));
+        List<String> instanceNames = dataSourceManager.getAvailableInstances();
+        String currentInstance = instanceNames.isEmpty() ? "default" :
+                (instanceNames.contains(instance) ? instance : instanceNames.get(0));
 
         List<String> databases = crossDbService.listDatabases(currentInstance);
         String currentDatabase = databases.isEmpty() ? "" : databases.get(0);
@@ -68,7 +68,7 @@ public class SchemaDocResource {
                 schemaDocService.getSchemas(currentInstance, currentDatabase);
 
         return schemaDocs.data("instance", currentInstance)
-                .data("instances", instances)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("currentInstance", currentInstance)
                 .data("databases", databases)
                 .data("currentDatabase", currentDatabase)

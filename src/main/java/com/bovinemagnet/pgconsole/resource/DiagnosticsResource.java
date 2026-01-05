@@ -10,6 +10,7 @@ import com.bovinemagnet.pgconsole.model.StatisticalFreshness;
 import com.bovinemagnet.pgconsole.model.ToastBloat;
 import com.bovinemagnet.pgconsole.model.WriteReadRatio;
 import com.bovinemagnet.pgconsole.model.XidWraparound;
+import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import io.quarkus.qute.Template;
@@ -103,6 +104,9 @@ public class DiagnosticsResource {
     PostgresService postgresService;
 
     @Inject
+    DataSourceManager dataSourceManager;
+
+    @Inject
     FeatureToggleService featureToggleService;
 
     /**
@@ -154,7 +158,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "pipeline-risk")
                 .data("pageTitle", "Pipeline Risk")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("risks", risks)
                 .data("staleThresholdHours", queueStaleHours)
                 .data("schemaEnabled", config.schema().enabled())
@@ -186,7 +191,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "toast-bloat")
                 .data("pageTitle", "TOAST Bloat")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("bloats", bloats)
                 .data("warnPercent", toastBloatWarnPercent)
                 .data("schemaEnabled", config.schema().enabled())
@@ -218,7 +224,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "index-redundancy")
                 .data("pageTitle", "Index Redundancy")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("redundancies", redundancies)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
@@ -249,7 +256,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "statistical-freshness")
                 .data("pageTitle", "Statistical Freshness")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("freshness", freshness)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
@@ -280,7 +288,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "write-read-ratio")
                 .data("pageTitle", "Write/Read Ratio")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("ratios", ratios)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
@@ -311,7 +320,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "hot-efficiency")
                 .data("pageTitle", "HOT Update Efficiency")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("efficiencies", efficiencies)
                 .data("warnPercent", hotEfficiencyWarnPercent)
                 .data("schemaEnabled", config.schema().enabled())
@@ -343,7 +353,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "correlation")
                 .data("pageTitle", "Column Correlation")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("correlations", correlations)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
@@ -379,7 +390,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "live-charts")
                 .data("pageTitle", "Live Charts")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("connectionsChart", connectionsChart)
                 .data("transactionsChart", transactionsChart)
                 .data("tuplesChart", tuplesChart)
@@ -420,7 +432,8 @@ public class DiagnosticsResource {
                 .data("currentPage", "xid-wraparound")
                 .data("pageTitle", "XID Wraparound")
                 .data("instance", instanceName)
-                .data("instances", postgresService.getInstanceList())
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("xids", xids)
                 .data("vacuumCommands", uniqueVacuumCommands)
                 .data("warnPercent", xidWarnPercent)

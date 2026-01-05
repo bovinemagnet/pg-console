@@ -18,6 +18,25 @@ public class IntegrationTestProfile implements QuarkusTestProfile {
 
     @Override
     public Map<String, String> getConfigOverrides() {
+        // Check if Docker is available before trying to start container
+        if (!PostgresTestContainer.isDockerAvailable()) {
+            // Return dummy config - tests will be skipped
+            return Map.ofEntries(
+                Map.entry("quarkus.datasource.db-kind", "h2"),
+                Map.entry("quarkus.datasource.jdbc.url", "jdbc:h2:mem:test"),
+                Map.entry("quarkus.datasource.username", "sa"),
+                Map.entry("quarkus.datasource.password", ""),
+                Map.entry("quarkus.flyway.migrate-at-start", "false"),
+                Map.entry("pg-console.history.enabled", "false"),
+                Map.entry("pg-console.alerting.enabled", "false"),
+                Map.entry("pg-console.security.enabled", "false"),
+                Map.entry("quarkus.scheduler.enabled", "false"),
+                Map.entry("pg-console.instances", "default"),
+                Map.entry("pg-console.instances.default.display-name", "Test Instance"),
+                Map.entry("quarkus.log.level", "WARN")
+            );
+        }
+
         // Start the container first to get the dynamic port
         var container = PostgresTestContainer.getInstance();
 

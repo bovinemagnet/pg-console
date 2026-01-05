@@ -84,9 +84,10 @@
                                         <select class="form-select" id="sourceInstance" name="sourceInstance" required
                                                 hx-get="/schema-comparison/schemas"
                                                 hx-target="#sourceSchemaSelect"
-                                                hx-trigger="change">
+                                                hx-trigger="change"
+                                                hx-include="this">
                                             {#for inst in instances}
-                                            <option value="{inst}" {#if inst == currentInstance}selected{/if}>{inst}</option>
+                                            <option value="{inst.name}" {#if inst.name == currentInstance}selected{/if}>{inst.displayName}</option>
                                             {/for}
                                         </select>
                                     </div>
@@ -117,9 +118,10 @@
                                         <select class="form-select" id="destInstance" name="destInstance" required
                                                 hx-get="/schema-comparison/schemas"
                                                 hx-target="#destSchemaSelect"
-                                                hx-trigger="change">
+                                                hx-trigger="change"
+                                                hx-include="this">
                                             {#for inst in instances}
-                                            <option value="{inst}">{inst}</option>
+                                            <option value="{inst.name}">{inst.displayName}</option>
                                             {/for}
                                         </select>
                                     </div>
