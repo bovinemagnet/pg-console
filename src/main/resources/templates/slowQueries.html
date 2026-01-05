@@ -190,6 +190,16 @@
                                 <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
                             {/if}
                         </th>
+                        <th class="sortable"
+                            hx-get="/slow-queries?instance={currentInstance ?: 'default'}&sortBy=cacheHitRatio&order={#if sortBy == 'cacheHitRatio' && order == 'asc'}desc{#else}asc{/if}&view={view ?: 'individual'}"
+                            hx-target="body"
+                            hx-swap="innerHTML"
+                            title="Percentage of blocks read from cache vs disk">
+                            Cache Hit %
+                            {#if sortBy == 'cacheHitRatio'}
+                                <span class="sort-indicator">{#if order == 'asc'}{/if}</span>
+                            {/if}
+                        </th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -205,6 +215,11 @@
                         <td>{query.meanTimeFormatted}</td>
                         <td>{query.maxTimeFormatted}</td>
                         <td>{query.rows}</td>
+                        <td>
+                            <span class="{#if query.cacheHitRatio < 90}text-warning{#else if query.cacheHitRatio < 95}text-info{#else}text-success{/if}">
+                                {query.cacheHitRatioFormatted}
+                            </span>
+                        </td>
                         <td>
                             <a href="/slow-queries/{query.queryId}?instance={currentInstance ?: 'default'}" class="btn btn-sm btn-outline-primary">Details</a>
                         </td>

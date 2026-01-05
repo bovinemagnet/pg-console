@@ -13,30 +13,68 @@ public class SecurityRecommendation {
 
     /**
      * Categories of security recommendations.
+     * <p>
+     * Each category represents a distinct area of PostgreSQL security configuration
+     * and is associated with a display name and Bootstrap icon class for UI presentation.
      */
     public enum Category {
+        /** Role and permission management recommendations. */
         ROLES("Roles & Permissions", "bi-people"),
+
+        /** Authentication mechanism recommendations. */
         AUTHENTICATION("Authentication", "bi-key"),
+
+        /** Data encryption and SSL/TLS recommendations. */
         ENCRYPTION("Encryption", "bi-lock"),
+
+        /** PostgreSQL extension security recommendations. */
         EXTENSIONS("Extensions", "bi-plug"),
+
+        /** Schema and database object security recommendations. */
         SCHEMA("Schema", "bi-diagram-3"),
+
+        /** Host-based authentication (pg_hba.conf) recommendations. */
         HBA("Host-Based Auth", "bi-shield-lock"),
+
+        /** Access control and privilege recommendations. */
         ACCESS_CONTROL("Access Control", "bi-person-lock"),
+
+        /** Logging and audit trail recommendations. */
         LOGGING("Logging & Audit", "bi-journal-text"),
+
+        /** General security configuration recommendations. */
         CONFIGURATION("Configuration", "bi-gear");
 
         private final String displayName;
         private final String iconClass;
 
+        /**
+         * Constructs a Category with display name and icon class.
+         *
+         * @param displayName the human-readable category name
+         * @param iconClass the Bootstrap icon class (e.g., "bi-people")
+         */
         Category(String displayName, String iconClass) {
             this.displayName = displayName;
             this.iconClass = iconClass;
         }
 
+        /**
+         * Returns the human-readable display name for this category.
+         *
+         * @return the display name, never null
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap icon class for this category.
+         * <p>
+         * Used for rendering category icons in the UI.
+         *
+         * @return the icon class (e.g., "bi-people"), never null
+         */
         public String getIconClass() {
             return iconClass;
         }
@@ -44,50 +82,117 @@ public class SecurityRecommendation {
 
     /**
      * Priority levels for recommendations.
+     * <p>
+     * Each priority level indicates the severity and urgency of addressing the recommendation.
+     * Higher priority values indicate more critical issues requiring immediate attention.
      */
     public enum Priority {
+        /** Critical security issue requiring immediate attention (level 5). */
         CRITICAL("Critical", "bg-danger", 5),
+
+        /** High priority issue that should be addressed soon (level 4). */
         HIGH("High", "bg-warning text-dark", 4),
+
+        /** Medium priority issue for scheduled remediation (level 3). */
         MEDIUM("Medium", "bg-info", 3),
+
+        /** Low priority issue for consideration (level 2). */
         LOW("Low", "bg-secondary", 2),
+
+        /** Informational recommendation for awareness (level 1). */
         INFORMATIONAL("Info", "bg-light text-dark", 1);
 
         private final String displayName;
         private final String cssClass;
         private final int level;
 
+        /**
+         * Constructs a Priority with display name, CSS class, and numeric level.
+         *
+         * @param displayName the human-readable priority name
+         * @param cssClass the Bootstrap CSS class for badge styling
+         * @param level the numeric priority level (1-5, higher is more critical)
+         */
         Priority(String displayName, String cssClass, int level) {
             this.displayName = displayName;
             this.cssClass = cssClass;
             this.level = level;
         }
 
+        /**
+         * Returns the human-readable display name for this priority.
+         *
+         * @return the display name, never null
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap CSS class for badge styling.
+         * <p>
+         * Used to render priority badges with appropriate colour coding in the UI.
+         *
+         * @return the CSS class (e.g., "bg-danger"), never null
+         */
         public String getCssClass() {
             return cssClass;
         }
 
+        /**
+         * Returns the numeric priority level for sorting and comparison.
+         * <p>
+         * Higher values indicate more critical priorities:
+         * <ul>
+         *   <li>5 - Critical</li>
+         *   <li>4 - High</li>
+         *   <li>3 - Medium</li>
+         *   <li>2 - Low</li>
+         *   <li>1 - Informational</li>
+         * </ul>
+         *
+         * @return the numeric level (1-5)
+         */
         public int getLevel() {
             return level;
         }
     }
 
+    /** The category of this security recommendation. */
     private Category category;
+
+    /** The priority level indicating severity and urgency. */
     private Priority priority;
+
+    /** Short, concise title summarising the recommendation. */
     private String title;
+
+    /** Detailed description of the security issue or concern. */
     private String description;
+
+    /** Explanation of why this recommendation is important. */
     private String rationale;
+
+    /** Specific action steps to address the recommendation. */
     private String suggestedAction;
+
+    /** The database object, role, or configuration item affected (e.g., role name, table name). */
     private String affectedObject;
+
+    /** The current configuration or state that triggered this recommendation. */
     private String currentValue;
+
+    /** The recommended configuration or state to improve security. */
     private String recommendedValue;
+
+    /** External reference such as PostgreSQL documentation URL or security guideline. */
     private String reference;
 
     /**
-     * Default constructor.
+     * Default constructor for framework use.
+     * <p>
+     * Creates an empty SecurityRecommendation. Use setters or the builder
+     * pattern to populate fields.
      */
     public SecurityRecommendation() {
     }
@@ -112,82 +217,182 @@ public class SecurityRecommendation {
 
     // Getters and Setters
 
+    /**
+     * Returns the category of this recommendation.
+     *
+     * @return the category, may be null if not set
+     */
     public Category getCategory() {
         return category;
     }
 
+    /**
+     * Sets the category of this recommendation.
+     *
+     * @param category the category to set
+     */
     public void setCategory(Category category) {
         this.category = category;
     }
 
+    /**
+     * Returns the priority level of this recommendation.
+     *
+     * @return the priority, may be null if not set
+     */
     public Priority getPriority() {
         return priority;
     }
 
+    /**
+     * Sets the priority level of this recommendation.
+     *
+     * @param priority the priority to set
+     */
     public void setPriority(Priority priority) {
         this.priority = priority;
     }
 
+    /**
+     * Returns the short title of this recommendation.
+     *
+     * @return the title, may be null if not set
+     */
     public String getTitle() {
         return title;
     }
 
+    /**
+     * Sets the short title of this recommendation.
+     *
+     * @param title the title to set
+     */
     public void setTitle(String title) {
         this.title = title;
     }
 
+    /**
+     * Returns the detailed description of the security issue.
+     *
+     * @return the description, may be null if not set
+     */
     public String getDescription() {
         return description;
     }
 
+    /**
+     * Sets the detailed description of the security issue.
+     *
+     * @param description the description to set
+     */
     public void setDescription(String description) {
         this.description = description;
     }
 
+    /**
+     * Returns the rationale explaining why this recommendation is important.
+     *
+     * @return the rationale, may be null if not set
+     */
     public String getRationale() {
         return rationale;
     }
 
+    /**
+     * Sets the rationale explaining why this recommendation is important.
+     *
+     * @param rationale the rationale to set
+     */
     public void setRationale(String rationale) {
         this.rationale = rationale;
     }
 
+    /**
+     * Returns the suggested action to address this recommendation.
+     *
+     * @return the suggested action, may be null if not set
+     */
     public String getSuggestedAction() {
         return suggestedAction;
     }
 
+    /**
+     * Sets the suggested action to address this recommendation.
+     *
+     * @param suggestedAction the suggested action to set
+     */
     public void setSuggestedAction(String suggestedAction) {
         this.suggestedAction = suggestedAction;
     }
 
+    /**
+     * Returns the affected database object, role, or configuration item.
+     *
+     * @return the affected object identifier, may be null if not applicable
+     */
     public String getAffectedObject() {
         return affectedObject;
     }
 
+    /**
+     * Sets the affected database object, role, or configuration item.
+     *
+     * @param affectedObject the affected object identifier to set
+     */
     public void setAffectedObject(String affectedObject) {
         this.affectedObject = affectedObject;
     }
 
+    /**
+     * Returns the current configuration or state that triggered this recommendation.
+     *
+     * @return the current value, may be null if not applicable
+     */
     public String getCurrentValue() {
         return currentValue;
     }
 
+    /**
+     * Sets the current configuration or state that triggered this recommendation.
+     *
+     * @param currentValue the current value to set
+     */
     public void setCurrentValue(String currentValue) {
         this.currentValue = currentValue;
     }
 
+    /**
+     * Returns the recommended configuration or state to improve security.
+     *
+     * @return the recommended value, may be null if not applicable
+     */
     public String getRecommendedValue() {
         return recommendedValue;
     }
 
+    /**
+     * Sets the recommended configuration or state to improve security.
+     *
+     * @param recommendedValue the recommended value to set
+     */
     public void setRecommendedValue(String recommendedValue) {
         this.recommendedValue = recommendedValue;
     }
 
+    /**
+     * Returns the external reference such as documentation URL or security guideline.
+     *
+     * @return the reference URL or identifier, may be null if not available
+     */
     public String getReference() {
         return reference;
     }
 
+    /**
+     * Sets the external reference such as documentation URL or security guideline.
+     *
+     * @param reference the reference to set
+     */
     public void setReference(String reference) {
         this.reference = reference;
     }
@@ -195,45 +400,58 @@ public class SecurityRecommendation {
     // Helper Methods
 
     /**
-     * Returns the CSS class for the priority badge.
+     * Returns the Bootstrap CSS class for styling the priority badge.
+     * <p>
+     * This is a convenience method for template rendering that ensures a valid
+     * CSS class is always returned, even if priority is not set.
      *
-     * @return CSS class name
+     * @return the CSS class name (e.g., "bg-danger"), defaults to "bg-secondary" if priority is null
      */
     public String getPriorityCssClass() {
         return priority != null ? priority.getCssClass() : "bg-secondary";
     }
 
     /**
-     * Returns the display name for the priority.
+     * Returns the human-readable display name for the priority level.
+     * <p>
+     * This is a convenience method for template rendering.
      *
-     * @return priority display name
+     * @return the priority display name, or "Unknown" if priority is null
      */
     public String getPriorityDisplay() {
         return priority != null ? priority.getDisplayName() : "Unknown";
     }
 
     /**
-     * Returns the display name for the category.
+     * Returns the human-readable display name for the category.
+     * <p>
+     * This is a convenience method for template rendering.
      *
-     * @return category display name
+     * @return the category display name, or "Unknown" if category is null
      */
     public String getCategoryDisplay() {
         return category != null ? category.getDisplayName() : "Unknown";
     }
 
     /**
-     * Returns the icon class for the category.
+     * Returns the Bootstrap icon class for the category.
+     * <p>
+     * This is a convenience method for template rendering that ensures a valid
+     * icon class is always returned.
      *
-     * @return Bootstrap icon class
+     * @return the icon class (e.g., "bi-people"), defaults to "bi-question-circle" if category is null
      */
     public String getCategoryIconClass() {
         return category != null ? category.getIconClass() : "bi-question-circle";
     }
 
     /**
-     * Checks if current and recommended values are set.
+     * Checks whether this recommendation includes a comparison between current and recommended values.
+     * <p>
+     * Returns true only if both {@code currentValue} and {@code recommendedValue} are set
+     * and non-empty, indicating that a before/after comparison can be displayed.
      *
-     * @return true if both values are available
+     * @return true if both current and recommended values are available, false otherwise
      */
     public boolean hasValueComparison() {
         return currentValue != null && !currentValue.isEmpty() &&
@@ -241,7 +459,18 @@ public class SecurityRecommendation {
     }
 
     /**
-     * Creates a builder for fluent construction.
+     * Creates a new Builder for fluent construction of SecurityRecommendation instances.
+     * <p>
+     * Example usage:
+     * <pre>{@code
+     * SecurityRecommendation rec = SecurityRecommendation.builder()
+     *     .category(Category.ROLES)
+     *     .priority(Priority.HIGH)
+     *     .title("Review superuser roles")
+     *     .description("Multiple superuser accounts detected")
+     *     .suggestedAction("Limit superuser access to essential accounts only")
+     *     .build();
+     * }</pre>
      *
      * @return a new Builder instance
      */
@@ -250,61 +479,134 @@ public class SecurityRecommendation {
     }
 
     /**
-     * Builder for creating SecurityRecommendation instances.
+     * Builder for creating SecurityRecommendation instances using a fluent API.
+     * <p>
+     * This builder provides a convenient way to construct recommendations with
+     * optional fields. All setter methods return the builder instance for method chaining.
+     *
+     * @see SecurityRecommendation#builder()
      */
     public static class Builder {
         private final SecurityRecommendation rec = new SecurityRecommendation();
 
+        /**
+         * Sets the category for the recommendation being built.
+         *
+         * @param category the category to set
+         * @return this builder instance for method chaining
+         */
         public Builder category(Category category) {
             rec.setCategory(category);
             return this;
         }
 
+        /**
+         * Sets the priority level for the recommendation being built.
+         *
+         * @param priority the priority to set
+         * @return this builder instance for method chaining
+         */
         public Builder priority(Priority priority) {
             rec.setPriority(priority);
             return this;
         }
 
+        /**
+         * Sets the title for the recommendation being built.
+         *
+         * @param title the title to set
+         * @return this builder instance for method chaining
+         */
         public Builder title(String title) {
             rec.setTitle(title);
             return this;
         }
 
+        /**
+         * Sets the description for the recommendation being built.
+         *
+         * @param description the description to set
+         * @return this builder instance for method chaining
+         */
         public Builder description(String description) {
             rec.setDescription(description);
             return this;
         }
 
+        /**
+         * Sets the rationale for the recommendation being built.
+         *
+         * @param rationale the rationale to set
+         * @return this builder instance for method chaining
+         */
         public Builder rationale(String rationale) {
             rec.setRationale(rationale);
             return this;
         }
 
+        /**
+         * Sets the suggested action for the recommendation being built.
+         *
+         * @param suggestedAction the suggested action to set
+         * @return this builder instance for method chaining
+         */
         public Builder suggestedAction(String suggestedAction) {
             rec.setSuggestedAction(suggestedAction);
             return this;
         }
 
+        /**
+         * Sets the affected object for the recommendation being built.
+         *
+         * @param affectedObject the affected object identifier to set
+         * @return this builder instance for method chaining
+         */
         public Builder affectedObject(String affectedObject) {
             rec.setAffectedObject(affectedObject);
             return this;
         }
 
+        /**
+         * Sets the current value for the recommendation being built.
+         *
+         * @param currentValue the current value to set
+         * @return this builder instance for method chaining
+         */
         public Builder currentValue(String currentValue) {
             rec.setCurrentValue(currentValue);
             return this;
         }
 
+        /**
+         * Sets the recommended value for the recommendation being built.
+         *
+         * @param recommendedValue the recommended value to set
+         * @return this builder instance for method chaining
+         */
         public Builder recommendedValue(String recommendedValue) {
             rec.setRecommendedValue(recommendedValue);
             return this;
         }
 
+        /**
+         * Sets the external reference for the recommendation being built.
+         *
+         * @param reference the reference URL or identifier to set
+         * @return this builder instance for method chaining
+         */
         public Builder reference(String reference) {
             rec.setReference(reference);
             return this;
         }
 
+        /**
+         * Builds and returns the configured SecurityRecommendation instance.
+         * <p>
+         * Note: This method returns the same instance on each invocation.
+         * The builder should not be reused after calling build().
+         *
+         * @return the configured SecurityRecommendation instance
+         */
         public SecurityRecommendation build() {
             return rec;
         }

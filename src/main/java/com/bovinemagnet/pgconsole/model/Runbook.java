@@ -8,48 +8,111 @@ import java.util.List;
 /**
  * Represents a runbook for incident response or maintenance procedures.
  * <p>
- * Runbooks provide step-by-step guidance for common database
- * operations and troubleshooting scenarios.
+ * Runbooks provide step-by-step guidance for common database operations, troubleshooting scenarios,
+ * and incident response workflows. Each runbook consists of an ordered sequence of steps that can be
+ * executed manually or automatically, depending on the step type and safety considerations.
+ * <p>
+ * A runbook can be triggered in various ways:
+ * <ul>
+ *   <li>Manually by a user through the UI</li>
+ *   <li>Automatically by an alert detection system</li>
+ *   <li>Through anomaly detection mechanisms</li>
+ *   <li>On a predefined schedule</li>
+ * </ul>
+ * <p>
+ * Each runbook tracks metadata including version, creation/update timestamps, and the creator.
+ * Runbooks can be enabled or disabled, and may support full auto-execution if all steps are
+ * non-destructive and safe to run without human intervention.
+ * <p>
+ * Example usage in a template:
+ * <pre>{@code
+ * Runbook runbook = new Runbook();
+ * runbook.setName("high-connection-count");
+ * runbook.setTitle("High Connection Count Response");
+ * runbook.setCategory(Category.INCIDENT);
+ * runbook.setTriggerType(TriggerType.ALERT);
+ * runbook.setSteps(Arrays.asList(
+ *     new Step(1, "Check Connections", "Review active connections",
+ *              Step.ActionType.NAVIGATE, "/activity"),
+ *     new Step(2, "Identify Blocking", "Check for blocking queries",
+ *              Step.ActionType.NAVIGATE, "/locks")
+ * ));
+ * }</pre>
  *
  * @author Paul Snow
- * @version 0.0.0
+ * @since 0.0.0
  */
 public class Runbook {
 
     /**
-     * Category of runbook.
+     * Defines the category of a runbook, which determines its purpose and presentation in the UI.
+     * <p>
+     * Each category has an associated display name, Bootstrap icon class, and description
+     * that helps users understand when to use runbooks in that category.
      */
     public enum Category {
+        /** Runbooks for responding to active database incidents requiring immediate attention. */
         INCIDENT("Incident Response", "bi-exclamation-diamond", "Respond to active incidents"),
+
+        /** Runbooks for regular database maintenance tasks and routine operations. */
         MAINTENANCE("Maintenance", "bi-wrench", "Regular maintenance procedures"),
+
+        /** Runbooks for diagnosing and resolving database issues and performance problems. */
         TROUBLESHOOTING("Troubleshooting", "bi-search", "Diagnose and resolve issues"),
+
+        /** Runbooks for disaster recovery, backup restoration, and failover procedures. */
         RECOVERY("Recovery", "bi-arrow-counterclockwise", "Disaster recovery procedures");
 
         private final String displayName;
         private final String icon;
         private final String description;
 
+        /**
+         * Constructs a category with display information.
+         *
+         * @param displayName the human-readable name shown in the UI
+         * @param icon the Bootstrap icon class (e.g., "bi-exclamation-diamond")
+         * @param description a brief description of when to use this category
+         */
         Category(String displayName, String icon, String description) {
             this.displayName = displayName;
             this.icon = icon;
             this.description = description;
         }
 
+        /**
+         * Returns the human-readable display name for this category.
+         *
+         * @return the display name (e.g., "Incident Response")
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap icon class for this category.
+         *
+         * @return the icon class name (e.g., "bi-exclamation-diamond")
+         */
         public String getIcon() {
             return icon;
         }
 
+        /**
+         * Returns a description of when to use runbooks in this category.
+         *
+         * @return the category description
+         */
         public String getDescription() {
             return description;
         }
     }
 
     /**
-     * Type of trigger that can start a runbook.
+     * Defines the type of trigger that can initiate a runbook execution.
+     * <p>
+     * Trigger types determine how and when a runbook is invoked, ranging from manual
+     * user-initiated execution to automated triggers based on alerts, anomalies, or schedules.
      */
     public enum TriggerType {
         MANUAL("Manual", "Started manually by user"),

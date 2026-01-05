@@ -5,47 +5,111 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Represents a custom type schema definition.
+ * Represents a custom type schema definition from PostgreSQL.
  * <p>
- * Supports enum types, composite types, and domain types for
- * schema comparison.
+ * This class models PostgreSQL user-defined types including enums, composite types,
+ * domain types, and range types. It provides structural comparison capabilities for
+ * schema migration and validation purposes.
+ * <p>
+ * Supported type kinds:
+ * <ul>
+ *   <li><b>ENUM</b> - Enumerated types with a fixed set of values</li>
+ *   <li><b>COMPOSITE</b> - Row types composed of named attributes</li>
+ *   <li><b>DOMAIN</b> - Constrained base types with optional defaults and checks</li>
+ *   <li><b>RANGE</b> - Range types over a subtype (e.g., int4range, tstzrange)</li>
+ * </ul>
+ * <p>
+ * Usage example:
+ * <pre>{@code
+ * TypeSchema enumType = TypeSchema.builder()
+ *     .schemaName("public")
+ *     .typeName("status")
+ *     .kind(TypeKind.ENUM)
+ *     .enumValues(List.of("pending", "active", "completed"))
+ *     .build();
+ *
+ * if (!enumType.equalsStructure(otherType)) {
+ *     List<AttributeDifference> diffs = enumType.getDifferencesFrom(otherType);
+ *     // Handle schema differences
+ * }
+ * }</pre>
  *
  * @author Paul Snow
- * @version 0.0.0
+ * @since 0.0.0
+ * @see CompositeAttribute
+ * @see AttributeDifference
  */
 public class TypeSchema {
 
     /**
-     * Type of custom type.
+     * Enumeration of PostgreSQL custom type categories.
+     * <p>
+     * Each kind corresponds to a type class in the PostgreSQL {@code pg_type} system
+     * catalogue (typtype column). The code values match PostgreSQL's internal codes.
      */
     public enum TypeKind {
+        /** Enumerated type with fixed set of labelled values. */
         ENUM("e", "Enum", "bi-list-ol"),
+
+        /** Composite type (row type) with named attributes. */
         COMPOSITE("c", "Composite", "bi-bricks"),
+
+        /** Domain type (constrained base type with optional default and check constraints). */
         DOMAIN("d", "Domain", "bi-shield"),
+
+        /** Range type over a discrete or continuous subtype. */
         RANGE("r", "Range", "bi-arrows-angle-expand");
 
         private final String code;
         private final String displayName;
         private final String iconClass;
 
+        /**
+         * Constructs a type kind with display metadata.
+         *
+         * @param code PostgreSQL internal type code (from pg_type.typtype)
+         * @param displayName human-readable name for UI display
+         * @param iconClass Bootstrap icon class for visual representation
+         */
         TypeKind(String code, String displayName, String iconClass) {
             this.code = code;
             this.displayName = displayName;
             this.iconClass = iconClass;
         }
 
+        /**
+         * Returns the PostgreSQL internal type code.
+         *
+         * @return single-character type code (e, c, d, or r)
+         */
         public String getCode() {
             return code;
         }
 
+        /**
+         * Returns the human-readable display name.
+         *
+         * @return display name for UI rendering
+         */
         public String getDisplayName() {
             return displayName;
         }
 
+        /**
+         * Returns the Bootstrap icon class for this type kind.
+         *
+         * @return Bootstrap icon class name (e.g., "bi-list-ol")
+         */
         public String getIconClass() {
             return iconClass;
         }
 
+        /**
+         * Resolves a PostgreSQL type code to its corresponding TypeKind.
+         *
+         * @param code single-character PostgreSQL type code (e, c, d, or r)
+         * @return matching TypeKind, or null if code is not recognised
+         */
         public static TypeKind fromCode(String code) {
             for (TypeKind kind : values()) {
                 if (kind.code.equals(code)) {
@@ -56,61 +120,207 @@ public class TypeSchema {
         }
     }
 
+    /** Schema name containing this type (e.g., "public", "myschema"). */
     private String schemaName;
+
+    /** Type name without schema qualification. */
     private String typeName;
+
+    /** Database role that owns this type. */
     private String owner;
+
+    /** Optional comment/description for this type. */
     private String comment;
+
+    /** The kind of type (enum, composite, domain, or range). */
     private TypeKind kind;
 
-    // For enum types
+    // Enum-specific fields
+
+    /** Ordered list of enum labels (for ENUM types only). */
     private List<String> enumValues = new ArrayList<>();
 
-    // For composite types
+    // Composite-specific fields
+
+    /** List of attributes comprising a composite type (for COMPOSITE types only). */
     private List<CompositeAttribute> attributes = new ArrayList<>();
 
-    // For domain types
+    // Domain-specific fields
+
+    /** Underlying base type for a domain (for DOMAIN types only). */
     private String baseType;
+
+    /** Default value expression for a domain (for DOMAIN types only). */
     private String defaultValue;
+
+    /** Whether the domain enforces NOT NULL constraint (for DOMAIN types only). */
     private boolean notNull;
+
+    /** List of CHECK constraint expressions for a domain (for DOMAIN types only). */
     private List<String> checkConstraints = new ArrayList<>();
 
-    // For range types
+    // Range-specific fields
+
+    /** Subtype over which the range is defined (for RANGE types only). */
     private String subtype;
 
     /**
-     * Creates a builder for TypeSchema.
+     * Creates a builder for constructing TypeSchema instances.
+     * <p>
+     * The builder pattern allows for flexible construction of TypeSchema objects
+     * with only the relevant fields populated for each type kind.
      *
-     * @return new builder
+     * @return new builder instance
      */
     public static Builder builder() {
         return new Builder();
     }
 
     /**
-     * Builder for TypeSchema.
+     * Builder for constructing TypeSchema instances with a fluent API.
+     * <p>
+     * Example usage:
+     * <pre>{@code
+     * TypeSchema domainType = TypeSchema.builder()
+     *     .schemaName("public")
+     *     .typeName("positive_int")
+     *     .kind(TypeKind.DOMAIN)
+     *     .baseType("integer")
+     *     .notNull(true)
+     *     .domainConstraints(List.of("VALUE > 0"))
+     *     .build();
+     * }</pre>
      */
     public static class Builder {
         private final TypeSchema type = new TypeSchema();
 
+        /**
+         * Sets the schema name.
+         *
+         * @param schemaName schema containing the type
+         * @return this builder
+         */
         public Builder schemaName(String schemaName) { type.schemaName = schemaName; return this; }
+
+        /**
+         * Sets the type name.
+         *
+         * @param typeName name of the type
+         * @return this builder
+         */
         public Builder typeName(String typeName) { type.typeName = typeName; return this; }
+
+        /**
+         * Sets the owner role.
+         *
+         * @param owner database role that owns this type
+         * @return this builder
+         */
         public Builder owner(String owner) { type.owner = owner; return this; }
+
+        /**
+         * Sets the type comment.
+         *
+         * @param comment descriptive comment
+         * @return this builder
+         */
         public Builder comment(String comment) { type.comment = comment; return this; }
+
+        /**
+         * Sets the type kind (enum, composite, domain, or range).
+         *
+         * @param kind type kind
+         * @return this builder
+         */
         public Builder kind(TypeKind kind) { type.kind = kind; return this; }
+
+        /**
+         * Sets the enum values (for ENUM types).
+         *
+         * @param enumValues ordered list of enum labels
+         * @return this builder
+         */
         public Builder enumValues(List<String> enumValues) { type.enumValues = enumValues; return this; }
+
+        /**
+         * Sets the base type (for DOMAIN types).
+         *
+         * @param baseType underlying PostgreSQL type
+         * @return this builder
+         */
         public Builder baseType(String baseType) { type.baseType = baseType; return this; }
+
+        /**
+         * Sets the default value (for DOMAIN types).
+         *
+         * @param defaultValue default value expression
+         * @return this builder
+         */
         public Builder defaultValue(String defaultValue) { type.defaultValue = defaultValue; return this; }
+
+        /**
+         * Sets whether NOT NULL constraint is enforced (for DOMAIN types).
+         *
+         * @param notNull true if NOT NULL is enforced
+         * @return this builder
+         */
         public Builder notNull(boolean notNull) { type.notNull = notNull; return this; }
+
+        /**
+         * Sets the subtype (for RANGE types).
+         *
+         * @param subtype subtype over which the range is defined
+         * @return this builder
+         */
         public Builder subtype(String subtype) { type.subtype = subtype; return this; }
+
+        /**
+         * Sets the enum labels (alias for enumValues).
+         *
+         * @param labels ordered list of enum labels
+         * @return this builder
+         */
         public Builder enumLabels(List<String> labels) { type.enumValues = labels; return this; }
+
+        /**
+         * Sets the composite type attributes (for COMPOSITE types).
+         *
+         * @param attrs list of attributes
+         * @return this builder
+         */
         public Builder attributes(List<CompositeAttribute> attrs) { type.attributes = attrs; return this; }
+
+        /**
+         * Sets the domain check constraints (for DOMAIN types).
+         *
+         * @param constraints list of CHECK constraint expressions
+         * @return this builder
+         */
         public Builder domainConstraints(List<String> constraints) { type.checkConstraints = constraints; return this; }
+
+        /**
+         * Builds the TypeSchema instance.
+         *
+         * @return constructed TypeSchema
+         */
         public TypeSchema build() { return type; }
     }
 
+    /**
+     * Constructs an empty TypeSchema.
+     * <p>
+     * Fields should be populated via setters or preferably via the builder.
+     */
     public TypeSchema() {
     }
 
+    /**
+     * Constructs a TypeSchema with basic identification.
+     *
+     * @param schemaName schema containing the type
+     * @param typeName name of the type
+     * @param kind type kind (enum, composite, domain, or range)
+     */
     public TypeSchema(String schemaName, String typeName, TypeKind kind) {
         this.schemaName = schemaName;
         this.typeName = typeName;
@@ -118,19 +328,28 @@ public class TypeSchema {
     }
 
     /**
-     * Gets the fully qualified type name.
+     * Returns the fully qualified type name.
      *
-     * @return schema.type name
+     * @return schema-qualified name in the form "schema.typename"
      */
     public String getFullName() {
         return schemaName + "." + typeName;
     }
 
     /**
-     * Checks if this type equals another for comparison purposes.
+     * Checks whether this type is structurally equal to another type.
+     * <p>
+     * Structural equality compares the type kind and kind-specific attributes:
+     * <ul>
+     *   <li><b>ENUM</b> - compares enum value lists</li>
+     *   <li><b>COMPOSITE</b> - compares attribute names and types</li>
+     *   <li><b>DOMAIN</b> - compares base type, default, NOT NULL flag, and constraints</li>
+     *   <li><b>RANGE</b> - compares subtype</li>
+     * </ul>
+     * Owner and comment fields are not considered in structural comparison.
      *
-     * @param other other type
-     * @return true if structurally equal
+     * @param other type to compare against
+     * @return true if structurally equivalent, false otherwise
      */
     public boolean equalsStructure(TypeSchema other) {
         if (other == null) return false;
@@ -147,6 +366,12 @@ public class TypeSchema {
         };
     }
 
+    /**
+     * Checks whether the composite attributes are structurally equal.
+     *
+     * @param other list of attributes to compare against
+     * @return true if all attributes match in name, type, and position
+     */
     private boolean attributesEqual(List<CompositeAttribute> other) {
         if (attributes.size() != other.size()) return false;
         for (int i = 0; i < attributes.size(); i++) {
@@ -158,10 +383,27 @@ public class TypeSchema {
     }
 
     /**
-     * Gets differences from another type.
+     * Computes the structural differences between this type and another type.
+     * <p>
+     * This method identifies differences in type kind and kind-specific attributes,
+     * marking each difference as breaking or non-breaking for schema migration purposes.
+     * <p>
+     * Breaking changes include:
+     * <ul>
+     *   <li>Different type kinds</li>
+     *   <li>Modified enum values</li>
+     *   <li>Added, removed, or modified composite attributes</li>
+     *   <li>Changed domain base type or NOT NULL constraint</li>
+     *   <li>Changed range subtype</li>
+     * </ul>
+     * Non-breaking changes include:
+     * <ul>
+     *   <li>Modified domain default values</li>
+     * </ul>
      *
-     * @param other other type
-     * @return list of differences
+     * @param other type to compare against
+     * @return list of differences, empty if types are structurally equal
+     * @see AttributeDifference
      */
     public List<AttributeDifference> getDifferencesFrom(TypeSchema other) {
         List<AttributeDifference> diffs = new ArrayList<>();

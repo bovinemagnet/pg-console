@@ -6,8 +6,6 @@ import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.repository.HistoryRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -19,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jboss.logging.Logger;
 
 /**
  * Service for managing PostgreSQL query statistics via {@code pg_stat_statements}.
@@ -42,404 +41,392 @@ import java.util.Set;
 @ApplicationScoped
 public class StatementsManagementService {
 
-    private static final Logger LOG = Logger.getLogger(StatementsManagementService.class);
+	private static final Logger LOG = Logger.getLogger(StatementsManagementService.class);
 
-    private static final double SIGNIFICANT_CHANGE_THRESHOLD = 10.0; // 10% change threshold
-    private static final int TOP_MOVERS_LIMIT = 50;
+	private static final double SIGNIFICANT_CHANGE_THRESHOLD = 10.0; // 10% change threshold
+	private static final int TOP_MOVERS_LIMIT = 50;
 
-    @Inject
-    DataSourceManager dataSourceManager;
+	@Inject
+	DataSourceManager dataSourceManager;
 
-    @Inject
-    HistoryRepository historyRepository;
+	@Inject
+	HistoryRepository historyRepository;
 
-    /**
-     * Identifies queries with the most significant performance changes between time periods.
-     * <p>
-     * Compares aggregated query metrics from the current period (last {@code windowHours})
-     * against the previous period (prior {@code windowHours}) to detect:
-     * <ul>
-     *   <li>Newly introduced queries</li>
-     *   <li>Removed or no longer executed queries</li>
-     *   <li>Queries with increased execution time or call frequency</li>
-     *   <li>Queries with decreased execution time or call frequency</li>
-     * </ul>
-     * <p>
-     * Results are ranked by impact score (absolute change in total execution time)
-     * and limited to queries exceeding the {@value #SIGNIFICANT_CHANGE_THRESHOLD}%
-     * threshold. A maximum of {@value #TOP_MOVERS_LIMIT} results are returned.
-     *
-     * @param instanceName the database instance identifier
-     * @param windowHours the duration in hours for each comparison window
-     * @return list of query baselines sorted by impact (highest first), limited to
-     *         top movers. Returns an empty list if insufficient historical data exists
-     *         or if an error occurs.
-     * @see QueryBaseline
-     * @see HistoryRepository#getAggregatedQueryMetrics(String, int, int)
-     */
-    public List<QueryBaseline> getTopMovers(String instanceName, int windowHours) {
-        List<QueryBaseline> movers = new ArrayList<>();
+	/**
+	 * Identifies queries with the most significant performance changes between time periods.
+	 * <p>
+	 * Compares aggregated query metrics from the current period (last {@code windowHours})
+	 * against the previous period (prior {@code windowHours}) to detect:
+	 * <ul>
+	 *   <li>Newly introduced queries</li>
+	 *   <li>Removed or no longer executed queries</li>
+	 *   <li>Queries with increased execution time or call frequency</li>
+	 *   <li>Queries with decreased execution time or call frequency</li>
+	 * </ul>
+	 * <p>
+	 * Results are ranked by impact score (absolute change in total execution time)
+	 * and limited to queries exceeding the {@value #SIGNIFICANT_CHANGE_THRESHOLD}%
+	 * threshold. A maximum of {@value #TOP_MOVERS_LIMIT} results are returned.
+	 *
+	 * @param instanceName the database instance identifier
+	 * @param windowHours the duration in hours for each comparison window
+	 * @return list of query baselines sorted by impact (highest first), limited to
+	 *         top movers. Returns an empty list if insufficient historical data exists
+	 *         or if an error occurs.
+	 * @see QueryBaseline
+	 * @see HistoryRepository#getAggregatedQueryMetrics(String, int, int)
+	 */
+	public List<QueryBaseline> getTopMovers(String instanceName, int windowHours) {
+		List<QueryBaseline> movers = new ArrayList<>();
 
-        try {
-            // Get current period stats
-            List<QueryMetricsHistory> currentPeriod = historyRepository.getAggregatedQueryMetrics(
-                instanceName, windowHours, 0);
+		try {
+			// Get current period stats
+			List<QueryMetricsHistory> currentPeriod = historyRepository.getAggregatedQueryMetrics(instanceName, windowHours, 0);
 
-            // Get previous period stats
-            List<QueryMetricsHistory> previousPeriod = historyRepository.getAggregatedQueryMetrics(
-                instanceName, windowHours * 2, windowHours);
+			// Get previous period stats
+			List<QueryMetricsHistory> previousPeriod = historyRepository.getAggregatedQueryMetrics(instanceName, windowHours * 2, windowHours);
 
-            // Build maps for lookup
-            Map<String, QueryMetricsHistory> currentMap = new HashMap<>();
-            for (QueryMetricsHistory m : currentPeriod) {
-                currentMap.put(m.getQueryId(), m);
-            }
+			// Build maps for lookup
+			Map<String, QueryMetricsHistory> currentMap = new HashMap<>();
+			for (QueryMetricsHistory m : currentPeriod) {
+				currentMap.put(m.getQueryId(), m);
+			}
 
-            Map<String, QueryMetricsHistory> previousMap = new HashMap<>();
-            for (QueryMetricsHistory m : previousPeriod) {
-                previousMap.put(m.getQueryId(), m);
-            }
+			Map<String, QueryMetricsHistory> previousMap = new HashMap<>();
+			for (QueryMetricsHistory m : previousPeriod) {
+				previousMap.put(m.getQueryId(), m);
+			}
 
-            // Track all unique query IDs
-            Set<String> allQueryIds = new HashSet<>();
-            allQueryIds.addAll(currentMap.keySet());
-            allQueryIds.addAll(previousMap.keySet());
+			// Track all unique query IDs
+			Set<String> allQueryIds = new HashSet<>();
+			allQueryIds.addAll(currentMap.keySet());
+			allQueryIds.addAll(previousMap.keySet());
 
-            for (String queryId : allQueryIds) {
-                QueryMetricsHistory current = currentMap.get(queryId);
-                QueryMetricsHistory previous = previousMap.get(queryId);
+			for (String queryId : allQueryIds) {
+				QueryMetricsHistory current = currentMap.get(queryId);
+				QueryMetricsHistory previous = previousMap.get(queryId);
 
-                QueryBaseline baseline = new QueryBaseline();
-                baseline.setQueryId(queryId);
+				QueryBaseline baseline = new QueryBaseline();
+				baseline.setQueryId(queryId);
 
-                if (previous == null && current != null) {
-                    // New query
-                    baseline.setQueryText(current.getQueryText());
-                    baseline.setCurrentCalls(current.getTotalCalls());
-                    baseline.setCurrentTotalTime(current.getTotalTimeMs());
-                    baseline.setCurrentMeanTime(current.getMeanTimeMs());
-                    baseline.setMovementType(MovementType.NEW_QUERY);
-                    baseline.setImpactScore(current.getTotalTimeMs()); // Impact = total time
-                    movers.add(baseline);
+				if (previous == null && current != null) {
+					// New query
+					baseline.setQueryText(current.getQueryText());
+					baseline.setCurrentCalls(current.getTotalCalls());
+					baseline.setCurrentTotalTime(current.getTotalTimeMs());
+					baseline.setCurrentMeanTime(current.getMeanTimeMs());
+					baseline.setMovementType(MovementType.NEW_QUERY);
+					baseline.setImpactScore(current.getTotalTimeMs()); // Impact = total time
+					movers.add(baseline);
+				} else if (previous != null && current == null) {
+					// Removed query
+					baseline.setQueryText(previous.getQueryText());
+					baseline.setPreviousCalls(previous.getTotalCalls());
+					baseline.setPreviousTotalTime(previous.getTotalTimeMs());
+					baseline.setPreviousMeanTime(previous.getMeanTimeMs());
+					baseline.setMovementType(MovementType.REMOVED);
+					baseline.setImpactScore(previous.getTotalTimeMs()); // Impact = previous total time
+					movers.add(baseline);
+				} else if (previous != null && current != null) {
+					// Existing query - compute deltas
+					baseline.setQueryText(current.getQueryText());
 
-                } else if (previous != null && current == null) {
-                    // Removed query
-                    baseline.setQueryText(previous.getQueryText());
-                    baseline.setPreviousCalls(previous.getTotalCalls());
-                    baseline.setPreviousTotalTime(previous.getTotalTimeMs());
-                    baseline.setPreviousMeanTime(previous.getMeanTimeMs());
-                    baseline.setMovementType(MovementType.REMOVED);
-                    baseline.setImpactScore(previous.getTotalTimeMs()); // Impact = previous total time
-                    movers.add(baseline);
+					baseline.setPreviousCalls(previous.getTotalCalls());
+					baseline.setPreviousTotalTime(previous.getTotalTimeMs());
+					baseline.setPreviousMeanTime(previous.getMeanTimeMs());
 
-                } else if (previous != null && current != null) {
-                    // Existing query - compute deltas
-                    baseline.setQueryText(current.getQueryText());
+					baseline.setCurrentCalls(current.getTotalCalls());
+					baseline.setCurrentTotalTime(current.getTotalTimeMs());
+					baseline.setCurrentMeanTime(current.getMeanTimeMs());
 
-                    baseline.setPreviousCalls(previous.getTotalCalls());
-                    baseline.setPreviousTotalTime(previous.getTotalTimeMs());
-                    baseline.setPreviousMeanTime(previous.getMeanTimeMs());
+					// Calculate deltas
+					baseline.setCallsDelta(current.getTotalCalls() - previous.getTotalCalls());
+					baseline.setTotalTimeDelta(current.getTotalTimeMs() - previous.getTotalTimeMs());
+					baseline.setMeanTimeDelta(current.getMeanTimeMs() - previous.getMeanTimeMs());
 
-                    baseline.setCurrentCalls(current.getTotalCalls());
-                    baseline.setCurrentTotalTime(current.getTotalTimeMs());
-                    baseline.setCurrentMeanTime(current.getMeanTimeMs());
+					// Calculate percentage changes
+					if (previous.getTotalCalls() > 0) {
+						baseline.setCallsChangePercent(((double) (current.getTotalCalls() - previous.getTotalCalls()) / previous.getTotalCalls()) * 100);
+					}
+					if (previous.getTotalTimeMs() > 0) {
+						baseline.setTotalTimeChangePercent(((current.getTotalTimeMs() - previous.getTotalTimeMs()) / previous.getTotalTimeMs()) * 100);
+					}
+					if (previous.getMeanTimeMs() > 0) {
+						baseline.setMeanTimeChangePercent(((current.getMeanTimeMs() - previous.getMeanTimeMs()) / previous.getMeanTimeMs()) * 100);
+					}
 
-                    // Calculate deltas
-                    baseline.setCallsDelta(current.getTotalCalls() - previous.getTotalCalls());
-                    baseline.setTotalTimeDelta(current.getTotalTimeMs() - previous.getTotalTimeMs());
-                    baseline.setMeanTimeDelta(current.getMeanTimeMs() - previous.getMeanTimeMs());
+					// Determine movement type
+					if (Math.abs(baseline.getTotalTimeChangePercent()) < SIGNIFICANT_CHANGE_THRESHOLD) {
+						baseline.setMovementType(MovementType.STABLE);
+					} else if (baseline.getTotalTimeDelta() > 0) {
+						baseline.setMovementType(MovementType.INCREASED);
+					} else {
+						baseline.setMovementType(MovementType.DECREASED);
+					}
 
-                    // Calculate percentage changes
-                    if (previous.getTotalCalls() > 0) {
-                        baseline.setCallsChangePercent(
-                            ((double) (current.getTotalCalls() - previous.getTotalCalls()) / previous.getTotalCalls()) * 100);
-                    }
-                    if (previous.getTotalTimeMs() > 0) {
-                        baseline.setTotalTimeChangePercent(
-                            ((current.getTotalTimeMs() - previous.getTotalTimeMs()) / previous.getTotalTimeMs()) * 100);
-                    }
-                    if (previous.getMeanTimeMs() > 0) {
-                        baseline.setMeanTimeChangePercent(
-                            ((current.getMeanTimeMs() - previous.getMeanTimeMs()) / previous.getMeanTimeMs()) * 100);
-                    }
+					// Impact score based on absolute change in total time
+					baseline.setImpactScore(Math.abs(baseline.getTotalTimeDelta()));
 
-                    // Determine movement type
-                    if (Math.abs(baseline.getTotalTimeChangePercent()) < SIGNIFICANT_CHANGE_THRESHOLD) {
-                        baseline.setMovementType(MovementType.STABLE);
-                    } else if (baseline.getTotalTimeDelta() > 0) {
-                        baseline.setMovementType(MovementType.INCREASED);
-                    } else {
-                        baseline.setMovementType(MovementType.DECREASED);
-                    }
+					// Only add if significant change
+					if (baseline.getMovementType() != MovementType.STABLE) {
+						movers.add(baseline);
+					}
+				}
+			}
 
-                    // Impact score based on absolute change in total time
-                    baseline.setImpactScore(Math.abs(baseline.getTotalTimeDelta()));
+			// Sort by impact score descending
+			movers.sort((a, b) -> Double.compare(b.getImpactScore(), a.getImpactScore()));
 
-                    // Only add if significant change
-                    if (baseline.getMovementType() != MovementType.STABLE) {
-                        movers.add(baseline);
-                    }
-                }
-            }
+			// Limit results
+			if (movers.size() > TOP_MOVERS_LIMIT) {
+				movers = new ArrayList<>(movers.subList(0, TOP_MOVERS_LIMIT));
+			}
+		} catch (Exception e) {
+			LOG.warnf("Failed to get top movers for %s: %s", instanceName, e.getMessage());
+		}
 
-            // Sort by impact score descending
-            movers.sort((a, b) -> Double.compare(b.getImpactScore(), a.getImpactScore()));
+		return movers;
+	}
 
-            // Limit results
-            if (movers.size() > TOP_MOVERS_LIMIT) {
-                movers = new ArrayList<>(movers.subList(0, TOP_MOVERS_LIMIT));
-            }
+	/**
+	 * Retrieves summary statistics for {@code pg_stat_statements} on the instance.
+	 * <p>
+	 * Provides an overview of statement tracking including total query count,
+	 * aggregate call counts, execution times, and extension availability. Also
+	 * includes the last reset timestamp if available (PostgreSQL 14+).
+	 *
+	 * @param instanceName the database instance identifier
+	 * @return summary object containing aggregated statistics. Returns a summary
+	 *         with {@code extensionAvailable=false} if {@code pg_stat_statements}
+	 *         is not installed.
+	 * @see StatementsSummary
+	 */
+	public StatementsSummary getSummary(String instanceName) {
+		StatementsSummary summary = new StatementsSummary();
 
-        } catch (Exception e) {
-            LOG.warnf("Failed to get top movers for %s: %s", instanceName, e.getMessage());
-        }
+		String sql = """
+			SELECT
+			    COUNT(*) as total_queries,
+			    SUM(calls) as total_calls,
+			    SUM(total_exec_time) as total_exec_time,
+			    AVG(mean_exec_time) as avg_mean_time,
+			    MAX(mean_exec_time) as max_mean_time,
+			    pg_stat_statements_reset() IS NOT NULL as can_reset
+			FROM pg_stat_statements
+			WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+			""";
 
-        return movers;
-    }
+		// First check if pg_stat_statements exists
+		String checkSql = """
+			SELECT EXISTS (
+			    SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
+			) as extension_exists
+			""";
 
-    /**
-     * Retrieves summary statistics for {@code pg_stat_statements} on the instance.
-     * <p>
-     * Provides an overview of statement tracking including total query count,
-     * aggregate call counts, execution times, and extension availability. Also
-     * includes the last reset timestamp if available (PostgreSQL 14+).
-     *
-     * @param instanceName the database instance identifier
-     * @return summary object containing aggregated statistics. Returns a summary
-     *         with {@code extensionAvailable=false} if {@code pg_stat_statements}
-     *         is not installed.
-     * @see StatementsSummary
-     */
-    public StatementsSummary getSummary(String instanceName) {
-        StatementsSummary summary = new StatementsSummary();
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection()) {
+			// Check extension exists
+			try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(checkSql)) {
+				if (rs.next() && !rs.getBoolean("extension_exists")) {
+					summary.setExtensionAvailable(false);
+					return summary;
+				}
+			}
 
-        String sql = """
-            SELECT
-                COUNT(*) as total_queries,
-                SUM(calls) as total_calls,
-                SUM(total_exec_time) as total_exec_time,
-                AVG(mean_exec_time) as avg_mean_time,
-                MAX(mean_exec_time) as max_mean_time,
-                pg_stat_statements_reset() IS NOT NULL as can_reset
-            FROM pg_stat_statements
-            WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-            """;
+			summary.setExtensionAvailable(true);
 
-        // First check if pg_stat_statements exists
-        String checkSql = """
-            SELECT EXISTS (
-                SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
-            ) as extension_exists
-            """;
+			// Get summary stats
+			String statsSql = """
+				SELECT
+				    COUNT(*) as total_queries,
+				    COALESCE(SUM(calls), 0) as total_calls,
+				    COALESCE(SUM(total_exec_time), 0) as total_exec_time,
+				    COALESCE(AVG(mean_exec_time), 0) as avg_mean_time,
+				    COALESCE(MAX(mean_exec_time), 0) as max_mean_time
+				FROM pg_stat_statements
+				WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+				""";
 
-        try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection()) {
-            // Check extension exists
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(checkSql)) {
-                if (rs.next() && !rs.getBoolean("extension_exists")) {
-                    summary.setExtensionAvailable(false);
-                    return summary;
-                }
-            }
+			try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(statsSql)) {
+				if (rs.next()) {
+					summary.setTotalQueries(rs.getInt("total_queries"));
+					summary.setTotalCalls(rs.getLong("total_calls"));
+					summary.setTotalExecTimeMs(rs.getDouble("total_exec_time"));
+					summary.setAvgMeanTimeMs(rs.getDouble("avg_mean_time"));
+					summary.setMaxMeanTimeMs(rs.getDouble("max_mean_time"));
+				}
+			}
 
-            summary.setExtensionAvailable(true);
+			// Get stats reset timestamp
+			String resetTimeSql = """
+				SELECT stats_reset FROM pg_stat_statements_info
+				""";
 
-            // Get summary stats
-            String statsSql = """
-                SELECT
-                    COUNT(*) as total_queries,
-                    COALESCE(SUM(calls), 0) as total_calls,
-                    COALESCE(SUM(total_exec_time), 0) as total_exec_time,
-                    COALESCE(AVG(mean_exec_time), 0) as avg_mean_time,
-                    COALESCE(MAX(mean_exec_time), 0) as max_mean_time
-                FROM pg_stat_statements
-                WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-                """;
+			try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(resetTimeSql)) {
+				if (rs.next()) {
+					var resetTime = rs.getTimestamp("stats_reset");
+					if (resetTime != null) {
+						summary.setLastReset(resetTime.toInstant());
+					}
+				}
+			} catch (SQLException e) {
+				// pg_stat_statements_info may not exist in older versions
+				LOG.debugf("Could not get stats_reset time: %s", e.getMessage());
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get statements summary for %s: %s", instanceName, e.getMessage());
+		}
 
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(statsSql)) {
-                if (rs.next()) {
-                    summary.setTotalQueries(rs.getInt("total_queries"));
-                    summary.setTotalCalls(rs.getLong("total_calls"));
-                    summary.setTotalExecTimeMs(rs.getDouble("total_exec_time"));
-                    summary.setAvgMeanTimeMs(rs.getDouble("avg_mean_time"));
-                    summary.setMaxMeanTimeMs(rs.getDouble("max_mean_time"));
-                }
-            }
+		return summary;
+	}
 
-            // Get stats reset timestamp
-            String resetTimeSql = """
-                SELECT stats_reset FROM pg_stat_statements_info
-                """;
+	/**
+	 * Resets all query statistics in {@code pg_stat_statements}.
+	 * <p>
+	 * Invokes {@code pg_stat_statements_reset()} to clear all tracked query metrics
+	 * and restart accumulation from zero. This operation should typically be performed
+	 * after capturing a historical snapshot to preserve the data before reset.
+	 * <p>
+	 * <strong>Warning:</strong> This permanently discards all current statement statistics.
+	 * Ensure historical data has been captured if needed for analysis.
+	 *
+	 * @param instanceName the database instance identifier
+	 * @return {@code true} if the reset operation succeeded, {@code false} if an error occurred
+	 */
+	public boolean resetStatements(String instanceName) {
+		String sql = "SELECT pg_stat_statements_reset()";
 
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(resetTimeSql)) {
-                if (rs.next()) {
-                    var resetTime = rs.getTimestamp("stats_reset");
-                    if (resetTime != null) {
-                        summary.setLastReset(resetTime.toInstant());
-                    }
-                }
-            } catch (SQLException e) {
-                // pg_stat_statements_info may not exist in older versions
-                LOG.debugf("Could not get stats_reset time: %s", e.getMessage());
-            }
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection(); Statement stmt = conn.createStatement()) {
+			stmt.execute(sql);
+			LOG.infof("Reset pg_stat_statements for instance: %s", instanceName);
+			return true;
+		} catch (SQLException e) {
+			LOG.warnf("Failed to reset pg_stat_statements for %s: %s", instanceName, e.getMessage());
+			return false;
+		}
+	}
 
-        } catch (SQLException e) {
-            LOG.warnf("Failed to get statements summary for %s: %s", instanceName, e.getMessage());
-        }
+	/**
+	 * Aggregated summary statistics for {@code pg_stat_statements}.
+	 * <p>
+	 * Provides overview metrics including total tracked queries, aggregate
+	 * execution counts and times, and the timestamp of the last statistics
+	 * reset. Includes formatting methods for human-readable display.
+	 */
+	public static class StatementsSummary {
 
-        return summary;
-    }
+		private boolean extensionAvailable;
+		private int totalQueries;
+		private long totalCalls;
+		private double totalExecTimeMs;
+		private double avgMeanTimeMs;
+		private double maxMeanTimeMs;
+		private Instant lastReset;
 
-    /**
-     * Resets all query statistics in {@code pg_stat_statements}.
-     * <p>
-     * Invokes {@code pg_stat_statements_reset()} to clear all tracked query metrics
-     * and restart accumulation from zero. This operation should typically be performed
-     * after capturing a historical snapshot to preserve the data before reset.
-     * <p>
-     * <strong>Warning:</strong> This permanently discards all current statement statistics.
-     * Ensure historical data has been captured if needed for analysis.
-     *
-     * @param instanceName the database instance identifier
-     * @return {@code true} if the reset operation succeeded, {@code false} if an error occurred
-     */
-    public boolean resetStatements(String instanceName) {
-        String sql = "SELECT pg_stat_statements_reset()";
+		public boolean isExtensionAvailable() {
+			return extensionAvailable;
+		}
 
-        try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.execute(sql);
-            LOG.infof("Reset pg_stat_statements for instance: %s", instanceName);
-            return true;
-        } catch (SQLException e) {
-            LOG.warnf("Failed to reset pg_stat_statements for %s: %s", instanceName, e.getMessage());
-            return false;
-        }
-    }
+		public void setExtensionAvailable(boolean extensionAvailable) {
+			this.extensionAvailable = extensionAvailable;
+		}
 
-    /**
-     * Aggregated summary statistics for {@code pg_stat_statements}.
-     * <p>
-     * Provides overview metrics including total tracked queries, aggregate
-     * execution counts and times, and the timestamp of the last statistics
-     * reset. Includes formatting methods for human-readable display.
-     */
-    public static class StatementsSummary {
-        private boolean extensionAvailable;
-        private int totalQueries;
-        private long totalCalls;
-        private double totalExecTimeMs;
-        private double avgMeanTimeMs;
-        private double maxMeanTimeMs;
-        private Instant lastReset;
+		public int getTotalQueries() {
+			return totalQueries;
+		}
 
-        public boolean isExtensionAvailable() {
-            return extensionAvailable;
-        }
+		public void setTotalQueries(int totalQueries) {
+			this.totalQueries = totalQueries;
+		}
 
-        public void setExtensionAvailable(boolean extensionAvailable) {
-            this.extensionAvailable = extensionAvailable;
-        }
+		public long getTotalCalls() {
+			return totalCalls;
+		}
 
-        public int getTotalQueries() {
-            return totalQueries;
-        }
+		public void setTotalCalls(long totalCalls) {
+			this.totalCalls = totalCalls;
+		}
 
-        public void setTotalQueries(int totalQueries) {
-            this.totalQueries = totalQueries;
-        }
+		public double getTotalExecTimeMs() {
+			return totalExecTimeMs;
+		}
 
-        public long getTotalCalls() {
-            return totalCalls;
-        }
+		public void setTotalExecTimeMs(double totalExecTimeMs) {
+			this.totalExecTimeMs = totalExecTimeMs;
+		}
 
-        public void setTotalCalls(long totalCalls) {
-            this.totalCalls = totalCalls;
-        }
+		public String getTotalExecTimeFormatted() {
+			if (totalExecTimeMs >= 3600000) {
+				return String.format("%.1f hours", totalExecTimeMs / 3600000);
+			} else if (totalExecTimeMs >= 60000) {
+				return String.format("%.1f minutes", totalExecTimeMs / 60000);
+			} else if (totalExecTimeMs >= 1000) {
+				return String.format("%.1f seconds", totalExecTimeMs / 1000);
+			}
+			return String.format("%.0f ms", totalExecTimeMs);
+		}
 
-        public double getTotalExecTimeMs() {
-            return totalExecTimeMs;
-        }
+		public double getAvgMeanTimeMs() {
+			return avgMeanTimeMs;
+		}
 
-        public void setTotalExecTimeMs(double totalExecTimeMs) {
-            this.totalExecTimeMs = totalExecTimeMs;
-        }
+		public void setAvgMeanTimeMs(double avgMeanTimeMs) {
+			this.avgMeanTimeMs = avgMeanTimeMs;
+		}
 
-        public String getTotalExecTimeFormatted() {
-            if (totalExecTimeMs >= 3600000) {
-                return String.format("%.1f hours", totalExecTimeMs / 3600000);
-            } else if (totalExecTimeMs >= 60000) {
-                return String.format("%.1f minutes", totalExecTimeMs / 60000);
-            } else if (totalExecTimeMs >= 1000) {
-                return String.format("%.1f seconds", totalExecTimeMs / 1000);
-            }
-            return String.format("%.0f ms", totalExecTimeMs);
-        }
+		public String getAvgMeanTimeFormatted() {
+			if (avgMeanTimeMs >= 1000) {
+				return String.format("%.2f s", avgMeanTimeMs / 1000);
+			}
+			return String.format("%.2f ms", avgMeanTimeMs);
+		}
 
-        public double getAvgMeanTimeMs() {
-            return avgMeanTimeMs;
-        }
+		public double getMaxMeanTimeMs() {
+			return maxMeanTimeMs;
+		}
 
-        public void setAvgMeanTimeMs(double avgMeanTimeMs) {
-            this.avgMeanTimeMs = avgMeanTimeMs;
-        }
+		public void setMaxMeanTimeMs(double maxMeanTimeMs) {
+			this.maxMeanTimeMs = maxMeanTimeMs;
+		}
 
-        public String getAvgMeanTimeFormatted() {
-            if (avgMeanTimeMs >= 1000) {
-                return String.format("%.2f s", avgMeanTimeMs / 1000);
-            }
-            return String.format("%.2f ms", avgMeanTimeMs);
-        }
+		public String getMaxMeanTimeFormatted() {
+			if (maxMeanTimeMs >= 1000) {
+				return String.format("%.2f s", maxMeanTimeMs / 1000);
+			}
+			return String.format("%.2f ms", maxMeanTimeMs);
+		}
 
-        public double getMaxMeanTimeMs() {
-            return maxMeanTimeMs;
-        }
+		public Instant getLastReset() {
+			return lastReset;
+		}
 
-        public void setMaxMeanTimeMs(double maxMeanTimeMs) {
-            this.maxMeanTimeMs = maxMeanTimeMs;
-        }
+		public void setLastReset(Instant lastReset) {
+			this.lastReset = lastReset;
+		}
 
-        public String getMaxMeanTimeFormatted() {
-            if (maxMeanTimeMs >= 1000) {
-                return String.format("%.2f s", maxMeanTimeMs / 1000);
-            }
-            return String.format("%.2f ms", maxMeanTimeMs);
-        }
+		public String getLastResetFormatted() {
+			if (lastReset == null) {
+				return "Never / Unknown";
+			}
+			long hoursSince = java.time.Duration.between(lastReset, Instant.now()).toHours();
+			if (hoursSince < 1) {
+				return "Less than an hour ago";
+			} else if (hoursSince < 24) {
+				return hoursSince + " hours ago";
+			} else {
+				long daysSince = hoursSince / 24;
+				return daysSince + " day" + (daysSince > 1 ? "s" : "") + " ago";
+			}
+		}
 
-        public Instant getLastReset() {
-            return lastReset;
-        }
-
-        public void setLastReset(Instant lastReset) {
-            this.lastReset = lastReset;
-        }
-
-        public String getLastResetFormatted() {
-            if (lastReset == null) {
-                return "Never / Unknown";
-            }
-            long hoursSince = java.time.Duration.between(lastReset, Instant.now()).toHours();
-            if (hoursSince < 1) {
-                return "Less than an hour ago";
-            } else if (hoursSince < 24) {
-                return hoursSince + " hours ago";
-            } else {
-                long daysSince = hoursSince / 24;
-                return daysSince + " day" + (daysSince > 1 ? "s" : "") + " ago";
-            }
-        }
-
-        public String getTotalCallsFormatted() {
-            if (totalCalls >= 1_000_000_000) {
-                return String.format("%.1fB", totalCalls / 1_000_000_000.0);
-            } else if (totalCalls >= 1_000_000) {
-                return String.format("%.1fM", totalCalls / 1_000_000.0);
-            } else if (totalCalls >= 1_000) {
-                return String.format("%.1fK", totalCalls / 1_000.0);
-            }
-            return String.valueOf(totalCalls);
-        }
-    }
+		public String getTotalCallsFormatted() {
+			if (totalCalls >= 1_000_000_000) {
+				return String.format("%.1fB", totalCalls / 1_000_000_000.0);
+			} else if (totalCalls >= 1_000_000) {
+				return String.format("%.1fM", totalCalls / 1_000_000.0);
+			} else if (totalCalls >= 1_000) {
+				return String.format("%.1fK", totalCalls / 1_000.0);
+			}
+			return String.valueOf(totalCalls);
+		}
+	}
 }
