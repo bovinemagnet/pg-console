@@ -1,0 +1,228 @@
+{#include base}
+{#title}Diagnostics{/title}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-heart-pulse me-2"></i>Diagnostics
+        </h1>
+    </div>
+
+    <p class="text-muted mb-4">Database health diagnostics and analysis tools. Each diagnostic provides insights into specific aspects of your PostgreSQL database performance and health.</p>
+
+    <!-- Summary Alert (if any issues) -->
+    {#if totalIssues > 0}
+    <div class="alert alert-warning mb-4">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>{totalIssues}</strong> issue(s) detected across diagnostics - review details below.
+    </div>
+    {/if}
+
+    <!-- Performance Diagnostics -->
+    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i>Performance Diagnostics</h5>
+    <div class="row g-4 mb-4">
+        <!-- Pipeline Risk -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-funnel me-2"></i>Pipeline Risk
+                        </h6>
+                        <span class="badge {pipelineRiskCount == 0 ? 'bg-success' : pipelineRiskCount <= 5 ? 'bg-warning' : 'bg-danger'}">{pipelineRiskCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Queue/pipeline table backlog detection for event processing tables.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/pipeline-risk?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistical Freshness -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-calendar-check me-2"></i>Statistical Freshness
+                        </h6>
+                        <span class="badge {staleFreshnessCount == 0 ? 'bg-success' : staleFreshnessCount <= 5 ? 'bg-warning' : 'bg-danger'}">{staleFreshnessCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Table statistics staleness affecting query planner decisions.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/statistical-freshness?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Write/Read Ratio -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-arrow-left-right me-2"></i>Write/Read Ratio
+                        </h6>
+                        <span class="badge bg-info">{writeHeavyCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Table access pattern analysis identifying write-heavy tables.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/write-read-ratio?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- HOT Efficiency -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-fire me-2"></i>HOT Efficiency
+                        </h6>
+                        <span class="badge {lowHotEfficiencyCount == 0 ? 'bg-success' : lowHotEfficiencyCount <= 5 ? 'bg-warning' : 'bg-danger'}">{lowHotEfficiencyCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Heap-Only Tuple update efficiency for reduced index bloat.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/hot-efficiency?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Storage & Indexes -->
+    <h5 class="mb-3"><i class="bi bi-hdd me-2"></i>Storage & Indexes</h5>
+    <div class="row g-4 mb-4">
+        <!-- TOAST Bloat -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-box-seam me-2"></i>TOAST Bloat
+                        </h6>
+                        <span class="badge {toastBloatCount == 0 ? 'bg-success' : toastBloatCount <= 5 ? 'bg-warning' : 'bg-danger'}">{toastBloatCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Out-of-line storage bloat analysis for large column values.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/toast-bloat?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Index Redundancy -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-layers me-2"></i>Index Redundancy
+                        </h6>
+                        <span class="badge {indexRedundancyCount == 0 ? 'bg-success' : indexRedundancyCount <= 5 ? 'bg-warning' : 'bg-danger'}">{indexRedundancyCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Overlapping and duplicate index detection for cleanup.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/index-redundancy?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Correlation -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-graph-up me-2"></i>Correlation
+                        </h6>
+                        <span class="badge {poorCorrelationCount == 0 ? 'bg-success' : poorCorrelationCount <= 5 ? 'bg-warning' : 'bg-danger'}">{poorCorrelationCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Column correlation statistics for CLUSTER recommendations.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/correlation?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Monitoring -->
+    <h5 class="mb-3"><i class="bi bi-activity me-2"></i>Health Monitoring</h5>
+    <div class="row g-4 mb-4">
+        <!-- XID Wraparound -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 {xidAtRiskCount > 0 ? 'border-danger' : ''}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-exclamation-octagon me-2"></i>XID Wraparound
+                        </h6>
+                        <span class="badge {xidAtRiskCount == 0 ? 'bg-success' : 'bg-danger'}">{xidAtRiskCount}</span>
+                    </div>
+                    <p class="card-text text-muted small">Transaction ID age monitoring to prevent database shutdown.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/xid-wraparound?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Details <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Charts -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="card-title">
+                            <i class="bi bi-graph-up-arrow me-2"></i>Live Charts
+                        </h6>
+                        <span class="badge bg-secondary">Interactive</span>
+                    </div>
+                    <p class="card-text text-muted small">Real-time metric visualisation with auto-refreshing charts.</p>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="/diagnostics/live-charts?instance={instance}" class="btn btn-sm btn-outline-primary">
+                        View Charts <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Tips -->
+    <div class="card bg-light mt-4">
+        <div class="card-body">
+            <h6 class="card-title"><i class="bi bi-lightbulb me-2"></i>Quick Tips</h6>
+            <ul class="mb-0 small">
+                <li><strong>Green badges</strong> indicate no issues detected in that category.</li>
+                <li><strong>Yellow badges</strong> indicate minor issues that should be reviewed.</li>
+                <li><strong>Red badges</strong> indicate issues requiring attention.</li>
+                <li>Click "View Details" to see specific recommendations for each diagnostic.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{/include}

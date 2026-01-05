@@ -74,6 +74,9 @@ public class DiagnosticsResource {
     InstanceConfig config;
 
     @Inject
+    Template diagnosticsIndex;
+
+    @Inject
     Template pipelineRisk;
 
     @Inject
@@ -131,6 +134,86 @@ public class DiagnosticsResource {
      */
     private Map<String, Boolean> getToggles() {
         return featureToggleService.getAllToggles();
+    }
+
+    // ========================================
+    // Diagnostics Index Page
+    // ========================================
+
+    /**
+     * Displays the Diagnostics index page with summary of all diagnostic tools.
+     *
+     * @param instance the PostgreSQL instance name
+     * @return rendered template
+     */
+    @GET
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance index(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+
+        // Get data and count issues for each diagnostic
+        List<PipelineRisk> risks = postgresService.getPipelineRisk(instanceName, null, queueStaleHours);
+        long pipelineRiskCount = risks.stream()
+                .filter(r -> !"ok".equals(r.getRiskLevel(queueStaleHours)))
+                .count();
+
+        List<ToastBloat> bloats = postgresService.getToastBloat(instanceName);
+        long toastBloatCount = bloats.stream()
+                .filter(b -> !"ok".equals(b.getSeverity(toastBloatWarnPercent)))
+                .count();
+
+        List<IndexRedundancy> redundancies = postgresService.getIndexRedundancy(instanceName);
+        long indexRedundancyCount = redundancies.size();
+
+        List<StatisticalFreshness> freshness = postgresService.getStatisticalFreshness(instanceName);
+        long staleFreshnessCount = freshness.stream()
+                .filter(f -> !"ok".equals(f.getStaleness(10.0)))
+                .count();
+
+        List<WriteReadRatio> ratios = postgresService.getWriteReadRatio(instanceName);
+        long writeHeavyCount = ratios.stream()
+                .filter(r -> "Write-Heavy".equals(r.getWorkloadDisplay()))
+                .count();
+
+        List<HotUpdateEfficiency> efficiencies = postgresService.getHotEfficiency(instanceName);
+        long lowHotEfficiencyCount = efficiencies.stream()
+                .filter(e -> !"ok".equals(e.getEfficiencyLevel(hotEfficiencyWarnPercent)))
+                .count();
+
+        List<ColumnCorrelation> correlations = postgresService.getColumnCorrelation(instanceName);
+        long poorCorrelationCount = correlations.stream()
+                .filter(ColumnCorrelation::isClusterRecommended)
+                .count();
+
+        List<XidWraparound> xids = postgresService.getXidWraparound(instanceName);
+        long xidAtRiskCount = xids.stream()
+                .filter(x -> !"ok".equals(x.getSeverity(xidWarnPercent, xidCriticalPercent)))
+                .count();
+
+        // Calculate total issues for alert banner
+        long totalIssues = pipelineRiskCount + toastBloatCount + indexRedundancyCount
+                + staleFreshnessCount + lowHotEfficiencyCount + poorCorrelationCount + xidAtRiskCount;
+
+        return diagnosticsIndex.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "diagnostics")
+                .data("pageTitle", "Diagnostics")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("pipelineRiskCount", pipelineRiskCount)
+                .data("toastBloatCount", toastBloatCount)
+                .data("indexRedundancyCount", indexRedundancyCount)
+                .data("staleFreshnessCount", staleFreshnessCount)
+                .data("writeHeavyCount", writeHeavyCount)
+                .data("lowHotEfficiencyCount", lowHotEfficiencyCount)
+                .data("poorCorrelationCount", poorCorrelationCount)
+                .data("xidAtRiskCount", xidAtRiskCount)
+                .data("totalIssues", totalIssues)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
     }
 
     // ========================================
