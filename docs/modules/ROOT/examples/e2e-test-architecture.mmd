@@ -1,0 +1,208 @@
+classDiagram
+    %% Base Test Infrastructure
+    class PlaywrightTestBase {
+        <<abstract>>
+        -static Playwright playwright
+        -static Browser browser
+        -static String BASE_URL
+        -static String BROWSER_TYPE
+        -static boolean HEADLESS
+        -static int SLOW_MO
+        -static int DEFAULT_TIMEOUT
+        -static String SCREENSHOT_DIR
+        #BrowserContext context
+        #Page page
+        +setUpPlaywright()$ void
+        +tearDownPlaywright()$ void
+        +setUpPage() void
+        +tearDownPage() void
+        #navigateTo(String) void
+        #navigateToWithInstance(String) void
+        #takeScreenshot(String) void
+        #waitForPageLoad() void
+        #waitForElement(String) void
+        #clickAndWait(String) void
+        #getPageTitle() String
+        #isVisible(String) boolean
+        #getText(String) String
+        #getInnerText(String) String
+        #pageContainsText(String) boolean
+        #toggleDarkMode() void
+        #isDarkMode() boolean
+        #setAutoRefresh(int) void
+        #selectInstance(String) void
+        #getTableRowCount(String) int
+        #sortTableBy(String) void
+        #pageLoadedWithoutErrors() boolean
+    }
+
+    %% Page Object Model Base
+    class BasePage {
+        #Page page
+        #String baseUrl
+        +BasePage(Page, String)
+        +navigateTo(String) void
+        +navigateToWithInstance(String) void
+        +waitForPageLoad() void
+        +getCurrentUrl() String
+        +getPageTitle() String
+        +getBrowserTitle() String
+        +pageLoadedWithoutErrors() boolean
+        +toggleTheme() void
+        +isDarkMode() boolean
+        +enableDarkMode() void
+        +enableLightMode() void
+        +setAutoRefresh(int) void
+        +disableAutoRefresh() void
+        +hasInstanceSelector() boolean
+        +selectInstance(String) void
+        +getSelectedInstance() String
+        +isSidebarVisible() boolean
+        +clickNavLink(String) void
+        +expandNavSection(String) void
+        +isVisible(String) boolean
+        +getText(String) String
+        +getInnerText(String) String
+        +click(String) void
+        +waitForElement(String) void
+        +countElements(String) int
+        +getTableRowCount(String) int
+        +sortTableBy(String) void
+        +getTableCell(String, int, int) String
+    }
+
+    %% Specific Page Objects
+    class DashboardPage {
+        +DashboardPage(Page, String)
+        +navigate() void
+        +hasConnectionsWidget() boolean
+        +hasActiveQueriesWidget() boolean
+        +hasBlockedQueriesWidget() boolean
+        +hasCacheHitWidget() boolean
+        +hasDatabaseSizeWidget() boolean
+        +hasTopTablesCard() boolean
+        +hasTopIndexesCard() boolean
+        +hasSparklines() boolean
+        +getConnectionsValue() String
+        +getActiveQueriesValue() String
+        +getBlockedQueriesValue() String
+        +getCacheHitValue() String
+        +getDatabaseSizeValue() String
+        +clickConnectionsWidget() void
+        +clickActiveQueriesWidget() void
+        +clickBlockedQueriesWidget() void
+        +allCoreWidgetsVisible() boolean
+        +getTopTablesCount() int
+        +getTopIndexesCount() int
+    }
+
+    class SlowQueriesPage {
+        +SlowQueriesPage(Page, String)
+        +navigate() void
+        +hasQueriesTable() boolean
+        +hasNoDataMessage() boolean
+        +getQueryCount() int
+        +sortByTotalTime() void
+        +sortByMeanTime() void
+        +sortByCalls() void
+        +sortByRows() void
+        +clickFirstQuery() void
+        +clickQuery(int) void
+        +getQueryText(int) String
+        +getCalls(int) String
+        +getMeanTime(int) String
+        +getTotalTime(int) String
+        +isPageValid() boolean
+        +hasSortableHeaders() boolean
+    }
+
+    %% Test Classes
+    class NavigationE2ETest {
+        +testNavigateToSlowQueries() void
+        +testNavigateToActivity() void
+        +testNavigateToLocks() void
+        +testNavigateToTables() void
+        +testNavigateToDatabases() void
+        +testSidebarLinksPresent() void
+    }
+
+    class ThemeE2ETest {
+        +testDarkModeToggle() void
+        +testDarkModePersistence() void
+        +testLightModeDefault() void
+        +testThemeToggleAcrossPages() void
+    }
+
+    class DashboardE2ETest {
+        +testDashboardLoads() void
+        +testAllWidgetsPresent() void
+        +testWidgetValues() void
+        +testWidgetClickThrough() void
+        +testSparklinesPresent() void
+        +testTopTablesAndIndexes() void
+    }
+
+    %% Playwright API (External)
+    class Playwright {
+        <<external>>
+        +create()$ Playwright
+        +chromium() BrowserType
+        +firefox() BrowserType
+        +webkit() BrowserType
+        +close() void
+    }
+
+    class Browser {
+        <<external>>
+        +newContext(NewContextOptions) BrowserContext
+        +close() void
+    }
+
+    class BrowserContext {
+        <<external>>
+        +newPage() Page
+        +setDefaultTimeout(double) void
+        +close() void
+    }
+
+    class Page {
+        <<external>>
+        +navigate(String) void
+        +click(String) void
+        +isVisible(String) boolean
+        +textContent(String) String
+        +innerText(String) String
+        +waitForLoadState() void
+        +waitForSelector(String) void
+        +screenshot(ScreenshotOptions) void
+        +title() String
+        +url() String
+        +locator(String) Locator
+        +getAttribute(String, String) String
+        +selectOption(String, String) void
+    }
+
+    %% Inheritance Relationships
+    BasePage <|-- DashboardPage : extends
+    BasePage <|-- SlowQueriesPage : extends
+    PlaywrightTestBase <|-- NavigationE2ETest : extends
+    PlaywrightTestBase <|-- ThemeE2ETest : extends
+    PlaywrightTestBase <|-- DashboardE2ETest : extends
+
+    %% Composition/Usage Relationships
+    PlaywrightTestBase *-- Playwright : uses (static)
+    PlaywrightTestBase *-- Browser : uses (static)
+    PlaywrightTestBase *-- BrowserContext : has
+    PlaywrightTestBase *-- Page : has
+    BasePage *-- Page : has
+
+    %% Test Classes Use Page Objects
+    NavigationE2ETest ..> DashboardPage : uses
+    NavigationE2ETest ..> SlowQueriesPage : uses
+    ThemeE2ETest ..> BasePage : uses
+    DashboardE2ETest ..> DashboardPage : uses
+
+    %% Playwright API Relationships
+    Playwright ..> Browser : creates
+    Browser ..> BrowserContext : creates
+    BrowserContext ..> Page : creates

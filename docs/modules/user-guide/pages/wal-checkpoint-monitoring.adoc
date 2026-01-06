@@ -1,0 +1,1080 @@
+= WAL & Checkpoint Monitoring
+Paul Snow
+0.0.0
+:description: Guide to monitoring PostgreSQL Write-Ahead Log (WAL) generation, checkpoint behaviour, and archiving using pg-console's dedicated dashboard
+:keywords: WAL, checkpoint, archiving, bgwriter, pg_stat_wal, pg_stat_checkpointer, durability, recovery
+
+[abstract]
+This guide explains how to use pg-console's WAL & Checkpoint Monitoring dashboard to track Write-Ahead Log generation, checkpoint efficiency, background writer performance, and WAL archiving status. Learn about version-specific features, health indicators, and tuning recommendations.
+
+== What Is WAL and Why Monitor It?
+
+=== Write-Ahead Log (WAL)
+
+The Write-Ahead Log (WAL) is PostgreSQL's mechanism for ensuring data durability. Before any changes are applied to data files, they are first recorded in the WAL. This design ensures that:
+
+* *Crash recovery* - PostgreSQL can replay WAL records to restore the database after a crash
+* *Point-in-time recovery* - WAL archives enable restoration to any specific moment in time
+* *Replication* - Standby servers apply WAL records to stay synchronised with the primary
+
+Key aspects of WAL:
+
+* Every INSERT, UPDATE, DELETE, and DDL operation generates WAL records
+* WAL is written sequentially for optimal performance
+* WAL files are recycled once no longer needed for recovery or replication
+* Full Page Images (FPI) are written after checkpoints to protect against partial page writes
+
+=== Checkpoints
+
+Checkpoints are critical operations that ensure data durability by flushing all dirty (modified) buffers from memory to disk. They create a known-good recovery starting point.
+
+PostgreSQL performs checkpoints:
+
+* *On schedule* - Controlled by `checkpoint_timeout` (typically 5 minutes)
+* *When WAL fills* - Controlled by `max_wal_size` (typically 1GB)
+* *On demand* - Via `CHECKPOINT` command or server shutdown
+
+Healthy checkpoint behaviour:
+
+* Most checkpoints should be *timed* (scheduled) rather than *requested* (due to WAL filling)
+* Checkpoint I/O should be spread over the `checkpoint_completion_target` period
+* Backend processes should rarely need to write buffers themselves
+
+=== Background Writer
+
+The background writer process proactively flushes dirty buffers to disk between checkpoints, reducing checkpoint I/O spikes. It continuously scans the buffer pool and writes buffers that are likely to be evicted soon.
+
+Benefits of an active background writer:
+
+* Smoother I/O patterns (less checkpoint-induced latency spikes)
+* Reduced checkpoint duration
+* Lower probability of backends having to write buffers themselves
+
+== The WAL & Checkpoint Monitoring Dashboard
+
+Access the WAL & Checkpoint Monitoring dashboard from the navigation menu: *Infrastructure* → *WAL Monitor*.
+
+* *Dashboard URL*: `/wal-checkpoints`
+* *Keyboard shortcut*: kbd:[w]
+
+[TIP]
+====
+The dashboard displays an overall health status badge at the top, providing at-a-glance visibility into WAL/checkpoint health. Click on individual metric cards for detailed information.
+====
+
+=== Overall Health Status
+
+The dashboard header displays an overall health status badge that evaluates multiple factors:
+
+[cols="1,3"]
+|===
+|Status |Meaning
+
+|*HEALTHY* (green)
+|All metrics within normal ranges. No action required.
+
+|*WARNING* (yellow)
+|Some metrics need attention. Review recommendations.
+
+|*CRITICAL* (red)
+|Urgent issues detected requiring immediate action. Check recommendations and PostgreSQL logs.
+|===
+
+Health evaluation criteria:
+
+* Timed checkpoint percentage (should be ≥ 70%)
+* Backend write percentage (should be ≤ 15%)
+* Archive failure counts and recency
+* Archive lag (time since last successful archive)
+
+The status badge also displays the number of issues detected across all components (e.g., "2 issues").
+
+== Dashboard Sections
+
+=== WAL Statistics (PostgreSQL 14+)
+
+This section displays metrics from the `pg_stat_wal` system view, available in PostgreSQL 14 and later.
+
+[NOTE]
+====
+If you are running PostgreSQL 13 or earlier, this section will not be displayed, as `pg_stat_wal` is not available. WAL-related metrics can still be inferred from checkpoint and archiving statistics.
+====
+
+==== Key Metrics
+
+[cols="1,3"]
+|===
+|Metric |Description
+
+|WAL Records
+|Total number of WAL records generated since statistics reset +
+Indicates overall database write activity
+
+|WAL Bytes
+|Total volume of WAL data generated (displayed in human-readable format: KB/MB/GB/TB) +
+Reflects the amount of change data being logged
+
+|Full Page Images (FPI)
+|Count of full page images written to WAL +
+High values may indicate frequent hint bit updates or aggressive checkpointing
+
+|FPI Ratio
+|Percentage of WAL records that are full page images +
+*Optimal*: < 30% +
+*Warning*: 30-50% +
+*Critical*: > 50% (may indicate excessive checkpoint frequency)
+
+|WAL Buffers Full
+|Number of times WAL buffers filled up and had to be written immediately +
+Non-zero values suggest increasing `wal_buffers` setting
+
+|WAL Writes
+|Number of times WAL data was written to disk
+
+|WAL Syncs
+|Number of times WAL files were synced to disk (fsync operations)
+
+|Avg Write Time
+|Average time per WAL write operation in milliseconds +
+High values (> 10ms) may indicate slow storage
+
+|Avg Sync Time
+|Average time per WAL sync operation in milliseconds +
+High values (> 20ms) suggest storage latency issues
+|===
+
+==== Interpreting WAL Statistics
+
+*High FPI Ratio (> 30%)*:
+
+Possible causes:
+
+* Checkpoint interval too short (`checkpoint_timeout` too low)
+* `max_wal_size` too small, causing frequent requested checkpoints
+* Many small updates scattered across different pages
+
+Solutions:
+
+* Increase `checkpoint_timeout` (e.g., from 5min to 10min)
+* Increase `max_wal_size` (e.g., from 1GB to 2GB or more)
+* Review application update patterns
+
+*High WAL Write/Sync Times*:
+
+Indicates storage I/O latency. Consider:
+
+* Faster storage (NVMe SSD instead of SATA SSD or spinning disks)
+* Separate WAL storage on dedicated high-performance volumes
+* Review storage configuration (`wal_sync_method` setting)
+
+=== Background Writer Metrics
+
+This section displays statistics from `pg_stat_bgwriter`, available in all PostgreSQL versions.
+
+==== Key Metrics
+
+[cols="1,3"]
+|===
+|Metric |Description
+
+|Buffers Cleaned
+|Number of buffers written by the background writer +
+Higher values indicate an active background writer reducing checkpoint load
+
+|Buffers by Backends
+|Number of buffers written directly by backend processes +
+*Optimal*: < 5% of total writes +
+*Warning*: 5-15% +
+*Critical*: > 15% (indicates background writer cannot keep up)
+
+|Backend Write %
+|Percentage of all buffer writes performed by backends +
+Colour-coded indicator (green/yellow/red based on thresholds)
+
+|Maxwritten Clean
+|Number of times background writer stopped due to writing too many buffers per round +
+Non-zero values suggest increasing `bgwriter_lru_maxpages`
+
+|Buffers Allocated
+|Total number of buffers allocated from the buffer pool +
+Contextual metric showing overall buffer activity
+
+|Backend Fsync
+|Number of times backends had to execute fsync themselves +
+*Should always be zero*. Non-zero indicates serious performance issues.
+|===
+
+==== Interpreting Background Writer Statistics
+
+*High Backend Write Percentage (> 15%)*:
+
+Backend writes occur when the background writer cannot keep pace with dirty buffer generation. This impacts query performance as backends must pause to write buffers.
+
+Solutions:
+
+* Increase `bgwriter_lru_maxpages` (default: 100) to allow background writer to write more buffers per round
+* Decrease `bgwriter_delay` (default: 200ms) to make background writer more aggressive
+* Increase `shared_buffers` to reduce buffer eviction pressure
+
+*Non-Zero Maxwritten Clean*:
+
+The background writer is hitting its per-round limit (`bgwriter_lru_maxpages`) and stopping prematurely.
+
+Solution:
+
+[source,conf]
+----
+# postgresql.conf
+bgwriter_lru_maxpages = 200  # Increase from default 100
+----
+
+*Non-Zero Backend Fsync*:
+
+This is a critical issue indicating backends are performing fsync operations themselves, which severely degrades performance.
+
+Investigation steps:
+
+. Check storage health and performance
+. Review `wal_sync_method` setting
+. Verify background writer and checkpoint writer processes are running
+. Check for resource exhaustion (CPU, I/O bandwidth)
+
+=== Checkpoint Statistics
+
+Checkpoint statistics are displayed from either `pg_stat_bgwriter` (all versions) or `pg_stat_checkpointer` (PostgreSQL 17+).
+
+[NOTE]
+====
+In PostgreSQL 17+, checkpoint statistics moved from `pg_stat_bgwriter` to a dedicated `pg_stat_checkpointer` view. pg-console automatically uses the appropriate view based on your PostgreSQL version.
+====
+
+==== Key Metrics
+
+[cols="1,3"]
+|===
+|Metric |Description
+
+|Timed Checkpoints
+|Number of scheduled checkpoints (triggered by `checkpoint_timeout`) +
+These are healthy and indicate normal operation
+
+|Requested Checkpoints
+|Number of checkpoints triggered because WAL size exceeded `max_wal_size` +
+High values indicate WAL is filling faster than checkpoint interval
+
+|Timed Checkpoint %
+|Percentage of checkpoints that were scheduled rather than requested +
+*Optimal*: ≥ 90% +
+*Warning*: 70-90% +
+*Critical*: < 70% (increase `max_wal_size`)
+
+|Avg Write Time
+|Average time spent writing checkpoint buffers to disk (seconds) +
+Ideally spread over `checkpoint_completion_target` period (default: 90% of `checkpoint_timeout`)
+
+|Avg Sync Time
+|Average time spent syncing checkpoint data to disk (seconds) +
+High values indicate storage latency or large checkpoint volumes
+
+|Buffers Written
+|Total number of buffers written during checkpoints
+
+|Checkpoint Write Time
+|Total cumulative time spent writing checkpoint data (milliseconds)
+
+|Checkpoint Sync Time
+|Total cumulative time spent syncing checkpoint data (milliseconds)
+|===
+
+==== PostgreSQL 17+ Additional Metrics
+
+On PostgreSQL 17+, the dashboard also displays restartpoint metrics (applicable to standby servers):
+
+* *Restartpoints Timed* - Scheduled restartpoints on standby
+* *Restartpoints Requested* - Requested restartpoints on standby
+* *Restartpoints Done* - Restartpoints completed due to WAL segment switching
+
+==== Interpreting Checkpoint Statistics
+
+*Low Timed Checkpoint Percentage (< 70%)*:
+
+Too many requested checkpoints indicate WAL is filling faster than the checkpoint interval allows.
+
+Solution:
+
+[source,conf]
+----
+# postgresql.conf
+max_wal_size = 2GB  # Increase from default 1GB
+# Or increase checkpoint interval:
+checkpoint_timeout = 10min  # Increase from default 5min
+----
+
+*High Checkpoint Write Times (> 30 seconds average)*:
+
+Checkpoint writes are taking too long, potentially causing latency spikes.
+
+Solutions:
+
+* Increase `checkpoint_completion_target` (default: 0.9) to spread writes over a longer period
+* Reduce `shared_buffers` if excessively large checkpoints occur
+* Upgrade storage for better write throughput
+* Review concurrent workload during checkpoints
+
+*Example Configuration for Busy Databases*:
+
+[source,conf]
+----
+# postgresql.conf - Example for high-volume OLTP workload
+
+# Allow more WAL before forcing checkpoint
+max_wal_size = 4GB
+
+# Longer checkpoint interval
+checkpoint_timeout = 15min
+
+# Spread checkpoint writes over 90% of interval
+checkpoint_completion_target = 0.9
+
+# More aggressive background writer
+bgwriter_delay = 100ms
+bgwriter_lru_maxpages = 200
+bgwriter_lru_multiplier = 3.0
+----
+
+[WARNING]
+====
+Increasing `max_wal_size` and `checkpoint_timeout` means more WAL must be replayed during crash recovery, potentially increasing recovery time. Balance durability requirements with performance needs.
+====
+
+=== WAL Archiver Status
+
+This section displays statistics from `pg_stat_archiver`, available in all PostgreSQL versions.
+
+WAL archiving is essential for:
+
+* Point-in-time recovery (PITR)
+* Creating base backups for disaster recovery
+* Maintaining standby servers (in some configurations)
+
+==== Key Metrics
+
+[cols="1,3"]
+|===
+|Metric |Description
+
+|Archive Mode
+|Current archive mode setting: `off`, `on`, or `always` +
+`on` = archiving enabled, `always` = archiving even on standby
+
+|Archive Command
+|Configured archive command (from `archive_command` setting) +
+Displayed for verification and troubleshooting
+
+|Archived Count
+|Number of WAL files successfully archived since statistics reset
+
+|Failed Count
+|Number of failed archive attempts +
+*Should be zero*. Non-zero indicates archiving issues requiring immediate attention
+
+|Last Archived WAL
+|Filename of the most recently archived WAL file
+
+|Last Archived Time
+|Timestamp of the last successful archive operation
+
+|Time Since Last Archive
+|Human-readable duration since last archive (e.g., "5 minutes", "2 hours") +
+Colour-coded: green (< 1 hour), yellow (1-24 hours), red (> 24 hours)
+
+|Last Failed WAL
+|Filename of the WAL file that failed to archive (if any)
+
+|Last Failed Time
+|Timestamp of the most recent archive failure (if any)
+
+|Success Rate
+|Percentage of successful archive attempts +
+*Should be 100%*
+
+|Health Status
+|Overall archiver health: HEALTHY, WARNING, CRITICAL, or DISABLED +
+Based on failure counts, recency, and lag
+|===
+
+==== Health Status Indicators
+
+[cols="1,3"]
+|===
+|Status |Criteria
+
+|*HEALTHY* (green)
+|Archiving enabled, no failures, last archive within 1 hour
+
+|*WARNING* (yellow)
+|Historical failures present (but not recent) OR archive lag > 1 hour
+
+|*CRITICAL* (red)
+|Recent failure (within last hour) OR significant archive lag
+
+|*DISABLED* (grey)
+|Archive mode is `off` - archiving not configured
+|===
+
+==== Interpreting Archiver Statistics
+
+*Archive Failures (Failed Count > 0)*:
+
+Archive failures are critical and can lead to:
+
+* Disk space exhaustion on the primary server (WAL files accumulate)
+* Inability to perform point-in-time recovery
+* Replication delays or failures
+
+Common causes:
+
+* Destination storage full or unavailable
+* Incorrect `archive_command` syntax or permissions
+* Network issues to archive destination
+* Misconfigured authentication for remote archive destinations
+
+Troubleshooting steps:
+
+. Check PostgreSQL logs for detailed error messages:
++
+[source,bash]
+----
+grep "archive command failed" /var/log/postgresql/postgresql-*.log
+----
+
+. Verify archive destination is accessible and has sufficient space
+. Test `archive_command` manually:
++
+[source,bash]
+----
+# Example: Test copying a WAL file
+sudo -u postgres cp /var/lib/postgresql/16/main/pg_wal/000000010000000000000001 /mnt/archive/
+----
+
+. Check permissions on archive destination directory
+. Review `archive_command` for syntax errors in `postgresql.conf`
+
+*Archive Lag (Time Since Last Archive > 1 hour)*:
+
+Indicates archiving has stopped or slowed significantly.
+
+Causes:
+
+* Archive command is hanging or very slow
+* Destination throughput bottleneck
+* Archive process suspended or stopped
+
+Solutions:
+
+* Check archive destination performance
+* Review archive command for inefficiencies
+* Increase archive timeout if using network destinations
+* Verify archive process is running (`ps aux | grep archiver`)
+
+*Example Archive Configurations*:
+
+Local filesystem archive:
+[source,conf]
+----
+# postgresql.conf
+archive_mode = on
+archive_command = 'test ! -f /mnt/archive/%f && cp %p /mnt/archive/%f'
+----
+
+Archive to remote server via rsync:
+[source,conf]
+----
+# postgresql.conf
+archive_mode = on
+archive_command = 'rsync -a %p backup-server:/archive/%f'
+----
+
+Archive to S3 (using wal-g):
+[source,conf]
+----
+# postgresql.conf
+archive_mode = on
+archive_command = '/usr/local/bin/wal-g wal-push %p'
+----
+
+== Dashboard Recommendations
+
+The WAL & Checkpoint Monitoring dashboard provides context-specific recommendations based on current metrics and health status.
+
+=== Checkpoint Tuning Recommendations
+
+==== Increase max_wal_size
+
+*When shown*: Timed checkpoint percentage < 70%
+
+*Recommendation*:
+[source,text]
+----
+Consider increasing max_wal_size to reduce the frequency of requested checkpoints
+----
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+max_wal_size = 2GB  # Increase from current value (typically 1GB)
+----
+
+Apply change:
+[source,sql]
+----
+ALTER SYSTEM SET max_wal_size = '2GB';
+SELECT pg_reload_conf();
+----
+
+==== Increase checkpoint_timeout
+
+*When shown*: Frequent checkpoints causing I/O spikes
+
+*Recommendation*:
+[source,text]
+----
+Consider increasing checkpoint_timeout or max_wal_size to reduce requested checkpoints
+----
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+checkpoint_timeout = 10min  # Increase from default 5min
+----
+
+==== Adjust checkpoint_completion_target
+
+*When shown*: Average checkpoint write time > 30 seconds
+
+*Recommendation*:
+[source,text]
+----
+Checkpoint writes are taking too long; consider increasing checkpoint_completion_target
+----
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+checkpoint_completion_target = 0.9  # Spread writes over 90% of checkpoint_timeout
+----
+
+=== Background Writer Tuning Recommendations
+
+==== Increase bgwriter_lru_maxpages
+
+*When shown*: Backend write percentage > 15% OR maxwritten_clean > 0
+
+*Recommendation*:
+[source,text]
+----
+Consider increasing bgwriter_lru_maxpages or decreasing bgwriter_delay
+----
+
+or
+
+[source,text]
+----
+Background writer is hitting maxwritten_clean limit; consider increasing bgwriter_lru_maxpages
+----
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+bgwriter_lru_maxpages = 200  # Increase from default 100
+----
+
+Apply change:
+[source,sql]
+----
+ALTER SYSTEM SET bgwriter_lru_maxpages = 200;
+SELECT pg_reload_conf();
+----
+
+==== Decrease bgwriter_delay
+
+*When shown*: Backend write percentage > 15%
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+bgwriter_delay = 100ms  # Decrease from default 200ms
+----
+
+=== Archive Troubleshooting Recommendations
+
+==== Enable Archiving
+
+*When shown*: Archive mode is `off`
+
+*Recommendation*:
+[source,text]
+----
+WAL archiving is disabled. Enable it for point-in-time recovery capability.
+----
+
+*Action*:
+[source,conf]
+----
+# postgresql.conf
+archive_mode = on
+archive_command = 'test ! -f /mnt/archive/%f && cp %p /mnt/archive/%f'
+----
+
+[IMPORTANT]
+====
+Changing `archive_mode` requires a server restart. Plan accordingly.
+====
+
+==== Fix Archive Failures
+
+*When shown*: Failed count > 0 (especially recent failures)
+
+*Recommendation*:
+[source,text]
+----
+Recent archive failure detected. Check archive_command configuration and destination availability.
+----
+
+or
+
+[source,text]
+----
+Archive failures have occurred. Review archive logs and verify destination storage.
+----
+
+*Action*:
+
+. Check PostgreSQL error logs for failure details
+. Verify destination storage availability and capacity
+. Test archive command manually
+. Correct `archive_command` or destination issues
+. Monitor dashboard for successful archiving resumption
+
+==== Resolve Archive Lag
+
+*When shown*: Time since last archive > 1 hour
+
+*Recommendation*:
+[source,text]
+----
+Archive lag detected. Check archive process and destination throughput.
+----
+
+*Action*:
+
+. Verify archive process is running
+. Check destination storage performance
+. Review network connectivity to remote destinations
+. Consider increasing archive destination throughput or using compression
+
+== Version Compatibility Matrix
+
+The WAL & Checkpoint Monitoring dashboard adapts to your PostgreSQL version, displaying only available metrics.
+
+[cols="1,1,3"]
+|===
+|Feature |Version |Notes
+
+|`pg_stat_bgwriter`
+|All versions
+|Background writer statistics available in all supported PostgreSQL versions
+
+|`pg_stat_archiver`
+|All versions
+|WAL archiver statistics available in all supported PostgreSQL versions
+
+|`pg_stat_wal`
+|*14+*
+|WAL generation statistics introduced in PostgreSQL 14 +
+Not available in PostgreSQL 13 or earlier
+
+|`pg_stat_checkpointer`
+|*17+*
+|Dedicated checkpoint statistics view introduced in PostgreSQL 17 +
+Earlier versions use checkpoint metrics from `pg_stat_bgwriter`
+|===
+
+=== Feature Availability by Version
+
+[cols="1,1,1,1,1"]
+|===
+|PostgreSQL Version |WAL Stats |BgWriter Stats |Checkpoint Stats |Archiver Stats
+
+|13 and earlier
+|Not available
+|✓ Available
+|✓ (via bgwriter)
+|✓ Available
+
+|14, 15, 16
+|✓ Available
+|✓ Available
+|✓ (via bgwriter)
+|✓ Available
+
+|17+
+|✓ Available
+|✓ Available
+|✓ (dedicated view)
+|✓ Available
+|===
+
+[TIP]
+====
+The dashboard automatically detects your PostgreSQL version and displays only applicable metrics. You do not need to configure version-specific settings.
+====
+
+== Configuration
+
+=== Enabling/Disabling the Dashboard
+
+The WAL & Checkpoint Monitoring dashboard is enabled by default. To disable it:
+
+[source,bash]
+----
+# Disable WAL & Checkpoint Monitoring dashboard
+export PG_CONSOLE_DASH_WAL_CHECKPOINTS=false
+----
+
+To disable the entire infrastructure monitoring section (including WAL monitoring):
+
+[source,bash]
+----
+# Disable all infrastructure dashboards
+export PG_CONSOLE_DASH_INFRASTRUCTURE=false
+----
+
+=== PostgreSQL Configuration for WAL Monitoring
+
+To enable comprehensive WAL and checkpoint monitoring, ensure the following PostgreSQL settings are configured:
+
+[source,conf]
+----
+# postgresql.conf
+
+# Enable timing statistics for WAL operations (PostgreSQL 14+)
+track_wal_io_timing = on
+
+# Enable checkpoint and bgwriter statistics (always available)
+# No explicit configuration required - always collected
+
+# Enable WAL archiving (if needed for PITR/backups)
+archive_mode = on
+archive_command = 'test ! -f /mnt/archive/%f && cp %p /mnt/archive/%f'
+
+# Logging for troubleshooting checkpoint behaviour
+log_checkpoints = on
+----
+
+Apply configuration changes:
+
+[source,sql]
+----
+SELECT pg_reload_conf();
+----
+
+Or restart PostgreSQL if changing `archive_mode`:
+
+[source,bash]
+----
+sudo systemctl restart postgresql
+----
+
+=== Recommended PostgreSQL Settings for Production
+
+For production databases with moderate to high write volume:
+
+[source,conf]
+----
+# postgresql.conf - Production WAL/Checkpoint Settings
+
+# ========== WAL Settings ==========
+# Buffer size for WAL data (default: -1 = auto, typically 2048 pages = 16MB)
+wal_buffers = 16MB
+
+# Method for forcing WAL updates to disk
+wal_sync_method = fdatasync  # or 'open_sync' on some systems
+
+# Compression for full page writes (PG 9.5+)
+wal_compression = on
+
+# ========== Checkpoint Settings ==========
+# Maximum size of WAL before forcing checkpoint
+max_wal_size = 2GB  # Increase for high-volume databases
+
+# Minimum checkpoint interval
+checkpoint_timeout = 10min  # Increase to reduce checkpoint frequency
+
+# Spread checkpoint I/O over this fraction of checkpoint_timeout
+checkpoint_completion_target = 0.9
+
+# Log checkpoint statistics for monitoring
+log_checkpoints = on
+
+# ========== Background Writer Settings ==========
+# Delay between background writer rounds
+bgwriter_delay = 100ms  # More aggressive than default 200ms
+
+# Max buffers to write per round
+bgwriter_lru_maxpages = 200  # Increase from default 100
+
+# Multiplier for estimating next round's buffer requirement
+bgwriter_lru_multiplier = 3.0
+
+# ========== Archiving Settings ==========
+# Enable WAL archiving
+archive_mode = on
+
+# Archive command (adjust for your backup strategy)
+archive_command = 'test ! -f /mnt/archive/%f && cp %p /mnt/archive/%f'
+
+# Archive timeout (force switch even if WAL not full)
+archive_timeout = 300  # 5 minutes - useful for low-volume databases
+----
+
+[WARNING]
+====
+Always test configuration changes in a non-production environment first. Improper settings can impact performance or increase recovery times.
+====
+
+== Data Sources
+
+The WAL & Checkpoint Monitoring dashboard uses the following PostgreSQL system views:
+
+[cols="1,1,3"]
+|===
+|View |Availability |Description
+
+|`pg_stat_wal`
+|PostgreSQL 14+
+|Server-wide WAL generation statistics including record counts, bytes, FPI ratio, and timing
+
+|`pg_stat_bgwriter`
+|All versions
+|Background writer and checkpoint statistics (checkpoint stats moved to `pg_stat_checkpointer` in PG17)
+
+|`pg_stat_checkpointer`
+|PostgreSQL 17+
+|Dedicated checkpoint statistics view separating checkpoint metrics from background writer
+
+|`pg_stat_archiver`
+|All versions
+|WAL archiving statistics including success/failure counts and last archive times
+
+|`pg_settings`
+|All versions
+|Configuration values for archive mode and archive command
+
+|`version()`
+|All versions
+|PostgreSQL version string for feature detection
+|===
+
+[NOTE]
+====
+Statistics in these views are cumulative since the last statistics reset. The dashboard displays the "Since Reset" timestamp to provide context for cumulative counts.
+====
+
+=== Resetting Statistics
+
+To reset WAL and checkpoint statistics:
+
+[source,sql]
+----
+-- Reset all statistics
+SELECT pg_stat_reset_shared('bgwriter');  -- Resets bgwriter and checkpoint stats
+SELECT pg_stat_reset_shared('archiver');  -- Resets archiver stats
+SELECT pg_stat_reset_shared('wal');       -- Resets WAL stats (PG 14+)
+----
+
+[WARNING]
+====
+Resetting statistics clears all historical data used for calculating rates and trends. Reset cautiously and consider the impact on monitoring and capacity planning.
+====
+
+== Troubleshooting
+
+=== Dashboard Shows "Not Available" for WAL Statistics
+
+*Cause*: Running PostgreSQL 13 or earlier, which lacks `pg_stat_wal`.
+
+*Resolution*: WAL statistics are a PostgreSQL 14+ feature. Upgrade to PostgreSQL 14 or later to access these metrics. Checkpoint and archiver statistics remain available on all versions.
+
+=== Checkpoint Statistics Not Showing in Dedicated Section
+
+*Cause*: Running PostgreSQL 16 or earlier. Dedicated `pg_stat_checkpointer` view was introduced in PostgreSQL 17.
+
+*Resolution*: Checkpoint statistics are displayed in the Background Writer section for PostgreSQL versions before 17. This is expected behaviour.
+
+=== High FPI Ratio (> 50%)
+
+*Symptom*: WAL statistics show FPI ratio above 50%, and WAL generation is higher than expected.
+
+*Diagnosis*:
+[source,sql]
+----
+-- Check current checkpoint and WAL settings
+SHOW checkpoint_timeout;
+SHOW max_wal_size;
+SHOW full_page_writes;  -- Should be 'on' for safety
+----
+
+*Causes and Solutions*:
+
+* *Frequent checkpoints* - Increase `max_wal_size` and `checkpoint_timeout`
+* *Many scattered updates* - Review application update patterns; consider batching
+* *Hint bit updates* - Normal after `VACUUM` or first reads after checkpoint; no action if transient
+
+=== Backend Write Percentage Consistently High (> 15%)
+
+*Symptom*: Background writer statistics show backends writing > 15% of total buffers.
+
+*Diagnosis*:
+[source,sql]
+----
+-- Check current background writer settings
+SHOW bgwriter_delay;
+SHOW bgwriter_lru_maxpages;
+SHOW bgwriter_lru_multiplier;
+SHOW shared_buffers;
+----
+
+*Solutions*:
+
+. Increase `bgwriter_lru_maxpages` to allow background writer to clean more buffers per round
+. Decrease `bgwriter_delay` to make background writer more frequent
+. Monitor `maxwritten_clean` - if non-zero, background writer is hitting its limit
+. Consider increasing `shared_buffers` if memory allows
+
+=== Archive Failures Persisting
+
+*Symptom*: Archive failed count increasing, recent failures shown.
+
+*Diagnosis Steps*:
+
+. Check PostgreSQL error log:
++
+[source,bash]
+----
+tail -f /var/log/postgresql/postgresql-*.log | grep -i archive
+----
+
+. Verify archive destination:
++
+[source,bash]
+----
+# Check destination exists and is writable
+sudo -u postgres touch /mnt/archive/test_write && rm /mnt/archive/test_write
+----
+
+. Check disk space on archive destination:
++
+[source,bash]
+----
+df -h /mnt/archive
+----
+
+. Test archive command manually:
++
+[source,bash]
+----
+# Replace %p and %f with actual WAL file path and name
+sudo -u postgres sh -c 'test ! -f /mnt/archive/test.wal && cp /tmp/test.wal /mnt/archive/test.wal'
+----
+
+*Common Resolutions*:
+
+* *Destination full* - Free space or expand archive storage volume
+* *Permission denied* - Correct ownership/permissions on archive destination
+* *Network issue* - Fix connectivity to remote archive destination; verify credentials
+* *Syntax error* - Correct `archive_command` in `postgresql.conf`
+
+=== Checkpoint Taking Too Long (> 30 seconds average)
+
+*Symptom*: Average checkpoint write time exceeds 30 seconds, causing latency spikes.
+
+*Diagnosis*:
+[source,sql]
+----
+-- Check checkpoint settings and shared_buffers
+SHOW checkpoint_completion_target;
+SHOW checkpoint_timeout;
+SHOW shared_buffers;
+SHOW max_wal_size;
+
+-- Review checkpoint logs
+----
+
+Check logs:
+[source,bash]
+----
+grep "checkpoint" /var/log/postgresql/postgresql-*.log | tail -20
+----
+
+*Solutions*:
+
+* Increase `checkpoint_completion_target` to spread writes over a longer period (e.g., 0.9)
+* Increase `checkpoint_timeout` to reduce checkpoint frequency
+* Upgrade storage to faster media (NVMe SSD)
+* Reduce `shared_buffers` if excessively large (> 25% of RAM on systems with < 32GB RAM)
+* Review concurrent workload during checkpoints; consider batch job scheduling
+
+== Best Practices
+
+=== Monitoring
+
+* *Set up alerts* - Monitor checkpoint efficiency (timed %), backend writes, and archive failures
+* *Track trends* - Use pg-console's history sampling to identify degradation over time
+* *Review regularly* - Check the WAL dashboard weekly during capacity planning sessions
+* *Log checkpoints* - Enable `log_checkpoints = on` for detailed checkpoint visibility
+
+=== Configuration
+
+* *Tune for workload* - OLTP workloads benefit from aggressive background writer; OLAP may prioritise checkpoint spreading
+* *Balance durability and performance* - Larger `max_wal_size` reduces checkpoint frequency but increases crash recovery time
+* *Test before production* - Validate configuration changes in staging environments
+* *Document settings* - Maintain a record of tuning decisions and their rationale
+
+=== Archiving
+
+* *Test archive restoration* - Regularly verify that archived WAL files can be retrieved and replayed
+* *Monitor archive lag* - Set alerts for archive lag > 1 hour
+* *Plan for failures* - Have procedures for handling archive destination outages
+* *Rotate archives* - Implement lifecycle policies to manage archive storage growth
+
+=== Capacity Planning
+
+* *Estimate WAL generation rate* - Use "WAL Bytes / Time Since Reset" to calculate MB/hour or GB/day
+* *Plan storage accordingly* - Ensure `max_wal_size` × 3 free space in `pg_wal` directory
+* *Consider replication* - Each standby requires WAL files; plan retention accordingly
+* *Archive storage growth* - Monitor and project archive volume requirements
+
+== Related Topics
+
+* xref:dashboards.adoc#overview-dashboard[Overview Dashboard] - High-level database health summary
+* xref:dashboards.adoc#activity-dashboard[Activity Dashboard] - Current query and connection monitoring
+* xref:diagnostics.adoc[Advanced Diagnostics] - Overview of all diagnostic dashboards
+* xref:configuration.adoc[Configuration Guide] - pg-console configuration options
+* xref:troubleshooting.adoc[Troubleshooting] - General troubleshooting guidance
+
+== Further Reading
+
+* https://www.postgresql.org/docs/current/wal-intro.html[PostgreSQL Documentation: Write-Ahead Logging (WAL)]
+* https://www.postgresql.org/docs/current/wal-configuration.html[PostgreSQL Documentation: WAL Configuration]
+* https://www.postgresql.org/docs/current/runtime-config-wal.html[PostgreSQL Documentation: WAL Settings]
+* https://www.postgresql.org/docs/current/monitoring-stats.html#PG-STAT-WAL-VIEW[PostgreSQL Documentation: pg_stat_wal View]
+* https://www.postgresql.org/docs/current/monitoring-stats.html#PG-STAT-BGWRITER-VIEW[PostgreSQL Documentation: pg_stat_bgwriter View]
+* https://www.postgresql.org/docs/17/monitoring-stats.html#PG-STAT-CHECKPOINTER-VIEW[PostgreSQL Documentation: pg_stat_checkpointer View (PG17+)]
+* https://www.postgresql.org/docs/current/monitoring-stats.html#PG-STAT-ARCHIVER-VIEW[PostgreSQL Documentation: pg_stat_archiver View]
+* https://www.postgresql.org/docs/current/continuous-archiving.html[PostgreSQL Documentation: Continuous Archiving and Point-in-Time Recovery]

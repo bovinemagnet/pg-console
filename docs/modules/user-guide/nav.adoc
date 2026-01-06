@@ -5,6 +5,7 @@
 ** xref:diagnostics.adoc[Advanced Diagnostics]
 *** xref:deadlocks.adoc[Deadlock Monitoring]
 *** xref:xid-wraparound.adoc[XID Wraparound Monitoring]
+*** xref:wal-checkpoint-monitoring.adoc[WAL & Checkpoint Monitoring]
 ** xref:runbooks.adoc[Runbooks]
 ** xref:database-diff.adoc[Database Diff]
 ** xref:schema-docs.adoc[Schema Documentation]

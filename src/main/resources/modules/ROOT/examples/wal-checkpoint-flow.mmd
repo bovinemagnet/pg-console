@@ -1,0 +1,119 @@
+graph TD
+    %% ===== PostgreSQL System Views (Data Sources) =====
+    subgraph PostgreSQL["PostgreSQL System Views"]
+        direction TB
+        PG_STAT_WAL["pg_stat_wal<br/>(PG14+)<br/>WAL generation metrics"]
+        PG_STAT_BGWRITER["pg_stat_bgwriter<br/>Background writer & buffer stats"]
+        PG_STAT_CHECKPOINTER["pg_stat_checkpointer<br/>(PG17+)<br/>Checkpoint-specific metrics"]
+        PG_STAT_ARCHIVER["pg_stat_archiver<br/>WAL archiving status"]
+        PG_SETTINGS["pg_settings<br/>archive_mode, archive_command"]
+        PG_VERSION["current_setting('server_version_num')<br/>Version detection"]
+    end
+
+    %% ===== Service Layer =====
+    subgraph Service["Service Layer"]
+        direction TB
+        GET_OVERVIEW["InfrastructureService<br/>getWalCheckpointOverview()"]
+
+        subgraph VersionLogic["Version Detection Logic"]
+            VERSION_CHECK["Check PG Version"]
+            PG14_CHECK{"PG >= 14?"}
+            PG17_CHECK{"PG >= 17?"}
+        end
+
+        subgraph DataFetch["Data Retrieval Methods"]
+            GET_WAL["getWalStats()<br/>(PG14+)"]
+            GET_BG["getBgWriterStats()"]
+            GET_CHKPT["getCheckpointStats()<br/>(PG17+)"]
+            GET_ARCH["getArchiverStats()"]
+        end
+    end
+
+    %% ===== Model Classes =====
+    subgraph Models["Model Classes"]
+        direction TB
+        WALSTATS["WalStats<br/>• walRecords, walFpi<br/>• walBytes, walBuffersFull<br/>• walWrite, walSync<br/>• walWriteTime, walSyncTime"]
+        BGWRITERSTATS["BgWriterStats<br/>• checkpointsTimed, checkpointsReq<br/>• buffersCheckpoint, buffersBackend<br/>• buffersClean, maxwrittenClean<br/>• checkpointWriteTime, checkpointSyncTime"]
+        CHKPTSTATS["CheckpointStats<br/>• numTimed, numRequested<br/>• restartpointsTimed/Req/Done<br/>• writeTime, syncTime<br/>• buffersWritten"]
+        ARCHSTATS["ArchiverStats<br/>• archivedCount, failedCount<br/>• lastArchivedWal/Time<br/>• lastFailedWal/Time<br/>• archiveMode, archiveCommand"]
+
+        OVERVIEW["WalCheckpointOverview<br/>(Aggregates all stats)<br/>• walStats<br/>• bgWriterStats<br/>• checkpointStats<br/>• archiverStats<br/>• pgVersionNum, pgVersion"]
+    end
+
+    %% ===== Dashboard Layer =====
+    subgraph Dashboard["Dashboard Layer"]
+        direction TB
+        RESOURCE["DashboardResource<br/>GET /wal-checkpoints"]
+        TEMPLATE["walCheckpoints.html<br/>Qute Template"]
+    end
+
+    %% ===== User Interface =====
+    subgraph UI["User Interface Sections"]
+        direction TB
+        HEALTH["Health Status Badge<br/>HEALTHY/WARNING/CRITICAL"]
+        WAL_CARD["WAL Statistics Card<br/>• Records & FPI<br/>• Bytes generated<br/>• Write/sync times"]
+        CHKPT_CARD["Checkpoint Metrics Card<br/>• Timed vs requested<br/>• Average times<br/>• Buffers written"]
+        ARCH_CARD["Archiver Status Card<br/>• Success/failure counts<br/>• Last archived WAL<br/>• Archive lag"]
+        RECS["Recommendations Panel<br/>Configuration tuning suggestions"]
+    end
+
+    %% ===== Data Flow: PostgreSQL -> Service =====
+    PG_VERSION --> VERSION_CHECK
+    VERSION_CHECK --> PG14_CHECK
+    VERSION_CHECK --> PG17_CHECK
+
+    PG14_CHECK -->|Yes| GET_WAL
+    PG14_CHECK -->|No| GET_BG
+    PG_STAT_WAL --> GET_WAL
+
+    PG_STAT_BGWRITER --> GET_BG
+
+    PG17_CHECK -->|Yes| GET_CHKPT
+    PG_STAT_CHECKPOINTER --> GET_CHKPT
+
+    PG_STAT_ARCHIVER --> GET_ARCH
+    PG_SETTINGS --> GET_ARCH
+
+    %% ===== Service -> Models =====
+    GET_WAL --> WALSTATS
+    GET_BG --> BGWRITERSTATS
+    GET_CHKPT --> CHKPTSTATS
+    GET_ARCH --> ARCHSTATS
+
+    GET_OVERVIEW --> GET_WAL
+    GET_OVERVIEW --> GET_BG
+    GET_OVERVIEW --> GET_CHKPT
+    GET_OVERVIEW --> GET_ARCH
+
+    %% ===== Model Aggregation =====
+    WALSTATS --> OVERVIEW
+    BGWRITERSTATS --> OVERVIEW
+    CHKPTSTATS --> OVERVIEW
+    ARCHSTATS --> OVERVIEW
+
+    %% ===== Dashboard Flow =====
+    GET_OVERVIEW --> RESOURCE
+    OVERVIEW --> RESOURCE
+    RESOURCE --> TEMPLATE
+
+    %% ===== Template -> UI =====
+    TEMPLATE --> HEALTH
+    TEMPLATE --> WAL_CARD
+    TEMPLATE --> CHKPT_CARD
+    TEMPLATE --> ARCH_CARD
+    TEMPLATE --> RECS
+
+    %% ===== Styling =====
+    classDef pgClass fill:#4169E1,stroke:#000,stroke-width:2px,color:#fff
+    classDef serviceClass fill:#32CD32,stroke:#000,stroke-width:2px,color:#000
+    classDef modelClass fill:#FFD700,stroke:#000,stroke-width:2px,color:#000
+    classDef dashboardClass fill:#FF6347,stroke:#000,stroke-width:2px,color:#fff
+    classDef uiClass fill:#9370DB,stroke:#000,stroke-width:2px,color:#fff
+    classDef logicClass fill:#87CEEB,stroke:#000,stroke-width:2px,color:#000
+
+    class PG_STAT_WAL,PG_STAT_BGWRITER,PG_STAT_CHECKPOINTER,PG_STAT_ARCHIVER,PG_SETTINGS,PG_VERSION pgClass
+    class GET_OVERVIEW,GET_WAL,GET_BG,GET_CHKPT,GET_ARCH serviceClass
+    class VERSION_CHECK,PG14_CHECK,PG17_CHECK logicClass
+    class WALSTATS,BGWRITERSTATS,CHKPTSTATS,ARCHSTATS,OVERVIEW modelClass
+    class RESOURCE,TEMPLATE dashboardClass
+    class HEALTH,WAL_CARD,CHKPT_CARD,ARCH_CARD,RECS uiClass

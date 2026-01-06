@@ -1,12 +1,18 @@
 package com.bovinemagnet.pgconsole.service;
 
+import com.bovinemagnet.pgconsole.model.ArchiverStats;
+import com.bovinemagnet.pgconsole.model.BgWriterStats;
+import com.bovinemagnet.pgconsole.model.CheckpointStats;
 import com.bovinemagnet.pgconsole.model.VacuumProgress;
+import com.bovinemagnet.pgconsole.model.WalCheckpointOverview;
+import com.bovinemagnet.pgconsole.model.WalStats;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import org.jboss.logging.Logger;
@@ -410,6 +416,340 @@ public class InfrastructureService {
 			}
 		} catch (SQLException e) {
 			LOG.warnf("Failed to get temp file stats for %s: %s", instanceName, e.getMessage());
+		}
+
+		return stats;
+	}
+
+	// ========== WAL & Checkpoint Monitoring ==========
+
+	/**
+	 * Retrieves comprehensive WAL and checkpoint statistics for dashboard display.
+	 * <p>
+	 * Collects metrics from multiple PostgreSQL system views, adapting queries based on
+	 * the PostgreSQL version:
+	 * <ul>
+	 *   <li>{@code pg_stat_wal} (PG14+) - WAL generation metrics</li>
+	 *   <li>{@code pg_stat_bgwriter} - Background writer and buffer statistics</li>
+	 *   <li>{@code pg_stat_checkpointer} (PG17+) - Checkpoint-specific metrics</li>
+	 *   <li>{@code pg_stat_archiver} - WAL archiving status</li>
+	 * </ul>
+	 *
+	 * @param instanceName the database instance identifier
+	 * @return aggregated WAL and checkpoint statistics
+	 */
+	public WalCheckpointOverview getWalCheckpointOverview(String instanceName) {
+		WalCheckpointOverview overview = new WalCheckpointOverview();
+
+		// Get PostgreSQL version first
+		int pgVersionNum = 0;
+		String pgVersion = "";
+		String versionSql = "SELECT current_setting('server_version_num')::int as version_num, version() as version_full";
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(versionSql)) {
+			if (rs.next()) {
+				pgVersionNum = rs.getInt("version_num");
+				pgVersion = rs.getString("version_full");
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get PostgreSQL version for %s: %s", instanceName, e.getMessage());
+		}
+
+		overview.setPgVersionNum(pgVersionNum);
+		overview.setPgVersion(pgVersion);
+
+		// Get WAL stats (PG14+)
+		if (pgVersionNum >= 140000) {
+			overview.setWalStats(getWalStats(instanceName, pgVersionNum));
+		}
+
+		// Get background writer stats (always available)
+		overview.setBgWriterStats(getBgWriterStats(instanceName, pgVersionNum));
+
+		// Get checkpoint stats (PG17+ has separate view)
+		if (pgVersionNum >= 170000) {
+			overview.setCheckpointStats(getCheckpointStats(instanceName));
+		}
+
+		// Get archiver stats (always available)
+		overview.setArchiverStats(getArchiverStats(instanceName));
+
+		return overview;
+	}
+
+	/**
+	 * Retrieves WAL generation statistics from pg_stat_wal (PostgreSQL 14+).
+	 *
+	 * @param instanceName the database instance identifier
+	 * @param pgVersionNum PostgreSQL version number
+	 * @return WAL statistics or null if not available
+	 */
+	private WalStats getWalStats(String instanceName, int pgVersionNum) {
+		WalStats stats = new WalStats();
+		stats.setPgVersionNum(pgVersionNum);
+
+		String sql = """
+			SELECT
+			    wal_records,
+			    wal_fpi,
+			    wal_bytes,
+			    wal_buffers_full,
+			    wal_write,
+			    wal_sync,
+			    wal_write_time,
+			    wal_sync_time,
+			    stats_reset
+			FROM pg_stat_wal
+			""";
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				stats.setWalRecords(rs.getLong("wal_records"));
+				stats.setWalFpi(rs.getLong("wal_fpi"));
+				stats.setWalBytes(rs.getLong("wal_bytes"));
+				stats.setWalBuffersFull(rs.getLong("wal_buffers_full"));
+				stats.setWalWrite(rs.getLong("wal_write"));
+				stats.setWalSync(rs.getLong("wal_sync"));
+				stats.setWalWriteTime(rs.getDouble("wal_write_time"));
+				stats.setWalSyncTime(rs.getDouble("wal_sync_time"));
+				Timestamp resetTs = rs.getTimestamp("stats_reset");
+				if (resetTs != null) {
+					stats.setStatsReset(resetTs.toInstant());
+				}
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get WAL stats for %s: %s", instanceName, e.getMessage());
+			return null;
+		}
+
+		return stats;
+	}
+
+	/**
+	 * Retrieves background writer statistics from pg_stat_bgwriter.
+	 * <p>
+	 * In PostgreSQL 17+, checkpoint stats have moved to pg_stat_checkpointer,
+	 * so this method adapts accordingly.
+	 *
+	 * @param instanceName the database instance identifier
+	 * @param pgVersionNum PostgreSQL version number
+	 * @return background writer statistics
+	 */
+	private BgWriterStats getBgWriterStats(String instanceName, int pgVersionNum) {
+		BgWriterStats stats = new BgWriterStats();
+
+		String sql;
+		if (pgVersionNum >= 170000) {
+			// PG17+ - checkpoint stats moved to pg_stat_checkpointer
+			sql = """
+				SELECT
+				    0 as checkpoints_timed,
+				    0 as checkpoints_req,
+				    0 as checkpoint_write_time,
+				    0 as checkpoint_sync_time,
+				    0 as buffers_checkpoint,
+				    buffers_clean,
+				    maxwritten_clean,
+				    buffers_alloc,
+				    stats_reset
+				FROM pg_stat_bgwriter
+				""";
+		} else {
+			// PG12-16 - all stats in pg_stat_bgwriter
+			sql = """
+				SELECT
+				    checkpoints_timed,
+				    checkpoints_req,
+				    checkpoint_write_time,
+				    checkpoint_sync_time,
+				    buffers_checkpoint,
+				    buffers_clean,
+				    maxwritten_clean,
+				    buffers_alloc,
+				    stats_reset
+				FROM pg_stat_bgwriter
+				""";
+		}
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				stats.setCheckpointsTimed(rs.getLong("checkpoints_timed"));
+				stats.setCheckpointsReq(rs.getLong("checkpoints_req"));
+				stats.setCheckpointWriteTime(rs.getDouble("checkpoint_write_time"));
+				stats.setCheckpointSyncTime(rs.getDouble("checkpoint_sync_time"));
+				stats.setBuffersCheckpoint(rs.getLong("buffers_checkpoint"));
+				stats.setBuffersClean(rs.getLong("buffers_clean"));
+				stats.setMaxwrittenClean(rs.getLong("maxwritten_clean"));
+				stats.setBuffersAlloc(rs.getLong("buffers_alloc"));
+				Timestamp resetTs = rs.getTimestamp("stats_reset");
+				if (resetTs != null) {
+					stats.setStatsReset(resetTs.toInstant());
+				}
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get bgwriter stats for %s: %s", instanceName, e.getMessage());
+		}
+
+		// Get backend buffer writes from pg_stat_io for PG16+
+		if (pgVersionNum >= 160000) {
+			String ioSql = """
+				SELECT
+				    COALESCE(SUM(writes), 0) as buffers_backend,
+				    COALESCE(SUM(fsyncs), 0) as buffers_backend_fsync
+				FROM pg_stat_io
+				WHERE backend_type = 'client backend'
+				  AND context = 'normal'
+				""";
+
+			try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+			     Statement stmt = conn.createStatement();
+			     ResultSet rs = stmt.executeQuery(ioSql)) {
+				if (rs.next()) {
+					stats.setBuffersBackend(rs.getLong("buffers_backend"));
+					stats.setBuffersFsyncBackend(rs.getLong("buffers_backend_fsync"));
+				}
+			} catch (SQLException e) {
+				LOG.debugf("Failed to get IO stats for %s: %s", instanceName, e.getMessage());
+			}
+		} else {
+			// Pre-PG16 - get from pg_stat_bgwriter
+			String bgSql = """
+				SELECT buffers_backend, buffers_backend_fsync
+				FROM pg_stat_bgwriter
+				""";
+
+			try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+			     Statement stmt = conn.createStatement();
+			     ResultSet rs = stmt.executeQuery(bgSql)) {
+				if (rs.next()) {
+					stats.setBuffersBackend(rs.getLong("buffers_backend"));
+					stats.setBuffersFsyncBackend(rs.getLong("buffers_backend_fsync"));
+				}
+			} catch (SQLException e) {
+				LOG.debugf("Failed to get backend buffer stats for %s: %s", instanceName, e.getMessage());
+			}
+		}
+
+		return stats;
+	}
+
+	/**
+	 * Retrieves checkpoint statistics from pg_stat_checkpointer (PostgreSQL 17+).
+	 *
+	 * @param instanceName the database instance identifier
+	 * @return checkpoint statistics
+	 */
+	private CheckpointStats getCheckpointStats(String instanceName) {
+		CheckpointStats stats = new CheckpointStats();
+
+		String sql = """
+			SELECT
+			    num_timed,
+			    num_requested,
+			    restartpoints_timed,
+			    restartpoints_req,
+			    restartpoints_done,
+			    write_time,
+			    sync_time,
+			    buffers_written,
+			    stats_reset
+			FROM pg_stat_checkpointer
+			""";
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				stats.setNumTimed(rs.getLong("num_timed"));
+				stats.setNumRequested(rs.getLong("num_requested"));
+				stats.setRestartpointsTimed(rs.getLong("restartpoints_timed"));
+				stats.setRestartpointsReq(rs.getLong("restartpoints_req"));
+				stats.setRestartpointsDone(rs.getLong("restartpoints_done"));
+				stats.setWriteTime(rs.getDouble("write_time"));
+				stats.setSyncTime(rs.getDouble("sync_time"));
+				stats.setBuffersWritten(rs.getLong("buffers_written"));
+				Timestamp resetTs = rs.getTimestamp("stats_reset");
+				if (resetTs != null) {
+					stats.setStatsReset(resetTs.toInstant());
+				}
+				stats.setAvailable(true);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get checkpointer stats for %s: %s", instanceName, e.getMessage());
+		}
+
+		return stats;
+	}
+
+	/**
+	 * Retrieves WAL archiver statistics from pg_stat_archiver.
+	 *
+	 * @param instanceName the database instance identifier
+	 * @return archiver statistics including configuration
+	 */
+	private ArchiverStats getArchiverStats(String instanceName) {
+		ArchiverStats stats = new ArchiverStats();
+
+		// Get archiver stats
+		String sql = """
+			SELECT
+			    archived_count,
+			    last_archived_wal,
+			    last_archived_time,
+			    failed_count,
+			    last_failed_wal,
+			    last_failed_time,
+			    stats_reset
+			FROM pg_stat_archiver
+			""";
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				stats.setArchivedCount(rs.getLong("archived_count"));
+				stats.setLastArchivedWal(rs.getString("last_archived_wal"));
+				Timestamp archivedTs = rs.getTimestamp("last_archived_time");
+				if (archivedTs != null) {
+					stats.setLastArchivedTime(archivedTs.toInstant());
+				}
+				stats.setFailedCount(rs.getLong("failed_count"));
+				stats.setLastFailedWal(rs.getString("last_failed_wal"));
+				Timestamp failedTs = rs.getTimestamp("last_failed_time");
+				if (failedTs != null) {
+					stats.setLastFailedTime(failedTs.toInstant());
+				}
+				Timestamp resetTs = rs.getTimestamp("stats_reset");
+				if (resetTs != null) {
+					stats.setStatsReset(resetTs.toInstant());
+				}
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get archiver stats for %s: %s", instanceName, e.getMessage());
+		}
+
+		// Get archive configuration
+		String configSql = """
+			SELECT
+			    (SELECT setting FROM pg_settings WHERE name = 'archive_mode') as archive_mode,
+			    (SELECT setting FROM pg_settings WHERE name = 'archive_command') as archive_command
+			""";
+
+		try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(configSql)) {
+			if (rs.next()) {
+				stats.setArchiveMode(rs.getString("archive_mode"));
+				stats.setArchiveCommand(rs.getString("archive_command"));
+			}
+		} catch (SQLException e) {
+			LOG.debugf("Failed to get archive config for %s: %s", instanceName, e.getMessage());
 		}
 
 		return stats;

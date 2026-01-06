@@ -1,0 +1,386 @@
+{#include base}
+{#title}WAL & Checkpoint Monitoring - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/wal-checkpoints?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>WAL & Checkpoint Monitoring</h1>
+        <p class="text-muted">
+            Comprehensive WAL generation, checkpoint performance, and archiving status
+            <span class="badge bg-secondary ms-2">{overview.pgVersion}</span>
+        </p>
+    </div>
+    <div class="col-auto">
+        <span class="badge {overview.overallHealthCssClass} fs-6 px-3 py-2">
+            {overview.overallHealthStatus}
+            {#if overview.hasIssues}
+            <span class="ms-1">({overview.issueCount} {#if overview.issueCount == 1}issue{#else}issues{/if})</span>
+            {/if}
+        </span>
+    </div>
+</div>
+
+<!-- Quick Stats Summary -->
+<div class="row mb-4">
+    {#if overview.hasWalStats}
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">WAL Generated</h6>
+                <h2 class="mb-0">{overview.walStats.walBytesFormatted}</h2>
+                <small class="text-muted">{overview.walStats.walRecords} records</small>
+            </div>
+        </div>
+    </div>
+    {/if}
+    <div class="col-md-3">
+        <div class="card h-100 {#if overview.bgWriterStats.timedCheckpointPercent < 70}border-warning{/if}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Timed Checkpoints</h6>
+                <h2 class="mb-0 {overview.bgWriterStats.timedCheckpointCssClass}">
+                    {overview.bgWriterStats.timedCheckpointPercent.intValue}%
+                </h2>
+                <small class="text-muted">{overview.bgWriterStats.checkpointsTimed} / {overview.bgWriterStats.totalCheckpoints} total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 {#if overview.bgWriterStats.backendWritePercent > 15}border-warning{/if}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Backend Writes</h6>
+                <h2 class="mb-0 {overview.bgWriterStats.backendWriteCssClass}">
+                    {overview.bgWriterStats.backendWritePercent.intValue}%
+                </h2>
+                <small class="text-muted">{overview.bgWriterStats.buffersBackend} buffers by backends</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 {#if overview.archiverStats.hasFailures}border-danger{/if}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Archiver Status</h6>
+                {#if overview.archiverStats.archivingEnabled}
+                <h2 class="mb-0">
+                    <span class="badge {overview.archiverStats.healthCssClass}">{overview.archiverStats.healthStatus}</span>
+                </h2>
+                <small class="text-muted">{overview.archiverStats.archivedCount} archived</small>
+                {#else}
+                <h2 class="mb-0 text-secondary">Disabled</h2>
+                <small class="text-muted">archive_mode = {overview.archiverStats.archiveMode}</small>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Section -->
+{#if overview.hasIssues}
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Recommendations</h5>
+    </div>
+    <div class="card-body">
+        <ul class="mb-0">
+            {#if overview.bgWriterStats.hasRecommendation}
+            <li class="mb-2">
+                <strong>Background Writer:</strong> {overview.bgWriterStats.recommendation}
+            </li>
+            {/if}
+            {#if overview.hasCheckpointStats && overview.checkpointStats.hasRecommendation}
+            <li class="mb-2">
+                <strong>Checkpointer:</strong> {overview.checkpointStats.recommendation}
+            </li>
+            {/if}
+            {#if overview.archiverStats.hasRecommendation}
+            <li class="mb-2">
+                <strong>Archiver:</strong> {overview.archiverStats.recommendation}
+            </li>
+            {/if}
+        </ul>
+    </div>
+</div>
+{#else}
+<div class="alert alert-success mb-4">
+    <i class="bi bi-check-circle me-2"></i>
+    <strong>System health looks good!</strong> No issues detected with WAL, checkpoints, or archiving.
+</div>
+{/if}
+
+<!-- WAL Statistics (PG14+) -->
+{#if overview.hasWalStats}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-journal-code me-2"></i>WAL Statistics <span class="badge bg-info ms-2">PG14+</span></h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">WAL Records</th>
+                            <td>{overview.walStats.walRecords}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">WAL Full Page Images</th>
+                            <td>{overview.walStats.walFpi}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">WAL Bytes Generated</th>
+                            <td>{overview.walStats.walBytesFormatted}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">FPI Ratio</th>
+                            <td>{overview.walStats.fpiRatioFormatted}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">WAL Buffers Full</th>
+                            <td class="{#if overview.walStats.walBuffersFull > 0}text-warning{/if}">{overview.walStats.walBuffersFull}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">WAL Writes</th>
+                            <td>{overview.walStats.walWrite}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">WAL Syncs</th>
+                            <td>{overview.walStats.walSync}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Write Time</th>
+                            <td>{overview.walStats.avgWriteTimeMsFormatted} ms</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Sync Time</th>
+                            <td>{overview.walStats.avgSyncTimeMsFormatted} ms</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>WAL statistics not available.</strong> pg_stat_wal requires PostgreSQL 14 or later.
+</div>
+{/if}
+
+<!-- Checkpoint and Background Writer -->
+<div class="row mb-4">
+    <!-- Background Writer Stats -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-hdd me-2"></i>Background Writer</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Buffers Cleaned</th>
+                            <td>{overview.bgWriterStats.buffersClean}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Max Written Clean (stops)</th>
+                            <td class="{overview.bgWriterStats.maxwrittenCleanCssClass}">{overview.bgWriterStats.maxwrittenClean}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers by Backends</th>
+                            <td class="{overview.bgWriterStats.backendWriteCssClass}">{overview.bgWriterStats.buffersBackend}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Allocated</th>
+                            <td>{overview.bgWriterStats.buffersAlloc}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Checkpoint Stats -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-journal-bookmark me-2"></i>Checkpoint Statistics
+                    {#if overview.hasCheckpointStats}<span class="badge bg-info ms-2">PG17+</span>{/if}
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        {#if overview.hasCheckpointStats}
+                        <tr>
+                            <th scope="row" style="width: 50%">Timed Checkpoints</th>
+                            <td>{overview.checkpointStats.numTimed}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Requested Checkpoints</th>
+                            <td class="{overview.checkpointStats.timedCheckpointCssClass}">{overview.checkpointStats.numRequested}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers Written</th>
+                            <td>{overview.checkpointStats.buffersWritten}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Write Time</th>
+                            <td>{overview.checkpointStats.avgWriteTimeSec} sec</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Sync Time</th>
+                            <td>{overview.checkpointStats.avgSyncTimeSec} sec</td>
+                        </tr>
+                        {#if overview.checkpointStats.standby}
+                        <tr>
+                            <th scope="row">Restartpoints</th>
+                            <td>{overview.checkpointStats.totalRestartpoints}</td>
+                        </tr>
+                        {/if}
+                        {#else}
+                        <tr>
+                            <th scope="row" style="width: 50%">Timed Checkpoints</th>
+                            <td>{overview.bgWriterStats.checkpointsTimed}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Requested Checkpoints</th>
+                            <td class="{overview.bgWriterStats.timedCheckpointCssClass}">{overview.bgWriterStats.checkpointsReq}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Buffers at Checkpoint</th>
+                            <td>{overview.bgWriterStats.buffersCheckpoint}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Write Time</th>
+                            <td>{overview.bgWriterStats.avgCheckpointWriteTimeSec} sec</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Avg Sync Time</th>
+                            <td>{overview.bgWriterStats.avgCheckpointSyncTimeSec} sec</td>
+                        </tr>
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WAL Archiver -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-archive me-2"></i>WAL Archiver</h5>
+        <span class="badge {overview.archiverStats.healthCssClass}">{overview.archiverStats.healthStatus}</span>
+    </div>
+    <div class="card-body">
+        {#if overview.archiverStats.archivingEnabled}
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Archive Mode</th>
+                            <td>{overview.archiverStats.archiveMode}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Archived Count</th>
+                            <td class="text-success">{overview.archiverStats.archivedCount}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Last Archived WAL</th>
+                            <td><code class="small">{overview.archiverStats.lastArchivedWal ?: 'None'}</code></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Time Since Last Archive</th>
+                            <td>{overview.archiverStats.timeSinceLastArchiveFormatted}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th scope="row" style="width: 50%">Failed Count</th>
+                            <td class="{overview.archiverStats.failedCountCssClass}">{overview.archiverStats.failedCount}</td>
+                        </tr>
+                        {#if overview.archiverStats.lastFailedWal}
+                        <tr>
+                            <th scope="row">Last Failed WAL</th>
+                            <td><code class="small text-danger">{overview.archiverStats.lastFailedWal}</code></td>
+                        </tr>
+                        {/if}
+                        <tr>
+                            <th scope="row">Success Rate</th>
+                            <td class="{#if overview.archiverStats.successRate < 99}text-warning{#else}text-success{/if}">
+                                {overview.archiverStats.successRate}%
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {#if overview.archiverStats.archiveCommand}
+        <div class="mt-3">
+            <strong>Archive Command:</strong>
+            <pre class="bg-light p-2 rounded mt-1 small mb-0"><code>{overview.archiverStats.archiveCommand}</code></pre>
+        </div>
+        {/if}
+        {#else}
+        <div class="text-center py-4">
+            <i class="bi bi-slash-circle text-secondary" style="font-size: 3rem;"></i>
+            <p class="mt-3 text-muted mb-0">
+                WAL archiving is <strong>disabled</strong>.<br>
+                <small>Set <code>archive_mode = on</code> and configure <code>archive_command</code> for point-in-time recovery.</small>
+            </p>
+        </div>
+        {/if}
+    </div>
+</div>
+
+<!-- Understanding Section -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Understanding These Metrics</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6>WAL Generation</h6>
+                <ul class="small">
+                    <li><strong>WAL Records</strong>: Individual change records written</li>
+                    <li><strong>Full Page Images</strong>: Complete page backups (high after checkpoint)</li>
+                    <li><strong>Buffers Full</strong>: WAL buffer overflow events (should be 0)</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h6>Checkpoint Behaviour</h6>
+                <ul class="small">
+                    <li><strong>Timed checkpoints</strong>: Scheduled by checkpoint_timeout</li>
+                    <li><strong>Requested</strong>: Forced when max_wal_size reached</li>
+                    <li>Target: &gt;90% timed checkpoints</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h6>Buffer Writes</h6>
+                <ul class="small">
+                    <li><strong>Checkpoint buffers</strong>: Ideal write path</li>
+                    <li><strong>Backend buffers</strong>: Indicates pressure (target &lt;10%)</li>
+                    <li><strong>BGWriter clean</strong>: Proactive cleaning</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}
