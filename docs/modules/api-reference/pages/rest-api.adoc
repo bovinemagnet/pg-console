@@ -4,6 +4,8 @@ Paul Snow
 :description: REST API architecture, authentication, and usage patterns for pg-console
 :keywords: rest, api, json, authentication, http, swagger
 
+include::_attributes.adoc[]
+
 This page provides an overview of the pg-console REST API architecture, common patterns, and best practices for API integration.
 
 == API Architecture

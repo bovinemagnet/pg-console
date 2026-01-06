@@ -4,15 +4,18 @@ Paul Snow
 :description: Database schema design for pg-console historical data and alert storage
 :keywords: database, schema, Flyway, migrations, history
 
-This page describes the database schema used by pg-console for storing historical metrics, alert data, and how Flyway manages schema migrations.
+include::_attributes.adoc[]
+
+This page describes the database schema used by pg-console for storing historical metrics and how Flyway manages schema migrations.
 
 == Overview
 
 By default, pg-console creates a dedicated schema named `pgconsole` in the monitored PostgreSQL database. This schema stores:
 
-* Historical overview statistics (connections, cache hits, database size)
-* Historical query performance metrics from `pg_stat_statements`
-* Alert history and notification records
+* System-level metrics history (connections, cache hits, blocking queries, database size)
+* Query performance metrics from `pg_stat_statements`
+* Per-database metrics history (transactions, cache hits, deadlocks, tuple operations)
+* Audit logs, bookmarks, notifications, and insights (extended features)
 
 The schema is created and managed automatically using Flyway migrations, which run on application startup.
 
@@ -63,11 +66,13 @@ The following diagram shows the relationships between tables in the `pgconsole` 
 
 include::example$erd-schema.mmd[]
 
-== Tables
+== Core History Tables
 
-=== overview_history
+These tables store time-series metrics sampled periodically for trend visualisation and historical analysis.
 
-Stores periodic snapshots of overall database health metrics.
+=== system_metrics_history
+
+Stores periodic snapshots of system-level database health metrics across all monitored databases.
 
 [cols="1,1,3"]
 |===
@@ -77,67 +82,72 @@ Stores periodic snapshots of overall database health metrics.
 |`BIGSERIAL`
 |Primary key (auto-incrementing)
 
-|`sample_time`
-|`TIMESTAMP`
+|`sampled_at`
+|`TIMESTAMP WITH TIME ZONE`
 |When the sample was taken
+
+|`instance_id`
+|`TEXT`
+|PostgreSQL instance identifier (default: 'default')
 
 |`total_connections`
 |`INTEGER`
 |Total number of database connections
 
-|`active_connections`
+|`max_connections`
 |`INTEGER`
-|Number of connections in active state
+|Maximum allowed connections
+
+|`active_queries`
+|`INTEGER`
+|Number of queries currently executing
 
 |`idle_connections`
 |`INTEGER`
 |Number of connections in idle state
 
+|`idle_in_transaction`
+|`INTEGER`
+|Number of connections idle in transaction
+
 |`blocked_queries`
 |`INTEGER`
 |Number of queries blocked by locks
 
+|`longest_query_seconds`
+|`DOUBLE PRECISION`
+|Duration of longest running query in seconds
+
+|`longest_transaction_seconds`
+|`DOUBLE PRECISION`
+|Duration of longest running transaction in seconds
+
 |`cache_hit_ratio`
-|`NUMERIC(5,2)`
-|Buffer cache hit ratio as percentage (0-100)
+|`DOUBLE PRECISION`
+|Buffer cache hit ratio (aggregated across databases)
 
-|`database_size_bytes`
+|`total_database_size_bytes`
 |`BIGINT`
-|Total size of all databases in bytes
-
-|`transactions_per_sec`
-|`NUMERIC(10,2)`
-|Transactions committed per second
-
-|`tuples_inserted`
-|`BIGINT`
-|Cumulative tuples inserted
-
-|`tuples_updated`
-|`BIGINT`
-|Cumulative tuples updated
-
-|`tuples_deleted`
-|`BIGINT`
-|Cumulative tuples deleted
+|Total size of all monitored databases in bytes
 |===
 
 ==== Indexes
 
-`idx_overview_history_sample_time`::
-B-tree index on `sample_time` for efficient time-range queries.
+`idx_system_metrics_instance_sampled`::
+B-tree index on `(instance_id, sampled_at DESC)` for efficient time-range queries per instance.
 
 ==== Sample Query
 
 [source,sql]
 ----
-SELECT sample_time, total_connections, cache_hit_ratio
-FROM pgconsole.overview_history
-WHERE sample_time >= NOW() - INTERVAL '1 hour'
-ORDER BY sample_time;
+SELECT sampled_at, total_connections, cache_hit_ratio, blocked_queries
+FROM pgconsole.system_metrics_history
+WHERE instance_id = 'default'
+  AND sampled_at >= NOW() - INTERVAL '1 hour'
+ORDER BY sampled_at;
 ----
 
-=== query_history
+=== query_metrics_history
 
 Stores periodic snapshots of query performance metrics from `pg_stat_statements`.
 
@@ -149,45 +159,49 @@ Stores periodic snapshots of query performance metrics from `pg_stat_statements`
 |`BIGSERIAL`
 |Primary key (auto-incrementing)
 
-|`sample_time`
-|`TIMESTAMP`
+|`sampled_at`
+|`TIMESTAMP WITH TIME ZONE`
 |When the sample was taken
 
+|`instance_id`
+|`TEXT`
+|PostgreSQL instance identifier (default: 'default')
+
 |`query_id`
-|`BIGINT`
+|`TEXT`
 |Hash identifier from `pg_stat_statements`
 
 |`query_text`
 |`TEXT`
 |Normalised SQL query text
 
-|`calls`
+|`total_calls`
 |`BIGINT`
-|Number of times executed
+|Number of times executed (cumulative counter)
 
-|`total_time`
-|`NUMERIC(20,3)`
-|Total execution time in milliseconds
+|`total_time_ms`
+|`DOUBLE PRECISION`
+|Total execution time in milliseconds (cumulative counter)
 
-|`min_time`
-|`NUMERIC(20,3)`
-|Minimum execution time in milliseconds
+|`total_rows`
+|`BIGINT`
+|Total number of rows returned (cumulative counter)
 
-|`max_time`
-|`NUMERIC(20,3)`
-|Maximum execution time in milliseconds
-
-|`mean_time`
-|`NUMERIC(20,3)`
+|`mean_time_ms`
+|`DOUBLE PRECISION`
 |Average execution time in milliseconds
 
-|`stddev_time`
-|`NUMERIC(20,3)`
-|Standard deviation of execution time
+|`min_time_ms`
+|`DOUBLE PRECISION`
+|Minimum execution time in milliseconds
 
-|`rows`
-|`BIGINT`
-|Total number of rows returned
+|`max_time_ms`
+|`DOUBLE PRECISION`
+|Maximum execution time in milliseconds
+
+|`stddev_time_ms`
+|`DOUBLE PRECISION`
+|Standard deviation of execution time
 
 |`shared_blks_hit`
 |`BIGINT`
@@ -204,26 +218,27 @@ Stores periodic snapshots of query performance metrics from `pg_stat_statements`
 
 ==== Indexes
 
-`idx_query_history_sample_time`::
-B-tree index on `sample_time` for time-range queries.
+`idx_query_metrics_instance_sampled`::
+B-tree index on `(instance_id, sampled_at DESC)` for time-range queries per instance.
 
-`idx_query_history_query_id`::
-B-tree index on `query_id` for tracking specific queries over time.
+`idx_query_metrics_instance_query`::
+B-tree index on `(instance_id, query_id, sampled_at DESC)` for tracking specific queries over time.
 
 ==== Sample Query
 
 [source,sql]
 ----
-SELECT sample_time, calls, mean_time
-FROM pgconsole.query_history
-WHERE query_id = 1234567890
-  AND sample_time >= NOW() - INTERVAL '24 hours'
-ORDER BY sample_time;
+SELECT sampled_at, total_calls, mean_time_ms
+FROM pgconsole.query_metrics_history
+WHERE instance_id = 'default'
+  AND query_id = '1234567890'
+  AND sampled_at >= NOW() - INTERVAL '24 hours'
+ORDER BY sampled_at;
 ----
 
-=== alert_history
+=== database_metrics_history
 
-Stores historical alerts and notifications generated by pg-console monitoring rules.
+Stores periodic snapshots of per-database statistics including connection counts, transaction rates, cache hit ratios, tuple operations, and problem indicators like deadlocks.
 
 [cols="1,1,3"]
 |===
@@ -233,56 +248,101 @@ Stores historical alerts and notifications generated by pg-console monitoring ru
 |`BIGSERIAL`
 |Primary key (auto-incrementing)
 
-|`alert_time`
-|`TIMESTAMP`
-|When the alert was triggered
+|`sampled_at`
+|`TIMESTAMP WITH TIME ZONE`
+|When the sample was taken
 
-|`alert_type`
-|`VARCHAR(50)`
-|Type of alert (e.g., `HIGH_CONNECTIONS`, `LONG_RUNNING_QUERY`)
-
-|`severity`
-|`VARCHAR(20)`
-|Severity level (`INFO`, `WARNING`, `CRITICAL`)
-
-|`message`
+|`instance_id`
 |`TEXT`
-|Human-readable alert message
+|PostgreSQL instance identifier (default: 'default')
 
-|`details`
-|`JSONB`
-|Additional alert context as JSON
+|`database_name`
+|`TEXT`
+|Name of the database being monitored
 
-|`resolved`
-|`BOOLEAN`
-|Whether the alert has been resolved
+|`num_backends`
+|`INTEGER`
+|Number of backends currently connected to this database
 
-|`resolved_time`
-|`TIMESTAMP`
-|When the alert was resolved (if applicable)
+|`xact_commit`
+|`BIGINT`
+|Number of transactions committed (cumulative counter)
+
+|`xact_rollback`
+|`BIGINT`
+|Number of transactions rolled back (cumulative counter)
+
+|`blks_hit`
+|`BIGINT`
+|Shared blocks read from cache (cumulative counter)
+
+|`blks_read`
+|`BIGINT`
+|Shared blocks read from disk (cumulative counter)
+
+|`cache_hit_ratio`
+|`DOUBLE PRECISION`
+|Buffer cache hit ratio for this database
+
+|`tup_returned`
+|`BIGINT`
+|Tuples returned by queries (cumulative counter)
+
+|`tup_fetched`
+|`BIGINT`
+|Tuples fetched by queries (cumulative counter)
+
+|`tup_inserted`
+|`BIGINT`
+|Tuples inserted (cumulative counter)
+
+|`tup_updated`
+|`BIGINT`
+|Tuples updated (cumulative counter)
+
+|`tup_deleted`
+|`BIGINT`
+|Tuples deleted (cumulative counter)
+
+|`deadlocks`
+|`BIGINT`
+|Number of deadlocks detected (cumulative counter)
+
+|`conflicts`
+|`BIGINT`
+|Number of queries cancelled due to conflicts (cumulative counter)
+
+|`temp_files`
+|`BIGINT`
+|Number of temporary files created (cumulative counter)
+
+|`temp_bytes`
+|`BIGINT`
+|Total bytes written to temporary files (cumulative counter)
+
+|`database_size_bytes`
+|`BIGINT`
+|Total size of the database in bytes
 |===
 
 ==== Indexes
 
-`idx_alert_history_alert_time`::
-B-tree index on `alert_time` for time-range queries.
+`idx_database_metrics_instance_sampled`::
+B-tree index on `(instance_id, sampled_at DESC)` for time-range queries per instance.
 
-`idx_alert_history_alert_type`::
-B-tree index on `alert_type` for filtering by alert type.
-
-`idx_alert_history_severity`::
-B-tree index on `severity` for filtering by severity level.
+`idx_database_metrics_instance_db`::
+B-tree index on `(instance_id, database_name, sampled_at DESC)` for tracking specific databases over time.
 
 ==== Sample Query
 
 [source,sql]
 ----
-SELECT alert_time, alert_type, severity, message
-FROM pgconsole.alert_history
-WHERE severity = 'CRITICAL'
-  AND resolved = false
-ORDER BY alert_time DESC
-LIMIT 10;
+SELECT sampled_at, database_name, num_backends, cache_hit_ratio, deadlocks
+FROM pgconsole.database_metrics_history
+WHERE instance_id = 'default'
+  AND database_name = 'myapp_prod'
+  AND sampled_at >= NOW() - INTERVAL '24 hours'
+ORDER BY sampled_at;
 ----
 
 == Flyway Migrations
@@ -293,17 +353,20 @@ NOTE: When operating in xref:admin-guide:schema-free-mode.adoc[Schema-Free Mode]
 
 === Migration Files
 
-`V1__create_pgconsole_schema.sql`::
-Creates the `pgconsole` schema and sets the search path.
+`V1__initial_schema.sql`::
+Creates the complete `pgconsole` schema including all tables, indexes, and constraints. This comprehensive migration creates:
++
+* Core history tables (`system_metrics_history`, `query_metrics_history`, `database_metrics_history`)
+* Audit and bookkeeping tables (`audit_log`, `query_bookmark`, `scheduled_report`)
+* Schema comparison tables (`comparison_profile`, `comparison_history`)
+* Notification infrastructure (`notification_channel`, `escalation_policy`, `alert_acknowledgement`, `active_alert`, etc.)
+* Insights and intelligence tables (`metric_baseline`, `detected_anomaly`, `metric_forecast`, `unified_recommendation`)
+* Natural language query support (`nl_query_pattern`, `nl_query_history`)
+* Runbook automation (`runbook`, `runbook_execution`)
+* Scheduled maintenance tracking (`scheduled_maintenance`, `maintenance_execution`)
+* Custom dashboards (`custom_dashboard`, `custom_widget`)
 
-`V2__create_overview_history_table.sql`::
-Creates the `overview_history` table with indexes.
-
-`V3__create_query_history_table.sql`::
-Creates the `query_history` table with indexes.
-
-`V4__create_alert_history_table.sql`::
-Creates the `alert_history` table with indexes.
+All schema objects are created in a single migration to ensure consistency and simplify initial deployment.
 
 === Migration Execution
 
@@ -368,11 +431,11 @@ The retention period is configured via the `PG_CONSOLE_HISTORY_RETENTION` enviro
 
 The `MetricsSamplerService` runs a daily cleanup job that:
 
-. Calculates the cutoff timestamp: `NOW() - INTERVAL '{retention} days'`
-. Deletes records older than the cutoff from each table:
-  * `overview_history`
-  * `query_history`
-  * `alert_history`
+. Calculates the cutoff timestamp: `NOW() - INTERVAL '\{retention} days'`
+. Deletes records older than the cutoff from each history table:
+  * `system_metrics_history`
+  * `query_metrics_history`
+  * `database_metrics_history`
 . Logs the number of records deleted
 . Runs `VACUUM` to reclaim storage space
 
@@ -380,26 +443,23 @@ The `MetricsSamplerService` runs a daily cleanup job that:
 
 [source,sql]
 ----
--- Delete old overview history
-DELETE FROM pgconsole.overview_history
-WHERE sample_time < NOW() - INTERVAL '7 days';
+-- Delete old system metrics history
+DELETE FROM pgconsole.system_metrics_history
+WHERE sampled_at < NOW() - INTERVAL '7 days';
 
--- Delete old query history
-DELETE FROM pgconsole.query_history
-WHERE sample_time < NOW() - INTERVAL '7 days';
+-- Delete old query metrics history
+DELETE FROM pgconsole.query_metrics_history
+WHERE sampled_at < NOW() - INTERVAL '7 days';
 
--- Delete old resolved alerts
-DELETE FROM pgconsole.alert_history
-WHERE alert_time < NOW() - INTERVAL '7 days'
-  AND resolved = true;
+-- Delete old database metrics history
+DELETE FROM pgconsole.database_metrics_history
+WHERE sampled_at < NOW() - INTERVAL '7 days';
 
 -- Reclaim storage
-VACUUM pgconsole.overview_history;
-VACUUM pgconsole.query_history;
-VACUUM pgconsole.alert_history;
+VACUUM pgconsole.system_metrics_history;
+VACUUM pgconsole.query_metrics_history;
+VACUUM pgconsole.database_metrics_history;
 ----
-
-NOTE: Unresolved alerts are retained beyond the retention period to ensure ongoing issues remain visible.
 
 === Disabling Retention
 
@@ -464,10 +524,11 @@ Sparklines on the dashboard use time-windowed queries:
 
 [source,sql]
 ----
-SELECT sample_time, total_connections
-FROM pgconsole.overview_history
-WHERE sample_time >= NOW() - INTERVAL '1 hour'
-ORDER BY sample_time;
+SELECT sampled_at, total_connections
+FROM pgconsole.system_metrics_history
+WHERE instance_id = 'default'
+  AND sampled_at >= NOW() - INTERVAL '1 hour'
+ORDER BY sampled_at;
 ----
 
 === Trend Analysis
@@ -478,13 +539,15 @@ Identify trends by comparing recent averages to historical baselines:
 ----
 WITH recent AS (
   SELECT AVG(cache_hit_ratio) AS avg_ratio
-  FROM pgconsole.overview_history
-  WHERE sample_time >= NOW() - INTERVAL '1 hour'
+  FROM pgconsole.system_metrics_history
+  WHERE instance_id = 'default'
+    AND sampled_at >= NOW() - INTERVAL '1 hour'
 ),
 baseline AS (
   SELECT AVG(cache_hit_ratio) AS avg_ratio
-  FROM pgconsole.overview_history
-  WHERE sample_time BETWEEN NOW() - INTERVAL '7 days'
+  FROM pgconsole.system_metrics_history
+  WHERE instance_id = 'default'
+    AND sampled_at BETWEEN NOW() - INTERVAL '7 days'
     AND NOW() - INTERVAL '1 hour'
 )
 SELECT
@@ -502,14 +565,34 @@ Track query performance changes over time:
 ----
 SELECT
   query_text,
-  sample_time,
-  calls,
-  mean_time,
-  max_time
-FROM pgconsole.query_history
-WHERE query_id = 1234567890
-  AND sample_time >= NOW() - INTERVAL '7 days'
-ORDER BY sample_time DESC;
+  sampled_at,
+  total_calls,
+  mean_time_ms,
+  max_time_ms
+FROM pgconsole.query_metrics_history
+WHERE instance_id = 'default'
+  AND query_id = '1234567890'
+  AND sampled_at >= NOW() - INTERVAL '7 days'
+ORDER BY sampled_at DESC;
+----
+
+=== Database-Specific Metrics
+
+Analyse per-database metrics including deadlock trends:
+
+[source,sql]
+----
+SELECT
+  sampled_at,
+  database_name,
+  deadlocks,
+  conflicts,
+  cache_hit_ratio,
+  num_backends
+FROM pgconsole.database_metrics_history
+WHERE instance_id = 'default'
+  AND sampled_at >= NOW() - INTERVAL '24 hours'
+ORDER BY database_name, sampled_at;
 ----
 
 == Next Steps

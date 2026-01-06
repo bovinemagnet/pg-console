@@ -3,6 +3,9 @@ Paul Snow
 0.0.0
 :description: Configure pg-console to monitor multiple PostgreSQL instances
 :keywords: multi-instance, monitoring, multiple databases, datasources, instance switcher
+:PROD_PASSWORD: prod_paSsword
+
+include::_attributes.adoc[]
 
 This guide explains how to configure pg-console to monitor multiple PostgreSQL instances simultaneously, allowing you to manage production, staging, and development environments from a single dashboard.
 
@@ -232,7 +235,7 @@ pg-console:
         enabled: false
 ----
 
-IMPORTANT: Use environment variable substitution (e.g., `${PROD_PASSWORD}`) to avoid storing passwords in version control.
+IMPORTANT: Use environment variable substitution (e.g., `\${PROD_PASSWORD}`) to avoid storing passwords in version control.
 
 == Instance Switcher UI
 

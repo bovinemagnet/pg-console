@@ -1,44 +1,66 @@
 erDiagram
     %% pgconsole schema entity-relationship diagram
-    %% Shows the three main tables used for historical data storage
+    %% Shows the main history tables used for metrics sampling and trend visualisation
 
-    OVERVIEW_HISTORY {
+    SYSTEM_METRICS_HISTORY {
         BIGSERIAL id PK
-        TIMESTAMP sampled_at
-        VARCHAR instance_name
-        INT active_connections
-        INT blocked_queries
-        DECIMAL cache_hit_ratio
-        BIGINT database_size_bytes
+        TIMESTAMPTZ sampled_at
+        TEXT instance_id
         INT total_connections
+        INT max_connections
+        INT active_queries
+        INT idle_connections
+        INT idle_in_transaction
+        INT blocked_queries
+        DOUBLE longest_query_seconds
+        DOUBLE longest_transaction_seconds
+        DOUBLE cache_hit_ratio
+        BIGINT total_database_size_bytes
     }
 
-    QUERY_HISTORY {
+    QUERY_METRICS_HISTORY {
         BIGSERIAL id PK
-        TIMESTAMP sampled_at
-        VARCHAR instance_name
-        BIGINT query_id
+        TIMESTAMPTZ sampled_at
+        TEXT instance_id
+        TEXT query_id
         TEXT query_text
-        BIGINT calls
-        DOUBLE total_time
-        DOUBLE mean_time
-        BIGINT rows
+        BIGINT total_calls
+        DOUBLE total_time_ms
+        BIGINT total_rows
+        DOUBLE mean_time_ms
+        DOUBLE min_time_ms
+        DOUBLE max_time_ms
+        DOUBLE stddev_time_ms
+        BIGINT shared_blks_hit
+        BIGINT shared_blks_read
+        BIGINT temp_blks_written
     }
 
-    ALERT_HISTORY {
+    DATABASE_METRICS_HISTORY {
         BIGSERIAL id PK
-        VARCHAR alert_type
-        VARCHAR severity
-        TEXT message
-        TIMESTAMP triggered_at
-        TIMESTAMP resolved_at
-        VARCHAR instance_name
+        TIMESTAMPTZ sampled_at
+        TEXT instance_id
+        TEXT database_name
+        INT num_backends
+        BIGINT xact_commit
+        BIGINT xact_rollback
+        BIGINT blks_hit
+        BIGINT blks_read
+        DOUBLE cache_hit_ratio
+        BIGINT tup_returned
+        BIGINT tup_fetched
+        BIGINT tup_inserted
+        BIGINT tup_updated
+        BIGINT tup_deleted
+        BIGINT deadlocks
+        BIGINT conflicts
+        BIGINT temp_files
+        BIGINT temp_bytes
+        BIGINT database_size_bytes
     }
 
     %% Relationships
-    %% overview_history and query_history are correlated by sampled_at timestamp
-    OVERVIEW_HISTORY ||--o{ QUERY_HISTORY : "correlated by sampled_at"
-
-    %% alert_history shares instance_name with both tables
-    OVERVIEW_HISTORY ||--o{ ALERT_HISTORY : "shares instance_name"
-    QUERY_HISTORY ||--o{ ALERT_HISTORY : "shares instance_name"
+    %% All history tables share instance_id and are correlated by sampled_at timestamp
+    SYSTEM_METRICS_HISTORY ||--o{ QUERY_METRICS_HISTORY : "correlated by instance_id and sampled_at"
+    SYSTEM_METRICS_HISTORY ||--o{ DATABASE_METRICS_HISTORY : "correlated by instance_id and sampled_at"
+    QUERY_METRICS_HISTORY ||--o{ DATABASE_METRICS_HISTORY : "shares instance_id"

@@ -149,7 +149,7 @@ The sort order toggles between ascending and descending on repeated clicks.
 
 === Query Details
 
-Click any query row to view detailed statistics on a dedicated page (`/slow-queries/{queryId}`).
+Click any query row to view detailed statistics on a dedicated page (`/slow-queries/\{queryId}`).
 
 ==== Detailed Metrics
 
@@ -477,7 +477,7 @@ The databases dashboard (`/databases`) compares metrics across all monitored dat
 
 === Database Detail View
 
-Click any database name to view a detailed dashboard (`/databases/{dbName}`) with:
+Click any database name to view a detailed dashboard (`/databases/\{dbName}`) with:
 
 * Historical sparklines for key metrics (if history sampling enabled)
 * Top queries specific to that database

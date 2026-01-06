@@ -4,6 +4,9 @@ import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
 import com.bovinemagnet.pgconsole.model.ColumnCorrelation;
 import com.bovinemagnet.pgconsole.model.ConfigSetting;
+import com.bovinemagnet.pgconsole.model.DeadlockConfig;
+import com.bovinemagnet.pgconsole.model.DeadlockStats;
+import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
 import com.bovinemagnet.pgconsole.model.ExplainPlan;
@@ -2436,5 +2439,170 @@ public class PostgresService {
 	 */
 	public List<ConfigSetting> getConfigurationHealth() {
 		return getConfigurationHealth("default");
+	}
+
+	// ========== Deadlock Monitoring ==========
+
+	/**
+	 * Retrieves deadlock statistics for all databases on the specified instance.
+	 * <p>
+	 * Queries pg_stat_database for cumulative deadlock counts and calculates
+	 * deadlock rates based on historical sampling data when available.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of deadlock statistics per database, ordered by count descending
+	 */
+	public List<DeadlockStats> getDeadlockStats(String instanceName) {
+		List<DeadlockStats> stats = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    datname,
+			    deadlocks,
+			    stats_reset
+			FROM pg_stat_database
+			WHERE datname NOT LIKE 'template%'
+			  AND datname IS NOT NULL
+			ORDER BY deadlocks DESC
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+
+			while (rs.next()) {
+				DeadlockStats stat = new DeadlockStats();
+				stat.setDatabaseName(rs.getString("datname"));
+				stat.setDeadlockCount(rs.getLong("deadlocks"));
+
+				Timestamp statsReset = rs.getTimestamp("stats_reset");
+				if (statsReset != null) {
+					stat.setStatsReset(statsReset.toInstant());
+				}
+
+				// Default rate to -1 (unavailable) - will be populated by caller if history is available
+				stat.setDeadlocksPerHour(-1);
+				stat.setSparklineSvg("");
+
+				stats.add(stat);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get deadlock stats for %s: %s", instanceName, e.getMessage());
+		}
+
+		return stats;
+	}
+
+	/**
+	 * Retrieves deadlock statistics for all databases on the default instance.
+	 *
+	 * @return list of deadlock statistics per database
+	 * @see #getDeadlockStats(String)
+	 */
+	public List<DeadlockStats> getDeadlockStats() {
+		return getDeadlockStats("default");
+	}
+
+	/**
+	 * Retrieves deadlock-related PostgreSQL configuration settings for the specified instance.
+	 * <p>
+	 * Returns settings that affect deadlock detection and logging, including:
+	 * <ul>
+	 *   <li>deadlock_timeout - time to wait before checking for deadlocks</li>
+	 *   <li>log_lock_waits - whether to log lock wait events</li>
+	 *   <li>lock_timeout - maximum time to wait for a lock</li>
+	 * </ul>
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return DeadlockConfig containing current settings and recommendations
+	 */
+	public DeadlockConfig getDeadlockConfig(String instanceName) {
+		DeadlockConfig config = new DeadlockConfig();
+
+		String sql = """
+			SELECT name, setting
+			FROM pg_settings
+			WHERE name IN ('deadlock_timeout', 'log_lock_waits', 'lock_timeout')
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+
+			while (rs.next()) {
+				String name = rs.getString("name");
+				String value = rs.getString("setting");
+
+				switch (name) {
+					case "deadlock_timeout" -> config.setDeadlockTimeout(value);
+					case "log_lock_waits" -> config.setLogLockWaits("on".equalsIgnoreCase(value));
+					case "lock_timeout" -> config.setLockTimeout(value);
+				}
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Failed to get deadlock config for %s: %s", instanceName, e.getMessage());
+		}
+
+		return config;
+	}
+
+	/**
+	 * Retrieves deadlock-related PostgreSQL configuration settings for the default instance.
+	 *
+	 * @return DeadlockConfig containing current settings and recommendations
+	 * @see #getDeadlockConfig(String)
+	 */
+	public DeadlockConfig getDeadlockConfig() {
+		return getDeadlockConfig("default");
+	}
+
+	/**
+	 * Calculates the deadlock rate per hour for a database based on historical samples.
+	 * <p>
+	 * Uses the oldest and newest samples in the history to calculate the rate
+	 * of deadlock increase over the sampling period.
+	 *
+	 * @param history list of database metrics history ordered by time ascending
+	 * @return deadlocks per hour, or -1 if insufficient data
+	 */
+	public double calculateDeadlockRate(List<DatabaseMetricsHistory> history) {
+		if (history == null || history.size() < 2) {
+			return -1;
+		}
+
+		DatabaseMetricsHistory oldest = history.get(0);
+		DatabaseMetricsHistory newest = history.get(history.size() - 1);
+
+		Long oldestDeadlocks = oldest.getDeadlocks();
+		Long newestDeadlocks = newest.getDeadlocks();
+
+		if (oldestDeadlocks == null || newestDeadlocks == null) {
+			return -1;
+		}
+
+		long deadlockDelta = newestDeadlocks - oldestDeadlocks;
+		if (deadlockDelta < 0) {
+			// Stats were reset, use newest value as the count since reset
+			deadlockDelta = newestDeadlocks;
+		}
+
+		Instant oldestTime = oldest.getSampledAt();
+		Instant newestTime = newest.getSampledAt();
+
+		if (oldestTime == null || newestTime == null) {
+			return -1;
+		}
+
+		long hoursBetween = java.time.Duration.between(oldestTime, newestTime).toHours();
+		if (hoursBetween < 1) {
+			// Less than an hour of data, extrapolate from minutes
+			long minutesBetween = java.time.Duration.between(oldestTime, newestTime).toMinutes();
+			if (minutesBetween < 1) {
+				return -1;
+			}
+			return (double) deadlockDelta * 60 / minutesBetween;
+		}
+
+		return (double) deadlockDelta / hoursBetween;
 	}
 }

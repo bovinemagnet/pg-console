@@ -1,0 +1,99 @@
+%% Multi-Instance Monitoring Architecture
+%% This diagram shows how pg-console monitors multiple PostgreSQL instances
+%% from a single application deployment
+
+graph TB
+    %% User Interface Layer
+    subgraph UI["User Interface Layer"]
+        Browser["Web Browser"]
+        InstanceSelector["Instance Selector Dropdown<br/>(Production, Staging, Development)"]
+        Dashboard["Dashboard Views<br/>(Overview, Slow Queries, Activity, Locks, etc.)"]
+    end
+
+    %% Application Layer
+    subgraph App["pg-console Application"]
+        Config["Configuration<br/>PG_CONSOLE_INSTANCES=<br/>prod:jdbc:postgresql://prod-db:5432/postgres:produser:prodpass,<br/>staging:jdbc:postgresql://staging-db:5432/postgres:stguser:stgpass,<br/>dev:jdbc:postgresql://dev-db:5432/postgres:devuser:devpass"]
+
+        DashboardResource["DashboardResource<br/>(JAX-RS Endpoints)<br/>?instance=prod"]
+
+        DataSourceManager["DataSourceManager<br/>- Manages connection pools per instance<br/>- Routes queries based on selected instance<br/>- Lazy initialisation of connections"]
+
+        PostgresService["PostgresService<br/>- Query execution logic<br/>- Uses DataSource from manager"]
+
+        MetricsSampler["MetricsSamplerService<br/>- Samples metrics for each instance<br/>- Stores history per instance"]
+    end
+
+    %% Database Layer
+    subgraph Instances["PostgreSQL Instances"]
+        direction LR
+
+        subgraph ProdDB["Production Database<br/>prod-db:5432"]
+            ProdPG["PostgreSQL Server"]
+            ProdStats["pg_stat_statements<br/>pg_stat_activity<br/>pg_locks<br/>pg_stat_database"]
+            ProdSchema["pgconsole schema<br/>(history tables)<br/>instance_id='prod'"]
+        end
+
+        subgraph StagingDB["Staging Database<br/>staging-db:5432"]
+            StagingPG["PostgreSQL Server"]
+            StagingStats["pg_stat_statements<br/>pg_stat_activity<br/>pg_locks<br/>pg_stat_database"]
+            StagingSchema["pgconsole schema<br/>(history tables)<br/>instance_id='staging'"]
+        end
+
+        subgraph DevDB["Development Database<br/>dev-db:5432"]
+            DevPG["PostgreSQL Server"]
+            DevStats["pg_stat_statements<br/>pg_stat_activity<br/>pg_locks<br/>pg_stat_database"]
+            DevSchema["pgconsole schema<br/>(history tables)<br/>instance_id='dev'"]
+        end
+    end
+
+    %% Optional Centralised History
+    subgraph CentralHistory["Optional: Centralised History Storage"]
+        CentralDB["Dedicated PostgreSQL Instance<br/>metrics-db:5432"]
+        CentralSchema["pgconsole schema<br/>- query_history (with instance_id)<br/>- database_history (with instance_id)<br/>- table_history (with instance_id)<br/>- Aggregated metrics across instances"]
+    end
+
+    %% User Interaction Flow
+    Browser --> InstanceSelector
+    InstanceSelector --> Dashboard
+    Dashboard --> |"HTTP Request<br/>GET /slow-queries?instance=prod"| DashboardResource
+
+    %% Application Processing Flow
+    Config -.->|"Loads configuration"| DataSourceManager
+    DashboardResource --> |"1. Extract instance parameter"| DataSourceManager
+    DataSourceManager --> |"2. Get DataSource for 'prod'"| PostgresService
+    PostgresService --> |"3. Execute query"| DashboardResource
+    DashboardResource --> |"4. Render template"| Dashboard
+
+    %% Scheduled Sampling Flow
+    MetricsSampler -.->|"Every 60s"| DataSourceManager
+    DataSourceManager -.->|"For each configured instance"| MetricsSampler
+
+    %% Database Connections
+    PostgresService --> |"Query: instance=prod"| ProdPG
+    PostgresService --> |"Query: instance=staging"| StagingPG
+    PostgresService --> |"Query: instance=dev"| DevPG
+
+    ProdPG --> ProdStats
+    StagingPG --> StagingStats
+    DevPG --> DevStats
+
+    %% History Storage (Local)
+    MetricsSampler -.->|"Sample & Store<br/>(instance=prod)"| ProdSchema
+    MetricsSampler -.->|"Sample & Store<br/>(instance=staging)"| StagingSchema
+    MetricsSampler -.->|"Sample & Store<br/>(instance=dev)"| DevSchema
+
+    %% History Storage (Centralised - Optional)
+    MetricsSampler -.->|"Optional: Centralised storage<br/>(all instances)"| CentralSchema
+
+    %% Styling
+    classDef uiClass fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    classDef appClass fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
+    classDef dbClass fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    classDef centralClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    classDef configClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
+
+    class Browser,InstanceSelector,Dashboard uiClass
+    class DashboardResource,DataSourceManager,PostgresService,MetricsSampler appClass
+    class ProdPG,ProdStats,ProdSchema,StagingPG,StagingStats,StagingSchema,DevPG,DevStats,DevSchema dbClass
+    class CentralDB,CentralSchema centralClass
+    class Config configClass

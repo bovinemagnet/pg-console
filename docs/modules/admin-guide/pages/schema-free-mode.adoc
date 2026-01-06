@@ -4,6 +4,8 @@ Paul Snow
 :description: Operating pg-console in read-only mode without creating database schema or objects
 :keywords: schema-free, read-only, non-invasive, in-memory, monitoring
 
+include::_attributes.adoc[]
+
 pg-console can operate in a completely read-only mode without creating any database objects. This schema-free mode is ideal for non-invasive monitoring of production databases where schema changes are restricted.
 
 == Overview

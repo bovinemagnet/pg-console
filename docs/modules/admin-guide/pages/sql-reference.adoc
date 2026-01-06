@@ -1,0 +1,1358 @@
+= SQL Query Reference
+Paul Snow
+:version: 0.0.0
+:description: Comprehensive reference of SQL queries used by pg-console for monitoring PostgreSQL
+:keywords: sql, queries, pg_stat_statements, pg_stat_activity, monitoring
+
+This page provides a comprehensive reference of all SQL queries executed by pg-console when monitoring PostgreSQL instances.
+
+== Overview
+
+pg-console uses *read-only* SQL queries to monitor PostgreSQL performance and health.
+All queries target PostgreSQL system catalogues and statistics views, requiring no modifications to user data or schema.
+
+The application queries system views to gather:
+
+* Real-time activity monitoring
+* Query performance statistics
+* Lock and blocking information
+* Table and index statistics
+* Database-level metrics
+* Replication status
+* Infrastructure and background processes
+* Historical metrics (stored in pgconsole schema)
+
+== Query Categories
+
+pg-console organises queries into logical categories based on the PostgreSQL system views they query.
+
+=== Activity Monitoring
+
+Queries against `pg_stat_activity` to monitor current database connections and queries.
+
+==== Current Activity
+
+*Purpose*: Displays all active database connections and running queries
+
+*Used by*: Activity Dashboard (`/activity`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    pid,
+    usename as user,
+    datname as database,
+    application_name,
+    client_addr::text as client_addr,
+    backend_start,
+    xact_start,
+    query_start,
+    state_change,
+    state,
+    wait_event_type,
+    wait_event,
+    query,
+    (SELECT pid FROM pg_stat_activity
+     WHERE pid = ANY(pg_blocking_pids(pg_stat_activity.pid)) LIMIT 1) as blocking_pid
+FROM pg_stat_activity
+WHERE pid != pg_backend_pid()
+  AND state != 'idle'
+ORDER BY query_start DESC NULLS LAST
+LIMIT 50
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Current backend activity
+
+*Key Functions*:
+
+* `pg_backend_pid()` - Returns the PID of the current backend
+* `pg_blocking_pids(pid)` - Returns array of PIDs blocking the specified process
+
+==== Connection Statistics
+
+*Purpose*: Aggregates connection counts and identifies active/blocked queries
+
+*Used by*: Overview Dashboard (`/`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    (SELECT count(*) FROM pg_stat_activity) as connections_used,
+    (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') as max_connections,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE state = 'active' AND pid != pg_backend_pid()) as active_queries,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE cardinality(pg_blocking_pids(pid)) > 0) as blocked_queries
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Backend activity
+* https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^] - Configuration parameters
+
+==== Background Processes
+
+*Purpose*: Lists all PostgreSQL background processes grouped by type
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT backend_type, count(*) as count
+FROM pg_stat_activity
+WHERE backend_type IS NOT NULL
+GROUP BY backend_type
+ORDER BY count DESC
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Backend activity (backend_type column available in PG 10+)
+
+=== Query Performance
+
+Queries against `pg_stat_statements` extension for query performance analysis.
+
+NOTE: The `pg_stat_statements` extension must be installed and enabled for these queries to return results.
+
+==== Slow Queries List
+
+*Purpose*: Identifies queries with high execution times or call counts
+
+*Used by*: Slow Queries Dashboard (`/slow-queries`)
+
+*PostgreSQL Version*: All supported versions (requires pg_stat_statements extension)
+
+[source,sql]
+----
+SELECT
+    md5(query) as queryid,
+    query,
+    calls as total_calls,
+    total_exec_time as total_time,
+    mean_exec_time as mean_time,
+    min_exec_time as min_time,
+    max_exec_time as max_time,
+    stddev_exec_time as stddev_time,
+    rows,
+    shared_blks_hit,
+    shared_blks_read,
+    shared_blks_written,
+    temp_blks_read,
+    temp_blks_written,
+    'unknown' as user,
+    'current' as database
+FROM pg_stat_statements
+WHERE query NOT LIKE '%pg_stat_statements%'
+ORDER BY total_exec_time DESC
+LIMIT 100
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/pgstatstatements.html[pg_stat_statements^] - Query execution statistics (extension)
+
+*Key Metrics*:
+
+* `total_exec_time` - Cumulative execution time
+* `mean_exec_time` - Average execution time per call
+* `shared_blks_hit` - Shared buffer hits (good - data in cache)
+* `shared_blks_read` - Shared buffer reads (slower - requires disk I/O)
+* `temp_blks_*` - Temporary file usage (indicates work_mem overflow)
+
+==== Query Detail
+
+*Purpose*: Retrieves comprehensive statistics for a specific query
+
+*Used by*: Query Detail Dashboard (`/slow-queries/\{queryId\}`)
+
+*PostgreSQL Version*: All supported versions (requires pg_stat_statements extension)
+
+[source,sql]
+----
+SELECT
+    md5(query) as queryid,
+    query,
+    calls as total_calls,
+    total_exec_time as total_time,
+    mean_exec_time as mean_time,
+    min_exec_time as min_time,
+    max_exec_time as max_time,
+    stddev_exec_time as stddev_time,
+    rows,
+    shared_blks_hit,
+    shared_blks_read,
+    shared_blks_written,
+    temp_blks_read,
+    temp_blks_written,
+    'unknown' as user,
+    'current' as database
+FROM pg_stat_statements
+WHERE md5(query) = ?
+LIMIT 1
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/pgstatstatements.html[pg_stat_statements^] - Query execution statistics
+
+=== Lock Monitoring
+
+Queries against `pg_locks` to identify lock contention and blocking relationships.
+
+==== Lock Information
+
+*Purpose*: Lists all locks held or awaited by backend processes
+
+*Used by*: Locks Dashboard (`/locks`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    l.pid,
+    l.locktype as lock_type,
+    d.datname as database,
+    COALESCE(c.relname, l.locktype || ':' ||
+             COALESCE(l.transactionid::text, l.virtualxid::text, '')) as relation,
+    l.mode,
+    l.granted,
+    a.query,
+    a.state,
+    a.wait_event_type,
+    a.wait_event,
+    a.usename as user
+FROM pg_locks l
+LEFT JOIN pg_database d ON l.database = d.oid
+LEFT JOIN pg_class c ON l.relation = c.oid
+JOIN pg_stat_activity a ON l.pid = a.pid
+WHERE l.pid != pg_backend_pid()
+ORDER BY l.granted, l.pid
+LIMIT 100
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/view-pg-locks.html[pg_locks^] - Lock information
+* https://www.postgresql.org/docs/current/catalog-pg-database.html[pg_database^] - Database catalogue
+* https://www.postgresql.org/docs/current/catalog-pg-class.html[pg_class^] - Table/index catalogue
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Backend activity
+
+*Lock Modes*:
+
+* `AccessShareLock` - Read operations (SELECT)
+* `RowShareLock` - SELECT FOR UPDATE/SHARE
+* `RowExclusiveLock` - UPDATE, DELETE, INSERT
+* `ShareUpdateExclusiveLock` - VACUUM, CREATE INDEX CONCURRENTLY
+* `ShareLock` - CREATE INDEX (non-concurrent)
+* `ShareRowExclusiveLock` - ALTER TABLE
+* `ExclusiveLock` - REFRESH MATERIALIZED VIEW CONCURRENTLY
+* `AccessExclusiveLock` - DROP, TRUNCATE, REINDEX, VACUUM FULL
+
+==== Blocking Tree
+
+*Purpose*: Identifies which queries are blocked and by whom
+
+*Used by*: Locks Dashboard (`/locks`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    blocked.pid as blocked_pid,
+    blocked.usename as blocked_user,
+    blocked.query as blocked_query,
+    blocked.state as blocked_state,
+    age(now(), blocked.query_start)::text as blocked_duration,
+    blocker.pid as blocker_pid,
+    blocker.usename as blocker_user,
+    blocker.query as blocker_query,
+    blocker.state as blocker_state,
+    blocked_locks.mode as lock_mode
+FROM pg_stat_activity blocked
+JOIN pg_locks blocked_locks ON blocked.pid = blocked_locks.pid
+    AND NOT blocked_locks.granted
+JOIN pg_locks blocker_locks ON blocker_locks.granted
+    AND blocked_locks.locktype = blocker_locks.locktype
+    AND blocked_locks.database IS NOT DISTINCT FROM blocker_locks.database
+    AND blocked_locks.relation IS NOT DISTINCT FROM blocker_locks.relation
+    AND blocked_locks.page IS NOT DISTINCT FROM blocker_locks.page
+    AND blocked_locks.tuple IS NOT DISTINCT FROM blocker_locks.tuple
+    AND blocked_locks.virtualxid IS NOT DISTINCT FROM blocker_locks.virtualxid
+    AND blocked_locks.transactionid IS NOT DISTINCT FROM blocker_locks.transactionid
+    AND blocked_locks.classid IS NOT DISTINCT FROM blocker_locks.classid
+    AND blocked_locks.objid IS NOT DISTINCT FROM blocker_locks.objid
+    AND blocked_locks.objsubid IS NOT DISTINCT FROM blocker_locks.objsubid
+    AND blocked_locks.pid != blocker_locks.pid
+JOIN pg_stat_activity blocker ON blocker.pid = blocker_locks.pid
+ORDER BY blocked.query_start
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/view-pg-locks.html[pg_locks^] - Lock information
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Backend activity
+
+=== Table Statistics
+
+Queries against `pg_stat_user_tables` and `pg_stat_user_indexes` for table-level metrics.
+
+==== Table Statistics
+
+*Purpose*: Displays scan patterns, tuple operations, and live/dead tuple counts
+
+*Used by*: Tables Dashboard (`/tables`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    schemaname,
+    relname as tablename,
+    seq_scan,
+    seq_tup_read,
+    COALESCE(idx_scan, 0) as idx_scan,
+    COALESCE(idx_tup_fetch, 0) as idx_tup_fetch,
+    n_tup_ins,
+    n_tup_upd,
+    n_tup_del,
+    n_live_tup,
+    n_dead_tup
+FROM pg_stat_user_tables
+WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY (n_live_tup + n_dead_tup) DESC
+LIMIT 50
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ALL-TABLES-VIEW[pg_stat_user_tables^] - Table access statistics
+
+*Key Metrics*:
+
+* `seq_scan` / `idx_scan` - Sequential vs index scans (high seq_scan may indicate missing indexes)
+* `n_dead_tup` - Dead tuples awaiting VACUUM
+* High dead tuple count suggests VACUUM tuning needed
+
+==== Top Tables by Size
+
+*Purpose*: Lists the largest tables in the database
+
+*Used by*: Overview Dashboard (`/`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    schemaname,
+    relname as tablename,
+    pg_size_pretty(pg_total_relation_size(schemaname || '.' || relname)) as size,
+    pg_total_relation_size(schemaname || '.' || relname) as size_bytes
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(schemaname || '.' || relname) DESC
+LIMIT 10
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ALL-TABLES-VIEW[pg_stat_user_tables^] - Table statistics
+
+*Key Functions*:
+
+* `pg_total_relation_size()` - Total disk space (table + indexes + TOAST)
+* `pg_size_pretty()` - Formats bytes to human-readable format
+
+==== Top Indexes by Size
+
+*Purpose*: Lists the largest indexes in the database
+
+*Used by*: Overview Dashboard (`/`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    schemaname,
+    indexrelname as indexname,
+    relname as tablename,
+    pg_size_pretty(pg_relation_size(indexrelid)) as size,
+    pg_relation_size(indexrelid) as size_bytes
+FROM pg_stat_user_indexes
+ORDER BY pg_relation_size(indexrelid) DESC
+LIMIT 10
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ALL-INDEXES-VIEW[pg_stat_user_indexes^] - Index access statistics
+
+=== Database Statistics
+
+Queries against `pg_stat_database` for per-database metrics.
+
+==== All Database Metrics
+
+*Purpose*: Comprehensive metrics for all databases including transactions, I/O, tuple operations, and sessions
+
+*Used by*: Databases Dashboard (`/databases`)
+
+*PostgreSQL Version*: All supported versions (some columns require PG 14+)
+
+[source,sql]
+----
+SELECT
+    d.datid,
+    d.datname,
+    d.numbackends,
+    d.xact_commit,
+    d.xact_rollback,
+    d.blks_read,
+    d.blks_hit,
+    d.tup_returned,
+    d.tup_fetched,
+    d.tup_inserted,
+    d.tup_updated,
+    d.tup_deleted,
+    d.conflicts,
+    d.temp_files,
+    d.temp_bytes,
+    d.deadlocks,
+    COALESCE(d.blk_read_time, 0) as blk_read_time,
+    COALESCE(d.blk_write_time, 0) as blk_write_time,
+    COALESCE(d.session_time, 0) as session_time,
+    COALESCE(d.active_time, 0) as active_time,
+    COALESCE(d.idle_in_transaction_time, 0) as idle_in_transaction_time,
+    COALESCE(d.sessions, 0) as sessions,
+    COALESCE(d.sessions_abandoned, 0) as sessions_abandoned,
+    COALESCE(d.sessions_fatal, 0) as sessions_fatal,
+    COALESCE(d.sessions_killed, 0) as sessions_killed,
+    d.stats_reset::text as stats_reset,
+    has_database_privilege(d.datname, 'CONNECT') as has_access,
+    CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+         THEN pg_size_pretty(pg_database_size(d.datname))
+         ELSE 'No access'
+    END as database_size,
+    CASE WHEN has_database_privilege(d.datname, 'CONNECT')
+         THEN pg_database_size(d.datname)
+         ELSE 0
+    END as database_size_bytes
+FROM pg_stat_database d
+WHERE d.datistemplate = false
+ORDER BY d.datname
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-DATABASE-VIEW[pg_stat_database^] - Database-wide statistics
+
+*Version-Specific Columns*:
+
+* `session_time`, `active_time`, `idle_in_transaction_time` - Available in PostgreSQL 14+
+* `sessions`, `sessions_abandoned`, `sessions_fatal`, `sessions_killed` - Available in PostgreSQL 14+
+
+==== Cache Hit Ratio
+
+*Purpose*: Calculates the percentage of data blocks served from shared buffers (cache)
+
+*Used by*: Overview Dashboard (`/`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    CASE WHEN (blks_hit + blks_read) = 0 THEN 0
+         ELSE (blks_hit::float / (blks_hit + blks_read)) * 100
+    END as cache_hit_ratio
+FROM pg_stat_database
+WHERE datname = current_database()
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-DATABASE-VIEW[pg_stat_database^] - Database statistics
+
+*Interpretation*:
+
+* *>99%* - Excellent (most data served from memory)
+* *95-99%* - Good
+* *<95%* - Consider increasing `shared_buffers` or reviewing query patterns
+
+=== Replication Monitoring
+
+Queries for monitoring streaming replication and logical replication.
+
+==== Streaming Replication Status
+
+*Purpose*: Monitors all connected streaming replicas including lag metrics
+
+*Used by*: Replication Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    pid,
+    usename,
+    application_name,
+    client_addr::text,
+    client_hostname,
+    client_port,
+    backend_start,
+    state,
+    sent_lsn::text,
+    write_lsn::text,
+    flush_lsn::text,
+    replay_lsn::text,
+    EXTRACT(EPOCH FROM write_lag) * 1000 as write_lag_ms,
+    EXTRACT(EPOCH FROM flush_lag) * 1000 as flush_lag_ms,
+    EXTRACT(EPOCH FROM replay_lag) * 1000 as replay_lag_ms,
+    sync_priority::text,
+    sync_state,
+    reply_time,
+    pg_wal_lsn_diff(sent_lsn, replay_lsn) as lag_bytes
+FROM pg_stat_replication
+ORDER BY application_name
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-REPLICATION-VIEW[pg_stat_replication^] - Replication statistics
+
+*Key Functions*:
+
+* `pg_wal_lsn_diff()` - Calculates byte difference between LSN positions
+
+*Lag Types*:
+
+* `write_lag` - Time until replica writes WAL to disk
+* `flush_lag` - Time until replica flushes WAL to disk
+* `replay_lag` - Time until replica applies WAL changes (affects queries)
+
+==== Replication Slots
+
+*Purpose*: Lists all physical and logical replication slots
+
+*Used by*: Replication Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    slot_name,
+    plugin,
+    slot_type,
+    database,
+    temporary,
+    active,
+    active_pid,
+    xmin::text,
+    catalog_xmin::text,
+    restart_lsn::text,
+    confirmed_flush_lsn::text,
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) as wal_retained_bytes,
+    NOT active AND restart_lsn IS NOT NULL as safe_to_delete
+FROM pg_replication_slots
+ORDER BY slot_type, slot_name
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/view-pg-replication-slots.html[pg_replication_slots^] - Replication slot information
+
+*Key Functions*:
+
+* `pg_current_wal_lsn()` - Current WAL insert position
+
+*Slot Types*:
+
+* `physical` - Streaming replication
+* `logical` - Logical replication (requires wal_level = logical)
+
+WARNING: Inactive replication slots can cause WAL accumulation and disk space issues. Monitor `wal_retained_bytes` carefully.
+
+==== WAL Statistics
+
+*Purpose*: Retrieves Write-Ahead Log configuration and usage statistics
+
+*Used by*: Replication Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    pg_current_wal_lsn()::text as current_lsn,
+    pg_walfile_name(pg_current_wal_lsn()) as current_wal_file,
+    (SELECT setting FROM pg_settings WHERE name = 'wal_level') as wal_level,
+    (SELECT setting FROM pg_settings WHERE name = 'max_wal_senders') as max_wal_senders,
+    (SELECT count(*) FROM pg_stat_replication) as active_senders,
+    (SELECT setting FROM pg_settings WHERE name = 'max_replication_slots') as max_replication_slots,
+    (SELECT count(*) FROM pg_replication_slots) as used_slots,
+    (SELECT setting::bigint FROM pg_settings WHERE name = 'wal_segment_size') as wal_segment_size
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^] - Configuration parameters
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-REPLICATION-VIEW[pg_stat_replication^] - Replication statistics
+* https://www.postgresql.org/docs/current/view-pg-replication-slots.html[pg_replication_slots^] - Replication slots
+
+*Key Functions*:
+
+* `pg_current_wal_lsn()` - Current WAL LSN position
+* `pg_walfile_name()` - Converts LSN to WAL filename
+
+==== Recovery Status
+
+*Purpose*: Checks whether the instance is a primary or standby server
+
+*Used by*: Replication Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT pg_is_in_recovery()
+----
+
+*Key Functions*:
+
+* `pg_is_in_recovery()` - Returns true if instance is in recovery mode (standby/replica)
+
+=== Infrastructure Monitoring
+
+Queries for monitoring background processes, checkpoints, and storage.
+
+==== Vacuum Progress (PostgreSQL 12-16)
+
+*Purpose*: Monitors ongoing VACUUM operations
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 12-16
+
+[source,sql]
+----
+SELECT
+    p.pid,
+    d.datname as database,
+    n.nspname as schema_name,
+    c.relname as table_name,
+    p.phase,
+    p.heap_blks_total,
+    p.heap_blks_scanned,
+    p.heap_blks_vacuumed,
+    p.index_vacuum_count,
+    p.num_dead_tuples,
+    p.max_dead_tuples,
+    a.query LIKE 'autovacuum:%' as is_autovacuum
+FROM pg_stat_progress_vacuum p
+JOIN pg_database d ON d.oid = p.datid
+JOIN pg_class c ON c.oid = p.relid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_stat_activity a ON a.pid = p.pid
+ORDER BY p.pid
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/progress-reporting.html#VACUUM-PROGRESS-REPORTING[pg_stat_progress_vacuum^] - Vacuum progress
+
+==== Vacuum Progress (PostgreSQL 17+)
+
+*Purpose*: Monitors ongoing VACUUM operations (updated column names in PG 17)
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 17+
+
+NOTE: PostgreSQL 17 renamed `num_dead_tuples` to `dead_tuple_bytes` and `max_dead_tuples` to `max_dead_tuple_bytes`.
+
+[source,sql]
+----
+SELECT
+    p.pid,
+    d.datname as database,
+    n.nspname as schema_name,
+    c.relname as table_name,
+    p.phase,
+    p.heap_blks_total,
+    p.heap_blks_scanned,
+    p.heap_blks_vacuumed,
+    p.index_vacuum_count,
+    p.dead_tuple_bytes as num_dead_tuples,
+    p.max_dead_tuple_bytes as max_dead_tuples,
+    a.query LIKE 'autovacuum:%' as is_autovacuum
+FROM pg_stat_progress_vacuum p
+JOIN pg_database d ON d.oid = p.datid
+JOIN pg_class c ON c.oid = p.relid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_stat_activity a ON a.pid = p.pid
+ORDER BY p.pid
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/progress-reporting.html#VACUUM-PROGRESS-REPORTING[pg_stat_progress_vacuum^] - Vacuum progress
+
+==== Autovacuum Statistics
+
+*Purpose*: Retrieves autovacuum configuration and worker status
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE backend_type = 'autovacuum launcher') as launcher_running,
+    (SELECT count(*) FROM pg_stat_activity
+     WHERE backend_type = 'autovacuum worker') as workers_running,
+    (SELECT setting::int FROM pg_settings
+     WHERE name = 'autovacuum_max_workers') as max_workers,
+    (SELECT setting FROM pg_settings
+     WHERE name = 'autovacuum') as autovacuum_enabled
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^] - Backend activity
+* https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^] - Configuration parameters
+
+==== Background Writer & Checkpointer (PostgreSQL 12-16)
+
+*Purpose*: Statistics for background writer and checkpoint processes
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 12-16
+
+[source,sql]
+----
+SELECT
+    checkpoints_timed,
+    checkpoints_req,
+    checkpoint_write_time,
+    checkpoint_sync_time,
+    buffers_checkpoint,
+    buffers_clean,
+    maxwritten_clean,
+    buffers_backend,
+    buffers_backend_fsync,
+    buffers_alloc
+FROM pg_stat_bgwriter
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-BGWRITER-VIEW[pg_stat_bgwriter^] - Background writer statistics
+
+*Key Metrics*:
+
+* `checkpoints_timed` - Scheduled checkpoints
+* `checkpoints_req` - Requested checkpoints (may indicate checkpoint tuning needed if too high)
+* `buffers_backend` - Buffers written directly by backends (high value suggests bgwriter tuning needed)
+
+==== Checkpointer Statistics (PostgreSQL 17+)
+
+*Purpose*: Statistics for checkpoint process (separated from bgwriter in PG 17)
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 17+
+
+NOTE: PostgreSQL 17 moved checkpoint statistics from `pg_stat_bgwriter` to the new `pg_stat_checkpointer` view.
+
+[source,sql]
+----
+SELECT
+    num_timed as checkpoints_timed,
+    num_requested as checkpoints_req,
+    write_time as checkpoint_write_time,
+    sync_time as checkpoint_sync_time,
+    buffers_written as buffers_checkpoint
+FROM pg_stat_checkpointer
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-CHECKPOINTER-VIEW[pg_stat_checkpointer^] - Checkpointer statistics (PostgreSQL 17+)
+
+==== Background Writer Statistics (PostgreSQL 17+)
+
+*Purpose*: Statistics for background writer process (PG 17 version)
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 17+
+
+[source,sql]
+----
+SELECT
+    buffers_clean,
+    maxwritten_clean,
+    buffers_alloc
+FROM pg_stat_bgwriter
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-BGWRITER-VIEW[pg_stat_bgwriter^] - Background writer statistics
+
+==== Backend I/O Statistics (PostgreSQL 16+)
+
+*Purpose*: Backend write and fsync statistics from pg_stat_io
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: PostgreSQL 16+
+
+[source,sql]
+----
+SELECT
+    COALESCE(SUM(writes), 0) as buffers_backend,
+    COALESCE(SUM(fsyncs), 0) as buffers_backend_fsync
+FROM pg_stat_io
+WHERE backend_type = 'client backend'
+  AND context = 'normal'
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-IO-VIEW[pg_stat_io^] - I/O statistics (PostgreSQL 16+)
+
+==== Storage Statistics
+
+*Purpose*: Comprehensive storage information including tablespaces, databases, and WAL
+
+*Used by*: Infrastructure Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+-- Tablespace information
+SELECT
+    spcname as name,
+    pg_tablespace_location(oid) as location,
+    pg_tablespace_size(oid) as size_bytes
+FROM pg_tablespace
+ORDER BY pg_tablespace_size(oid) DESC
+----
+
+[source,sql]
+----
+-- Database sizes
+SELECT
+    datname as name,
+    pg_database_size(datname) as size_bytes
+FROM pg_database
+WHERE datistemplate = false
+ORDER BY pg_database_size(datname) DESC
+----
+
+[source,sql]
+----
+-- WAL statistics
+SELECT
+    (SELECT setting FROM pg_settings WHERE name = 'data_directory') as data_directory,
+    (SELECT setting::bigint FROM pg_settings WHERE name = 'wal_segment_size') as wal_segment_size,
+    (SELECT count(*) FROM pg_ls_waldir()) as wal_file_count
+----
+
+[source,sql]
+----
+-- Temporary file statistics
+SELECT
+    COALESCE(SUM(temp_files), 0) as temp_files,
+    COALESCE(SUM(temp_bytes), 0) as temp_bytes
+FROM pg_stat_database
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/catalog-pg-tablespace.html[pg_tablespace^] - Tablespace catalogue
+* https://www.postgresql.org/docs/current/catalog-pg-database.html[pg_database^] - Database catalogue
+* https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^] - Configuration parameters
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-DATABASE-VIEW[pg_stat_database^] - Database statistics
+* https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-BACKUP[pg_ls_waldir()^] - WAL directory listing function
+
+=== Configuration
+
+Queries against `pg_settings` for configuration parameters.
+
+==== Database Information
+
+*Purpose*: Retrieves version, encoding, and server information
+
+*Used by*: About Dashboard (`/about`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    version() as postgres_version,
+    current_database() as current_database,
+    current_user as current_user,
+    (SELECT setting FROM pg_settings WHERE name = 'server_encoding') as server_encoding,
+    (SELECT pg_postmaster_start_time()::text) as server_start_time
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^] - Configuration parameters
+
+*Key Functions*:
+
+* `version()` - PostgreSQL version string
+* `current_database()` - Name of current database
+* `current_user` - Current user name
+* `pg_postmaster_start_time()` - Server start timestamp
+
+==== Extension Check
+
+*Purpose*: Verifies presence and version of pg_stat_statements extension
+
+*Used by*: About Dashboard (`/about`)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT extversion
+FROM pg_extension
+WHERE extname = 'pg_stat_statements'
+----
+
+*System Views*:
+
+* https://www.postgresql.org/docs/current/catalog-pg-extension.html[pg_extension^] - Installed extensions
+
+=== History Storage
+
+Queries against the `pgconsole` schema for historical metrics storage and retrieval.
+
+NOTE: These tables are created and managed by pg-console's Flyway migrations. See xref:schema-free-mode.adoc[Schema-Free Mode] for disabling history storage.
+
+==== Save System Metrics
+
+*Purpose*: Stores periodic snapshots of system-wide metrics
+
+*Used by*: MetricsSamplerService (scheduled job)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+INSERT INTO pgconsole.system_metrics_history (
+    instance_id, sampled_at, total_connections, max_connections, active_queries,
+    idle_connections, idle_in_transaction, blocked_queries,
+    longest_query_seconds, longest_transaction_seconds,
+    cache_hit_ratio, total_database_size_bytes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+----
+
+*Schema*: `pgconsole.system_metrics_history`
+
+==== Retrieve System Metrics History
+
+*Purpose*: Fetches historical system metrics for trend analysis and sparklines
+
+*Used by*: SparklineService, Overview Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT id, sampled_at, total_connections, max_connections, active_queries,
+       idle_connections, idle_in_transaction, blocked_queries,
+       longest_query_seconds, longest_transaction_seconds,
+       cache_hit_ratio, total_database_size_bytes
+FROM pgconsole.system_metrics_history
+WHERE instance_id = ? AND sampled_at >= ?
+ORDER BY sampled_at ASC
+----
+
+*Schema*: `pgconsole.system_metrics_history`
+
+==== Save Query Metrics
+
+*Purpose*: Stores periodic snapshots of top query performance from pg_stat_statements
+
+*Used by*: MetricsSamplerService (scheduled job)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+INSERT INTO pgconsole.query_metrics_history (
+    instance_id, sampled_at, query_id, query_text, total_calls, total_time_ms,
+    total_rows, mean_time_ms, min_time_ms, max_time_ms, stddev_time_ms,
+    shared_blks_hit, shared_blks_read, temp_blks_written
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+----
+
+*Schema*: `pgconsole.query_metrics_history`
+
+==== Retrieve Query Metrics History
+
+*Purpose*: Fetches historical performance data for a specific query
+
+*Used by*: SparklineService, Query Detail Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT id, sampled_at, query_id, query_text, total_calls, total_time_ms,
+       total_rows, mean_time_ms, min_time_ms, max_time_ms, stddev_time_ms,
+       shared_blks_hit, shared_blks_read, temp_blks_written
+FROM pgconsole.query_metrics_history
+WHERE instance_id = ? AND query_id = ? AND sampled_at >= ?
+ORDER BY sampled_at ASC
+----
+
+*Schema*: `pgconsole.query_metrics_history`
+
+==== Save Database Metrics
+
+*Purpose*: Stores periodic snapshots of per-database metrics
+
+*Used by*: MetricsSamplerService (scheduled job)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+INSERT INTO pgconsole.database_metrics_history (
+    instance_id, sampled_at, database_name, num_backends, xact_commit, xact_rollback,
+    blks_hit, blks_read, cache_hit_ratio, tup_returned, tup_fetched,
+    tup_inserted, tup_updated, tup_deleted, deadlocks, conflicts,
+    temp_files, temp_bytes, database_size_bytes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+----
+
+*Schema*: `pgconsole.database_metrics_history`
+
+==== Retrieve Database Metrics History
+
+*Purpose*: Fetches historical metrics for a specific database
+
+*Used by*: SparklineService, Database Detail Dashboard
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT id, sampled_at, database_name, num_backends, xact_commit, xact_rollback,
+       blks_hit, blks_read, cache_hit_ratio, tup_returned, tup_fetched,
+       tup_inserted, tup_updated, tup_deleted, deadlocks, conflicts,
+       temp_files, temp_bytes, database_size_bytes
+FROM pgconsole.database_metrics_history
+WHERE instance_id = ? AND database_name = ? AND sampled_at >= ?
+ORDER BY sampled_at ASC
+----
+
+*Schema*: `pgconsole.database_metrics_history`
+
+==== Aggregated Query Metrics
+
+*Purpose*: Aggregates query performance over a time window for regression detection
+
+*Used by*: QueryRegressionService
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT
+    query_id,
+    MAX(query_text) as query_text,
+    AVG(mean_time_ms) as avg_mean_time,
+    SUM(total_calls) as total_calls,
+    SUM(total_time_ms) as total_time,
+    COUNT(*) as sample_count
+FROM pgconsole.query_metrics_history
+WHERE instance_id = ?
+  AND sampled_at >= ? AND sampled_at < ?
+GROUP BY query_id
+HAVING COUNT(*) >= 2
+ORDER BY AVG(mean_time_ms) DESC
+----
+
+*Schema*: `pgconsole.query_metrics_history`
+
+==== Delete Old History Data
+
+*Purpose*: Purges historical data older than the configured retention period
+
+*Used by*: MetricsSamplerService (scheduled cleanup job)
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+DELETE FROM pgconsole.system_metrics_history WHERE sampled_at < ?
+DELETE FROM pgconsole.query_metrics_history WHERE sampled_at < ?
+DELETE FROM pgconsole.database_metrics_history WHERE sampled_at < ?
+----
+
+*Schema*: `pgconsole.*_history` tables
+
+=== Management Operations
+
+Queries that perform management operations (cancel, terminate).
+
+==== Cancel Backend Query
+
+*Purpose*: Sends SIGINT to cancel a running query without disconnecting the client
+
+*Used by*: Activity Dashboard (`/activity`) - Cancel button
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT pg_cancel_backend(?)
+----
+
+*Key Functions*:
+
+* `pg_cancel_backend(pid)` - Cancels the current query on the specified backend
+
+WARNING: Requires appropriate permissions. Only superusers or users with `pg_signal_backend` role can cancel other users' queries.
+
+==== Terminate Backend
+
+*Purpose*: Sends SIGTERM to forcefully disconnect a client connection
+
+*Used by*: Activity Dashboard (`/activity`) - Terminate button
+
+*PostgreSQL Version*: All supported versions
+
+[source,sql]
+----
+SELECT pg_terminate_backend(?)
+----
+
+*Key Functions*:
+
+* `pg_terminate_backend(pid)` - Terminates the specified backend process
+
+WARNING: This is more aggressive than `pg_cancel_backend()` as it closes the entire connection. Use with caution.
+
+== PostgreSQL System Views Reference
+
+This table lists all PostgreSQL system views queried by pg-console with links to official documentation.
+
+[cols="1,3,1"]
+|===
+| View/Catalogue | Purpose | Min Version
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW[pg_stat_activity^]
+| Current backend activity and connections
+| 9.2+
+
+| https://www.postgresql.org/docs/current/pgstatstatements.html[pg_stat_statements^]
+| Query execution statistics (extension required)
+| 9.2+
+
+| https://www.postgresql.org/docs/current/view-pg-locks.html[pg_locks^]
+| Lock information
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ALL-TABLES-VIEW[pg_stat_user_tables^]
+| Table access statistics
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ALL-INDEXES-VIEW[pg_stat_user_indexes^]
+| Index access statistics
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-DATABASE-VIEW[pg_stat_database^]
+| Database-wide statistics
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-REPLICATION-VIEW[pg_stat_replication^]
+| Streaming replication statistics
+| 9.2+
+
+| https://www.postgresql.org/docs/current/view-pg-replication-slots.html[pg_replication_slots^]
+| Replication slot information
+| 9.4+
+
+| https://www.postgresql.org/docs/current/view-pg-settings.html[pg_settings^]
+| Configuration parameters
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-BGWRITER-VIEW[pg_stat_bgwriter^]
+| Background writer statistics
+| 9.2+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-CHECKPOINTER-VIEW[pg_stat_checkpointer^]
+| Checkpointer statistics
+| 17+
+
+| https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-IO-VIEW[pg_stat_io^]
+| I/O statistics by backend type
+| 16+
+
+| https://www.postgresql.org/docs/current/progress-reporting.html#VACUUM-PROGRESS-REPORTING[pg_stat_progress_vacuum^]
+| Vacuum operation progress
+| 12+
+
+| https://www.postgresql.org/docs/current/catalog-pg-database.html[pg_database^]
+| Database catalogue
+| 9.2+
+
+| https://www.postgresql.org/docs/current/catalog-pg-class.html[pg_class^]
+| Table/index/sequence catalogue
+| 9.2+
+
+| https://www.postgresql.org/docs/current/catalog-pg-namespace.html[pg_namespace^]
+| Schema catalogue
+| 9.2+
+
+| https://www.postgresql.org/docs/current/catalog-pg-tablespace.html[pg_tablespace^]
+| Tablespace catalogue
+| 9.2+
+
+| https://www.postgresql.org/docs/current/catalog-pg-extension.html[pg_extension^]
+| Installed extensions
+| 9.2+
+
+|===
+
+== Required Permissions
+
+pg-console requires the following PostgreSQL permissions to execute monitoring queries:
+
+=== Minimum Required Permissions
+
+[source,sql]
+----
+-- Connect to databases
+GRANT CONNECT ON DATABASE your_database TO pg_console_user;
+
+-- Read system catalogues and statistics views
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_catalog TO pg_console_user;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pg_catalog TO pg_console_user;
+
+-- Read pg_stat_statements (if using the extension)
+GRANT SELECT ON pg_stat_statements TO pg_console_user;
+----
+
+=== Recommended Permissions
+
+For full functionality including query cancellation:
+
+[source,sql]
+----
+-- Grant monitoring role (PostgreSQL 10+)
+GRANT pg_monitor TO pg_console_user;
+
+-- Grant signal backend role for cancel/terminate operations (PostgreSQL 10+)
+GRANT pg_signal_backend TO pg_console_user;
+
+-- For older versions, use superuser or specific grants:
+-- GRANT SELECT ON pg_stat_activity TO pg_console_user;
+----
+
+=== Schema-Free Mode Permissions
+
+If using xref:schema-free-mode.adoc[Schema-Free Mode] (disabled history storage), no write permissions are required.
+
+If history storage is enabled:
+
+[source,sql]
+----
+-- Allow pg-console to create and manage the pgconsole schema
+GRANT CREATE ON DATABASE your_database TO pg_console_user;
+
+-- After schema creation (done automatically by Flyway migrations)
+GRANT ALL ON SCHEMA pgconsole TO pg_console_user;
+GRANT ALL ON ALL TABLES IN SCHEMA pgconsole TO pg_console_user;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA pgconsole TO pg_console_user;
+----
+
+=== Multi-Instance Monitoring
+
+For monitoring multiple PostgreSQL instances, the monitoring user must have the same permissions on each instance.
+See xref:multi-instance.adoc[Multi-Instance Monitoring] for configuration details.
+
+== Version Compatibility
+
+pg-console adapts queries based on the detected PostgreSQL version to ensure compatibility.
+
+=== Automatic Version Detection
+
+The application automatically detects PostgreSQL version and adjusts queries:
+
+* **PostgreSQL 17+**: Uses `pg_stat_checkpointer`, `dead_tuple_bytes` in vacuum progress
+* **PostgreSQL 16+**: Uses `pg_stat_io` for backend I/O statistics
+* **PostgreSQL 14+**: Includes session-level statistics in `pg_stat_database`
+* **PostgreSQL 12-16**: Uses consolidated `pg_stat_bgwriter`, original vacuum column names
+* **PostgreSQL 10+**: Full support for all monitoring features
+* **PostgreSQL 9.2-9.6**: Basic monitoring (some features unavailable)
+
+=== Version-Specific Queries
+
+Some dashboards adapt their queries based on version:
+
+* **Vacuum Progress**: Detects column name changes between PG 16 and PG 17
+* **Background Processes**: Uses `pg_stat_checkpointer` on PG 17+, `pg_stat_bgwriter` on earlier versions
+* **Database Metrics**: Conditionally includes session columns on PG 14+
+
+== Query Performance Considerations
+
+=== Query Optimisation
+
+All pg-console queries are designed for minimal performance impact:
+
+* *Read-only operations*: No modifications to user data
+* *System view queries*: Leverage PostgreSQL's internal caching
+* *Result limits*: Most queries use `LIMIT` clauses to prevent excessive data transfer
+* *Indexed lookups*: System catalogues are already indexed by PostgreSQL
+
+=== Monitoring Impact
+
+* pg_stat_statements overhead is typically <1% CPU when enabled
+* Historical metrics sampling (default: 60s interval) has negligible impact
+* Lock monitoring queries may be slower on systems with thousands of concurrent connections
+
+=== Tuning Recommendations
+
+If monitoring queries cause performance concerns:
+
+1. Increase sampling interval: `PG_CONSOLE_HISTORY_INTERVAL=300` (5 minutes)
+2. Reduce top queries tracked: `PG_CONSOLE_HISTORY_TOP_QUERIES=25`
+3. Enable schema-free mode to disable history storage: xref:schema-free-mode.adoc[Schema-Free Mode]
+4. Use database filtering to monitor specific databases only: xref:configuration.adoc#database-filtering[Database Filtering]
+
+== See Also
+
+* xref:configuration.adoc[Configuration Reference] - Environment variables and settings
+* xref:schema-free-mode.adoc[Schema-Free Mode] - Disable history storage
+* xref:multi-instance.adoc[Multi-Instance Monitoring] - Monitor multiple PostgreSQL instances
+* xref:security.adoc[Security Configuration] - Permissions and access control
+* https://www.postgresql.org/docs/current/monitoring-stats.html[PostgreSQL Statistics Collector^] - Official documentation
+* https://www.postgresql.org/docs/current/pgstatstatements.html[pg_stat_statements Extension^] - Query statistics extension

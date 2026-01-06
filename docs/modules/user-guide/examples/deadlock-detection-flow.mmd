@@ -1,0 +1,43 @@
+%% PostgreSQL Deadlock Detection and Resolution Flow
+%% Shows the complete process from lock request to deadlock resolution
+
+flowchart TD
+    Start([Transaction Requests Lock]) --> CheckLock{Lock<br/>Available?}
+
+    CheckLock -->|Yes| Granted[Lock Granted]
+    Granted --> Continue([Transaction Continues])
+
+    CheckLock -->|No| StartWait[Begin Waiting for Lock]
+    StartWait --> WaitTimer{Wait Time ><br/>deadlock_timeout?}
+
+    WaitTimer -->|No| StillWaiting[Continue Waiting]
+    StillWaiting --> CheckGranted{Lock<br/>Granted?}
+    CheckGranted -->|Yes| Granted
+    CheckGranted -->|No| WaitTimer
+
+    WaitTimer -->|Yes| DeadlockCheck[PostgreSQL Scans<br/>Lock Wait Graph]
+    DeadlockCheck --> CycleFound{Deadlock<br/>Cycle Found?}
+
+    CycleFound -->|No| StillWaiting
+
+    CycleFound -->|Yes| SelectVictim[Select Transaction<br/>to Abort]
+    SelectVictim --> AbortTx[Abort Selected Transaction]
+    AbortTx --> LogError[Log Deadlock Error<br/>to PostgreSQL Logs]
+    LogError --> RollbackVictim[Rollback Victim<br/>Transaction]
+    RollbackVictim --> ReleaseLocks[Release All Locks<br/>Held by Victim]
+    ReleaseLocks --> GrantOther[Grant Lock to<br/>Other Transaction]
+    GrantOther --> Error([Return Error to<br/>Aborted Transaction])
+
+    %% Styling
+    classDef startEnd fill:#e1f5ff,stroke:#0277bd,stroke-width:2px,rx:10
+    classDef decision fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef process fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    classDef waiting fill:#e0e0e0,stroke:#616161,stroke-width:2px
+    classDef deadlockProcess fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    classDef errorState fill:#f8bbd0,stroke:#880e4f,stroke-width:2px
+
+    class Start,Continue,Error startEnd
+    class CheckLock,WaitTimer,CycleFound,CheckGranted decision
+    class Granted,DeadlockCheck,GrantOther process
+    class StartWait,StillWaiting waiting
+    class SelectVictim,AbortTx,LogError,RollbackVictim,ReleaseLocks deadlockProcess

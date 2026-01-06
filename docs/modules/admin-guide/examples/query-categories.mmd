@@ -1,0 +1,90 @@
+graph TD
+    Root[SQL Query Categories<br/>in pg-console]
+
+    %% Main categories
+    Root --> Monitoring[Monitoring]
+    Root --> Performance[Performance]
+    Root --> Maintenance[Maintenance]
+    Root --> Replication[Replication]
+    Root --> Security[Security]
+    Root --> Configuration[Configuration]
+
+    %% Monitoring subcategories
+    Monitoring --> MonActivity[Activity Monitoring]
+    Monitoring --> MonQueries[Query Monitoring]
+    Monitoring --> MonLocks[Lock Monitoring]
+    Monitoring --> MonWaitEvents[Wait Event Monitoring]
+
+    MonActivity -->|pg_stat_activity| MonActivityQueries["Active connections<br/>Backend processes<br/>Session states<br/>Query execution times"]
+
+    MonQueries -->|pg_stat_statements| MonQueriesQueries["Top queries by time<br/>Query call frequency<br/>Query I/O statistics<br/>Query planning time"]
+
+    MonLocks -->|pg_locks| MonLocksQueries["Current locks<br/>Lock modes<br/>Blocking tree<br/>Lock contention"]
+
+    MonWaitEvents -->|pg_stat_activity| MonWaitQueries["Wait event types<br/>Lock waits<br/>I/O waits<br/>Client waits"]
+
+    %% Performance subcategories
+    Performance --> PerfSlowQueries[Slow Query Analysis]
+    Performance --> PerfCache[Cache Performance]
+    Performance --> PerfIO[I/O Performance]
+    Performance --> PerfIndexes[Index Performance]
+
+    PerfSlowQueries -->|pg_stat_statements| PerfSlowQueriesSQL["Queries by total time<br/>Queries by mean time<br/>Queries by max time<br/>Query execution patterns"]
+
+    PerfCache -->|pg_stat_database| PerfCacheSQL["Cache hit ratio<br/>Block reads vs hits<br/>Temporary file usage<br/>Shared buffer efficiency"]
+
+    PerfIO -->|pg_statio_*| PerfIOSQL["Table I/O statistics<br/>Index I/O statistics<br/>Heap vs index reads<br/>Sequential scan I/O"]
+
+    PerfIndexes -->|pg_stat_user_indexes| PerfIndexesSQL["Index scan counts<br/>Index tuple reads<br/>Index size vs usage<br/>Unused index detection"]
+
+    %% Maintenance subcategories
+    Maintenance --> MaintVacuum[Vacuum Monitoring]
+    Maintenance --> MaintBloat[Bloat Detection]
+    Maintenance --> MaintDeadTuples[Dead Tuple Analysis]
+    Maintenance --> MaintTableHealth[Table Health]
+
+    MaintVacuum -->|pg_stat_user_tables| MaintVacuumSQL["Last vacuum time<br/>Last autovacuum time<br/>Autovacuum counts<br/>Vacuum progress"]
+
+    MaintBloat -->|pg_stat_user_tables| MaintBloatSQL["Table bloat estimation<br/>Dead tuple ratio<br/>Free space mapping<br/>Bloat percentage"]
+
+    MaintDeadTuples -->|pg_stat_user_tables| MaintDeadSQL["Dead tuple counts<br/>Live vs dead ratio<br/>Autovacuum triggers<br/>Tuple modification counts"]
+
+    MaintTableHealth -->|pg_stat_user_tables| MaintHealthSQL["Sequential vs index scans<br/>Insert/update/delete counts<br/>Analyze statistics<br/>Hot updates"]
+
+    %% Replication subcategories
+    Replication --> ReplLag[Replication Lag]
+    Replication --> ReplSlots[Replication Slots]
+    Replication --> ReplWAL[WAL Status]
+
+    ReplLag -->|pg_stat_replication| ReplLagSQL["Replay lag time<br/>Write lag time<br/>Flush lag time<br/>Byte lag metrics"]
+
+    ReplSlots -->|pg_replication_slots| ReplSlotsSQL["Active slots<br/>Slot lag bytes<br/>Temporary slots<br/>Slot restart LSN"]
+
+    ReplWAL -->|pg_stat_wal| ReplWALSQL["WAL records generated<br/>WAL bytes generated<br/>WAL sync time<br/>WAL write time"]
+
+    %% Security subcategories
+    Security --> SecRoles[Role Information]
+    Security --> SecPermissions[Permission Checks]
+
+    SecRoles -->|pg_roles| SecRolesSQL["Role attributes<br/>Superuser status<br/>Connection limits<br/>Valid until dates"]
+
+    SecPermissions -->|pg_database| SecPermSQL["Database ownership<br/>ACL permissions<br/>Default privileges<br/>Grant information"]
+
+    %% Configuration subcategories
+    Configuration --> ConfSettings[Settings Review]
+    Configuration --> ConfHealth[Health Checks]
+
+    ConfSettings -->|pg_settings| ConfSettingsSQL["Current settings<br/>Configuration context<br/>Setting categories<br/>Pending restarts"]
+
+    ConfHealth -->|pg_stat_database| ConfHealthSQL["Database size<br/>Connection counts<br/>Transaction counts<br/>Deadlock counts"]
+
+    %% Styling
+    classDef rootStyle fill:#263238,stroke:#000,stroke-width:3px,color:#fff
+    classDef categoryStyle fill:#37474f,stroke:#000,stroke-width:2px,color:#fff
+    classDef subcategoryStyle fill:#546e7a,stroke:#000,stroke-width:2px,color:#fff
+    classDef queryStyle fill:#78909c,stroke:#37474f,stroke-width:1px,color:#000
+
+    class Root rootStyle
+    class Monitoring,Performance,Maintenance,Replication,Security,Configuration categoryStyle
+    class MonActivity,MonQueries,MonLocks,MonWaitEvents,PerfSlowQueries,PerfCache,PerfIO,PerfIndexes,MaintVacuum,MaintBloat,MaintDeadTuples,MaintTableHealth,ReplLag,ReplSlots,ReplWAL,SecRoles,SecPermissions,ConfSettings,ConfHealth subcategoryStyle
+    class MonActivityQueries,MonQueriesQueries,MonLocksQueries,MonWaitQueries,PerfSlowQueriesSQL,PerfCacheSQL,PerfIOSQL,PerfIndexesSQL,MaintVacuumSQL,MaintBloatSQL,MaintDeadSQL,MaintHealthSQL,ReplLagSQL,ReplSlotsSQL,ReplWALSQL,SecRolesSQL,SecPermSQL,ConfSettingsSQL,ConfHealthSQL queryStyle

@@ -1182,6 +1182,12 @@
                         <span class="nav-link-text">Locks</span>
                     </a>
                     {/if}
+                    {#if toggles.deadlocks}
+                    <a class="nav-link" href="/deadlocks?instance={currentInstance ?: 'default'}" data-title="Deadlocks">
+                        <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
+                        <span class="nav-link-text">Deadlocks</span>
+                    </a>
+                    {/if}
                     {#if toggles.waitEvents}
                     <a class="nav-link" href="/wait-events?instance={currentInstance ?: 'default'}" data-title="Wait Events">
                         <i class="bi bi-clock-history" aria-hidden="true"></i>
@@ -1570,6 +1576,12 @@
             <a class="mobile-nav-link" href="/locks?instance={currentInstance ?: 'default'}" aria-label="Locks">
                 <i class="bi bi-lock-fill" aria-hidden="true"></i>
                 <span>Locks</span>
+            </a>
+            {/if}
+            {#if toggles.deadlocks}
+            <a class="mobile-nav-link" href="/deadlocks?instance={currentInstance ?: 'default'}" aria-label="Deadlocks">
+                <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
+                <span>Deadlocks</span>
             </a>
             {/if}
             <button class="mobile-nav-link" id="mobileMoreBtn" aria-label="More navigation options">
@@ -1965,6 +1977,7 @@
                 'a': { path: '/activity', label: 'Activity' },
                 'q': { path: '/slow-queries', label: 'Slow Queries' },
                 'l': { path: '/locks', label: 'Locks' },
+                'k': { path: '/deadlocks', label: 'Deadlocks' },
                 't': { path: '/tables', label: 'Tables' },
                 'd': { path: '/databases', label: 'Databases' },
                 'i': { path: '/index-advisor', label: 'Index Advisor' },

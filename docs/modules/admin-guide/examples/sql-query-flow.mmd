@@ -1,0 +1,76 @@
+flowchart TD
+    %% User interaction layer
+    User[User Browser Request] --> Route{Route Handler}
+
+    %% DashboardResource routes
+    Route -->|GET /| Overview[DashboardResource::overview]
+    Route -->|GET /slow-queries| SlowQueries[DashboardResource::slowQueries]
+    Route -->|GET /activity| Activity[DashboardResource::activity]
+    Route -->|GET /locks| Locks[DashboardResource::locks]
+    Route -->|GET /tables| Tables[DashboardResource::tables]
+    Route -->|GET /databases| Databases[DashboardResource::databases]
+
+    %% Service layer
+    Overview --> PostgresService[PostgresService]
+    SlowQueries --> PostgresService
+    Activity --> PostgresService
+    Locks --> PostgresService
+    Tables --> PostgresService
+    Databases --> PostgresService
+
+    %% PostgresService methods
+    PostgresService --> GetConnections[getActiveConnections]
+    PostgresService --> GetSlowQueries[getSlowQueries]
+    PostgresService --> GetActivity[getCurrentActivity]
+    PostgresService --> GetLocks[getLocks]
+    PostgresService --> GetTables[getTableStats]
+    PostgresService --> GetDatabases[getDatabaseMetrics]
+
+    %% SQL execution
+    GetConnections --> SQL1[SQL: pg_stat_activity]
+    GetSlowQueries --> SQL2[SQL: pg_stat_statements]
+    GetActivity --> SQL3[SQL: pg_stat_activity]
+    GetLocks --> SQL4[SQL: pg_locks + pg_stat_activity]
+    GetTables --> SQL5[SQL: pg_stat_user_tables]
+    GetDatabases --> SQL6[SQL: pg_stat_database]
+
+    %% PostgreSQL system
+    SQL1 --> PG[(PostgreSQL<br/>System Views)]
+    SQL2 --> PG
+    SQL3 --> PG
+    SQL4 --> PG
+    SQL5 --> PG
+    SQL6 --> PG
+
+    %% Response flow
+    PG --> Results[Result Set]
+    Results --> DTO[Map to DTOs]
+    DTO --> Template[Qute Template]
+    Template --> HTML[HTML Response]
+    HTML --> User
+
+    %% Supporting services
+    Overview --> SparklineService[SparklineService]
+    SparklineService --> HistoryRepo[HistoryRepository]
+    HistoryRepo --> HistorySQL[SQL: pgconsole.* tables]
+    HistorySQL --> PG
+    HistoryRepo --> SVG[SVG Sparkline]
+    SVG --> Template
+
+    %% Background sampling
+    MetricsSampler[MetricsSamplerService<br/>Scheduled Job] -.->|Every 60s| SampleMetrics[Sample Metrics]
+    SampleMetrics --> PostgresService
+    SampleMetrics --> HistoryRepo
+
+    %% Styling
+    classDef userLayer fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef resourceLayer fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef serviceLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef dataLayer fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef dbLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+
+    class User,HTML userLayer
+    class Route,Overview,SlowQueries,Activity,Locks,Tables,Databases resourceLayer
+    class PostgresService,SparklineService,MetricsSampler,GetConnections,GetSlowQueries,GetActivity,GetLocks,GetTables,GetDatabases serviceLayer
+    class HistoryRepo,Results,DTO,Template,SVG dataLayer
+    class PG,SQL1,SQL2,SQL3,SQL4,SQL5,SQL6,HistorySQL,SampleMetrics dbLayer

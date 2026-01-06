@@ -4,6 +4,8 @@ Paul Snow
 :description: Command-line interface reference for pg-console
 :keywords: CLI, command-line, automation, scripting, reports, cron
 
+include::_attributes.adoc[]
+
 This guide provides a comprehensive reference for using pg-console in command-line mode for automated reporting, scripting, and integration with monitoring pipelines.
 
 == Overview

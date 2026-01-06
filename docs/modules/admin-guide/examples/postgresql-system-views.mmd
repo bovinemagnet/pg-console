@@ -1,0 +1,72 @@
+graph TD
+    %% Central views
+    Activity[pg_stat_activity<br/>---<br/>pid, datid, usesysid<br/>state, query, wait_event<br/>backend_start, xact_start]
+
+    Statements[pg_stat_statements<br/>---<br/>queryid, query<br/>calls, total_exec_time<br/>mean_exec_time, rows]
+
+    Database[pg_stat_database<br/>---<br/>datid, datname<br/>numbackends, deadlocks<br/>blks_read, blks_hit<br/>tup_returned, tup_fetched]
+
+    %% Table and index views
+    Tables[pg_stat_user_tables<br/>---<br/>relid, schemaname, relname<br/>seq_scan, idx_scan<br/>n_tup_ins, n_tup_upd, n_tup_del<br/>n_live_tup, n_dead_tup<br/>last_vacuum, last_autovacuum]
+
+    Indexes[pg_stat_user_indexes<br/>---<br/>relid, indexrelid<br/>schemaname, relname, indexrelname<br/>idx_scan, idx_tup_read, idx_tup_fetch]
+
+    %% Locking views
+    Locks[pg_locks<br/>---<br/>locktype, pid<br/>mode, granted<br/>relation, database, tuple]
+
+    %% Replication views
+    Replication[pg_stat_replication<br/>---<br/>pid, usesysid, application_name<br/>client_addr, state<br/>sent_lsn, write_lsn, flush_lsn<br/>replay_lag, write_lag, flush_lag]
+
+    %% Configuration
+    Settings[pg_settings<br/>---<br/>name, setting, unit<br/>category, short_desc<br/>context, vartype]
+
+    %% Wait Events (extension)
+    WaitEvents[pg_stat_activity.wait_event<br/>---<br/>wait_event_type<br/>wait_event]
+
+    %% Relationships based on common keys
+    Activity -.->|pid| Locks
+    Activity -->|datid| Database
+    Activity -.->|contains| WaitEvents
+    Activity -.->|pid| Replication
+
+    Database -->|datid| Activity
+    Database -->|datname| Tables
+    Database -->|datname| Indexes
+
+    Tables -->|relid| Indexes
+    Locks -.->|relation| Tables
+    Locks -.->|relation| Indexes
+
+    Statements -.->|query text| Activity
+
+    %% Annotations
+    Activity -->|"Used for:<br/>Current connections<br/>Active queries<br/>Blocking sessions"| ActivityUse[Activity Monitoring]
+
+    Statements -->|"Used for:<br/>Slow query analysis<br/>Query performance<br/>Top queries by time"| StatementsUse[Performance Analysis]
+
+    Database -->|"Used for:<br/>Database metrics<br/>Cache hit ratio<br/>Deadlock detection"| DatabaseUse[Database Health]
+
+    Tables -->|"Used for:<br/>Table bloat<br/>Vacuum monitoring<br/>Sequential vs index scans"| TablesUse[Table Maintenance]
+
+    Indexes -->|"Used for:<br/>Index usage<br/>Unused indexes<br/>Index efficiency"| IndexesUse[Index Analysis]
+
+    Locks -->|"Used for:<br/>Lock contention<br/>Blocking tree<br/>Deadlock analysis"| LocksUse[Lock Monitoring]
+
+    Replication -->|"Used for:<br/>Replication lag<br/>Replica status<br/>Streaming health"| ReplicationUse[Replication Monitoring]
+
+    Settings -->|"Used for:<br/>Configuration review<br/>Parameter checking<br/>Health diagnostics"| SettingsUse[Configuration]
+
+    %% Styling
+    classDef coreView fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef tableView fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef lockView fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef replView fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef configView fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef useCase fill:#f5f5f5,stroke:#616161,stroke-width:1px,stroke-dasharray: 5 5
+
+    class Activity,Statements,Database,WaitEvents coreView
+    class Tables,Indexes tableView
+    class Locks lockView
+    class Replication replView
+    class Settings configView
+    class ActivityUse,StatementsUse,DatabaseUse,TablesUse,IndexesUse,LocksUse,ReplicationUse,SettingsUse useCase

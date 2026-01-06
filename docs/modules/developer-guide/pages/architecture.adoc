@@ -4,6 +4,8 @@ Paul Snow
 :description: Technical architecture of pg-console including stack, design decisions, and request flow
 :keywords: architecture, design, Quarkus, htmx, Qute
 
+include::_attributes.adoc[]
+
 This page describes the technical architecture of pg-console, including the technology stack, package structure, key design decisions, and how requests flow through the application layers.
 
 == Technology Stack
@@ -114,7 +116,7 @@ The following routes are exposed:
 |`/slow-queries`
 |Query performance analysis from `pg_stat_statements`
 
-|`/slow-queries/{queryId}`
+|`/slow-queries/\{queryId}`
 |Detailed statistics for a specific query
 
 |`/activity`
@@ -129,7 +131,7 @@ The following routes are exposed:
 |`/databases`
 |Per-database metrics comparison
 
-|`/databases/{dbName}`
+|`/databases/\{dbName}`
 |Detailed metrics for a single database
 
 |`/about`
