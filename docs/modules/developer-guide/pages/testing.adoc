@@ -4,6 +4,8 @@ Paul Snow
 :description: Testing strategy for pg-console including unit tests, integration tests, E2E tests, and coverage
 :keywords: testing, unit tests, integration tests, Testcontainers, Playwright, JaCoCo
 
+include::_attributes.adoc[]
+
 This page describes the testing strategy for pg-console, including how to run tests, write new tests, and measure code coverage.
 
 == Testing Philosophy

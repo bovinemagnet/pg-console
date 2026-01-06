@@ -1,0 +1,77 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#e8f5e9','secondaryColor':'#fff3e0','tertiaryColor':'#fce4ec','primaryBorderColor':'#4caf50','secondaryBorderColor':'#ff9800','tertiaryBorderColor':'#e91e63'}}}%%
+graph TB
+    subgraph SchemaFree["<b>Schema-Free Mode</b><br/>(PG_CONSOLE_SCHEMA_ENABLED=false)"]
+        direction TB
+        SF1[No pgconsole Schema]
+        SF2[Flyway Migrations Skipped]
+        SF3[In-Memory Metrics Only<br/>Configurable Retention Minutes]
+        SF4[Read-Only PostgreSQL Access]
+        SF5[Real-Time Monitoring Only]
+        SF6[No Historical Trends]
+        SF7[No Query Regression Detection]
+        SF8[No Database Write Privileges Required]
+
+        SF1 --> SF2
+        SF2 --> SF3
+        SF3 --> SF5
+        SF4 --> SF5
+        SF5 --> SF6
+        SF6 --> SF7
+        SF4 --> SF8
+    end
+
+    subgraph SchemaEnabled["<b>Schema-Enabled Mode</b><br/>(PG_CONSOLE_SCHEMA_ENABLED=true)"]
+        direction TB
+        SE1[pgconsole Schema Created]
+        SE2[Flyway Migrations Executed]
+        SE3[Historical Metrics Tables<br/>query_history, connection_history, etc.]
+        SE4[CREATE Schema Privileges Required]
+        SE5[Sparklines and Trend Charts]
+        SE6[Query Regression Detection]
+        SE7[Configurable Retention Days]
+        SE8[Scheduled Cleanup Jobs]
+
+        SE1 --> SE2
+        SE2 --> SE3
+        SE3 --> SE5
+        SE3 --> SE6
+        SE4 --> SE1
+        SE7 --> SE8
+        SE3 --> SE7
+    end
+
+    subgraph CommonFeatures["<b>Common Features<br/>(Both Modes)</b>"]
+        direction LR
+        CF1[Live Dashboard]
+        CF2[Activity Monitoring]
+        CF3[Lock Detection]
+        CF4[Table Statistics]
+        CF5[Slow Query Analysis]
+        CF6[Connection Tracking]
+
+        CF1 --- CF2
+        CF2 --- CF3
+        CF3 --- CF4
+        CF4 --- CF5
+        CF5 --- CF6
+    end
+
+    Start{pg-console<br/>Startup} --> Decision{PG_CONSOLE_SCHEMA_ENABLED?}
+    Decision -->|false| SchemaFree
+    Decision -->|true| SchemaEnabled
+
+    SchemaFree --> CommonFeatures
+    SchemaEnabled --> CommonFeatures
+
+    CommonFeatures --> Output[Web Dashboard<br/>http://localhost:8080]
+
+    %% Styling for emphasis
+    classDef schemaFreeStyle fill:#e8f5e9,stroke:#4caf50,stroke-width:3px,color:#1b5e20
+    classDef schemaEnabledStyle fill:#fff3e0,stroke:#ff9800,stroke-width:3px,color:#e65100
+    classDef commonStyle fill:#e3f2fd,stroke:#2196f3,stroke-width:2px,color:#0d47a1
+    classDef decisionStyle fill:#fce4ec,stroke:#e91e63,stroke-width:3px,color:#880e4f
+
+    class SF1,SF2,SF3,SF4,SF5,SF6,SF7,SF8 schemaFreeStyle
+    class SE1,SE2,SE3,SE4,SE5,SE6,SE7,SE8 schemaEnabledStyle
+    class CF1,CF2,CF3,CF4,CF5,CF6 commonStyle
+    class Start,Decision decisionStyle

@@ -4,6 +4,8 @@ Paul Snow
 :description: Configure alerting for critical database conditions in pg-console
 :keywords: alerting, notifications, webhooks, email, slack, discord, teams, thresholds
 
+include::_attributes.adoc[]
+
 This guide explains how to configure alerting in pg-console to receive notifications when critical database conditions are detected.
 
 == Overview

@@ -5,4 +5,5 @@
 ** xref:security.adoc[Security Configuration]
 ** xref:multi-instance.adoc[Multi-Instance Monitoring]
 ** xref:alerting.adoc[Alerting Configuration]
+** xref:sql-reference.adoc[SQL Query Reference]
 ** xref:cli-reference.adoc[CLI Reference]

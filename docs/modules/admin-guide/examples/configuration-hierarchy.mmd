@@ -1,0 +1,99 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#e3f2fd','primaryTextColor':'#1565c0','primaryBorderColor':'#1976d2','lineColor':'#1976d2','secondaryColor':'#f3e5f5','tertiaryColor':'#e8f5e9'}}}%%
+graph TB
+    %% Configuration Resolution Flow
+    subgraph resolution["Configuration Resolution (Highest to Lowest Priority)"]
+        env["Environment Variables<br/><small>Highest Priority</small>"]
+        appProps["application.properties<br/><small>Middle Priority</small>"]
+        defaults["Default Values<br/><small>Lowest Priority</small>"]
+
+        env -->|overrides| appProps
+        appProps -->|overrides| defaults
+    end
+
+    %% Configuration Categories
+    subgraph categories["Configuration Categories"]
+        direction TB
+
+        subgraph db["Database Connection"]
+            dbUrl["POSTGRES_URL<br/><small>jdbc:postgresql://localhost:5432/postgres</small>"]
+            dbUser["POSTGRES_USER<br/><small>postgres</small>"]
+            dbPass["POSTGRES_PASSWORD<br/><small>postgres</small>"]
+        end
+
+        subgraph instance["Instance Configuration"]
+            instances["PG_CONSOLE_INSTANCES<br/><small>Comma-separated list of database names</small><br/><small>Empty = all non-template databases</small>"]
+        end
+
+        subgraph schema["Schema Settings"]
+            schemaEnabled["PG_CONSOLE_SCHEMA_ENABLED<br/><small>true/false</small><br/><small>Enable pgconsole schema creation</small>"]
+        end
+
+        subgraph history["History Settings"]
+            histEnabled["PG_CONSOLE_HISTORY_ENABLED<br/><small>default: true</small>"]
+            histInterval["PG_CONSOLE_HISTORY_INTERVAL<br/><small>default: 60 seconds</small>"]
+            histRetention["PG_CONSOLE_HISTORY_RETENTION<br/><small>default: 7 days</small>"]
+            histTopQueries["PG_CONSOLE_HISTORY_TOP_QUERIES<br/><small>default: 50</small>"]
+        end
+
+        subgraph dashboard["Dashboard Toggles"]
+            dashOverview["PG_CONSOLE_DASH_OVERVIEW<br/><small>default: true</small>"]
+            dashActivity["PG_CONSOLE_DASH_ACTIVITY<br/><small>default: true</small>"]
+            dashSlowQueries["PG_CONSOLE_DASH_SLOW_QUERIES<br/><small>default: true</small>"]
+            dashLocks["PG_CONSOLE_DASH_LOCKS<br/><small>default: true</small>"]
+            dashTables["PG_CONSOLE_DASH_TABLES<br/><small>default: true</small>"]
+            dashDatabases["PG_CONSOLE_DASH_DATABASES<br/><small>default: true</small>"]
+        end
+
+        subgraph security["Security Settings"]
+            secEnabled["PG_CONSOLE_SECURITY_ENABLED<br/><small>default: false</small>"]
+            secUsers["PG_CONSOLE_SECURITY_USERS<br/><small>user:password pairs</small>"]
+            secRoles["PG_CONSOLE_SECURITY_ROLES<br/><small>user:role mappings</small>"]
+        end
+    end
+
+    %% Connect resolution to categories
+    defaults -.->|provides| db
+    defaults -.->|provides| instance
+    defaults -.->|provides| schema
+    defaults -.->|provides| history
+    defaults -.->|provides| dashboard
+    defaults -.->|provides| security
+
+    appProps -.->|can override| db
+    appProps -.->|can override| instance
+    appProps -.->|can override| schema
+    appProps -.->|can override| history
+    appProps -.->|can override| dashboard
+    appProps -.->|can override| security
+
+    env -.->|can override| db
+    env -.->|can override| instance
+    env -.->|can override| schema
+    env -.->|can override| history
+    env -.->|can override| dashboard
+    env -.->|can override| security
+
+    %% Configuration Usage
+    subgraph usage["Configuration Usage"]
+        runtime["Runtime Configuration Resolver"]
+
+        db --> runtime
+        instance --> runtime
+        schema --> runtime
+        history --> runtime
+        dashboard --> runtime
+        security --> runtime
+    end
+
+    runtime --> services["Application Services"]
+
+    %% Styling
+    classDef priorityBox fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef categoryBox fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef configItem fill:#fff9c4,stroke:#f57f17,stroke-width:1px
+    classDef usageBox fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+
+    class env,appProps,defaults priorityBox
+    class db,instance,schema,history,dashboard,security categoryBox
+    class dbUrl,dbUser,dbPass,instances,schemaEnabled,histEnabled,histInterval,histRetention,histTopQueries,dashOverview,dashActivity,dashSlowQueries,dashLocks,dashTables,dashDatabases,secEnabled,secUsers,secRoles configItem
+    class runtime,services usageBox

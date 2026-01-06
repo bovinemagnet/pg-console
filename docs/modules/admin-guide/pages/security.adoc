@@ -4,6 +4,9 @@ Paul Snow
 :description: Security configuration for pg-console including authentication, database permissions, and network security
 :keywords: security, authentication, authorisation, permissions, postgresql, ssl, tls, monitoring
 
+include::_attributes.adoc[]
+
+
 This guide explains how to secure your pg-console deployment, including application authentication, database permissions, and network security best practices.
 
 == Overview

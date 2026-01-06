@@ -1,0 +1,880 @@
+= Deadlock Monitoring
+Paul Snow
+0.0.0
+:description: Guide to monitoring and preventing PostgreSQL deadlocks using pg-console's dedicated dashboard
+:keywords: deadlocks, lock conflicts, database contention, deadlock detection, pg_stat_database
+
+[abstract]
+This guide explains how to use pg-console's Deadlock Monitoring dashboard to track, analyse, and prevent deadlocks across your PostgreSQL databases. Learn about deadlock causes, configuration best practices, and investigation techniques.
+
+== What Is a Deadlock?
+
+A deadlock occurs when two or more transactions are waiting for each other to release locks, creating a circular dependency that prevents any of them from proceeding.
+
+=== Simple Example
+
+[source,text]
+----
+Transaction A: Locks Row 1, waits for Row 2
+Transaction B: Locks Row 2, waits for Row 1
+Result: Neither transaction can proceed (deadlock)
+----
+
+PostgreSQL automatically detects deadlocks using a timeout mechanism and resolves them by aborting one of the transactions with an error:
+
+[source,text]
+----
+ERROR: deadlock detected
+DETAIL: Process 12345 waits for ShareLock on transaction 67890;
+        blocked by process 54321.
+        Process 54321 waits for ShareLock on transaction 12346;
+        blocked by process 12345.
+----
+
+.Deadlock Cycle
+[mermaid]
+----
+include::example$deadlock-cycle.mmd[]
+----
+
+The diagram above illustrates how a circular dependency forms between two transactions, each holding a lock that the other needs, resulting in a deadlock that PostgreSQL must resolve by aborting one transaction.
+
+=== Why Deadlocks Matter
+
+* *Application errors* - Aborted transactions cause failures that applications must handle
+* *Performance impact* - Deadlock detection adds latency to affected queries
+* *Retry overhead* - Applications must implement retry logic, adding complexity
+* *Database health indicator* - Frequent deadlocks often signal schema or query design issues
+
+[NOTE]
+====
+While PostgreSQL handles deadlocks gracefully by aborting one transaction, frequent deadlocks indicate underlying problems that should be addressed rather than simply retried.
+====
+
+=== How PostgreSQL Detects and Resolves Deadlocks
+
+PostgreSQL uses a timeout-based deadlock detection mechanism. When a transaction waits for a lock longer than the configured `deadlock_timeout` (default: 1 second), PostgreSQL scans the lock wait graph to check for circular dependencies. If a deadlock cycle is found, PostgreSQL selects one transaction as the "victim" and aborts it, allowing the other transaction(s) to proceed.
+
+.PostgreSQL Deadlock Detection and Resolution Process
+[mermaid]
+----
+include::example$deadlock-detection-flow.mmd[]
+----
+
+The detection process is designed to minimise overhead by only scanning for deadlocks when necessary, rather than checking on every lock request.
+
+== The Deadlock Monitoring Dashboard
+
+Access the Deadlock Monitoring dashboard from the main navigation menu: *Monitoring* → *Deadlocks*.
+
+* *Dashboard URL*: `/deadlocks`
+* *Keyboard shortcut*: kbd:[k]
+
+=== Summary Cards
+
+The dashboard header displays four key metrics:
+
+[cols="1,3"]
+|===
+|Card |Description
+
+|Total Deadlocks
+|Cumulative deadlock count across all monitored databases since statistics were last reset
+
+|Databases Monitored
+|Number of databases being tracked for deadlocks
+
+|Configuration Status
+|Current health of deadlock-related PostgreSQL settings +
+Shows "Optimal" (green) or count of configuration issues (yellow/red)
+
+|Highest Deadlock Rate
+|Database experiencing the highest deadlock rate (per hour) +
+Helps identify which database needs immediate attention
+|===
+
+=== Per-Database Deadlocks Table
+
+The main table shows deadlock statistics for each database:
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Database
+|Database name (clickable link to xref:dashboards.adoc#database-detail-view[Database Detail View])
+
+|Deadlocks
+|Cumulative count from `pg_stat_database.deadlocks` +
+Resets when statistics are reset via `pg_stat_reset()`
+
+|Rate/Hour
+|Average deadlocks per hour calculated from historical samples +
+Requires xref:configuration.adoc#history-sampling[history sampling] to be enabled
+
+|Trend
+|SVG sparkline showing deadlock rate over time (24-hour default) +
+Green: Stable or decreasing, Red: Increasing trend +
+Only visible when history sampling is enabled
+
+|Since Reset
+|Time elapsed since database statistics were last reset +
+Provides context for cumulative counts
+
+|Status
+|Colour-coded indicator of deadlock severity: +
+*OK* (green): Zero deadlocks or very low rate +
+*Warning* (yellow): Elevated deadlock rate +
+*Critical* (red): High deadlock rate requiring attention
+|===
+
+[TIP]
+====
+Click any database name to view detailed metrics including active connections, query statistics, and locks for that specific database.
+====
+
+=== Configuration Panel
+
+The configuration panel shows PostgreSQL settings that affect deadlock detection and logging:
+
+==== deadlock_timeout
+
+Controls how long a lock wait must last before PostgreSQL checks for deadlock conditions.
+
+[cols="1,1,3"]
+|===
+|Setting |Recommended |Explanation
+
+|`deadlock_timeout`
+|`1s`
+|Default is 1 second, which balances detection speed with overhead. Lowering this value increases CPU overhead for lock checking; raising it delays deadlock detection.
+|===
+
+*Status Badge*:
+
+* *Optimal* (green) - Set to recommended value (1s)
+* *Suboptimal* (yellow) - Set to a non-standard value (consider reviewing)
+
+==== log_lock_waits
+
+Controls whether lock waits longer than `deadlock_timeout` are logged to PostgreSQL's server log.
+
+[cols="1,1,3"]
+|===
+|Setting |Recommended |Explanation
+
+|`log_lock_waits`
+|`on`
+|Logs all lock waits exceeding `deadlock_timeout`, enabling investigation of both deadlocks and near-deadlocks. Essential for diagnosing lock contention issues.
+|===
+
+*Status Badge*:
+
+* *Enabled* (green) - Logging is active
+* *Disabled* (red) - Lock waits are not logged (investigation will be difficult)
+
+==== lock_timeout
+
+Sets the maximum time a statement will wait to acquire a lock before giving up.
+
+[cols="1,1,3"]
+|===
+|Setting |Recommended |Explanation
+
+|`lock_timeout`
+|*Informational*
+|Default is `0` (wait indefinitely). Setting a finite value (e.g., `30s`) prevents queries from waiting too long for locks, but may cause more lock acquisition failures.
+|===
+
+*Status Badge*:
+
+* *Not Set* (grey) - Queries wait indefinitely for locks (default)
+* *Set to Xs* (blue) - Queries abort after X seconds of waiting
+
+[IMPORTANT]
+====
+Setting `lock_timeout` too low may cause legitimate long-running transactions to fail. Use with caution in production environments.
+====
+
+=== Dynamic Recommendations
+
+The dashboard provides context-specific recommendations based on current deadlock counts and configuration:
+
+==== When Deadlocks Are Detected
+
+If any database shows deadlocks, the dashboard displays actionable recommendations:
+
+* *Review Application Logic* - Check for inconsistent lock ordering
+* *Enable Lock Logging* - If `log_lock_waits` is disabled, enable it to capture deadlock details
+* *Analyse Deadlock Patterns* - Use PostgreSQL server logs to identify recurring patterns
+* *Consider Query Optimisation* - Reduce transaction duration to minimise lock hold time
+
+==== When Configuration Is Suboptimal
+
+If deadlock-related settings are not optimal:
+
+* *Enable log_lock_waits* - "Enable `log_lock_waits` to log lock contention in PostgreSQL logs"
+* *Adjust deadlock_timeout* - "Consider adjusting `deadlock_timeout` to balance detection speed and overhead"
+* *Set lock_timeout* - "Consider setting `lock_timeout` to prevent indefinite lock waits"
+
+==== Related Dashboard Links
+
+Quick navigation to related monitoring features:
+
+* xref:dashboards.adoc#locks-dashboard[Locks & Blocking Dashboard] - View current lock contention and blocking trees
+* xref:dashboards.adoc#activity-dashboard[Activity Dashboard] - Monitor active connections and queries
+* *Config Health* - Review all PostgreSQL configuration settings (if available)
+
+=== Understanding Deadlocks Section
+
+The dashboard includes an educational section explaining:
+
+* *What causes deadlocks* - Lock ordering inconsistencies, concurrent updates, foreign key constraints
+* *Common scenarios* - Multiple tables, UPDATE operations, SELECT FOR UPDATE
+* *Prevention strategies* - Consistent lock ordering, shorter transactions, optimistic locking
+* *Investigation tips* - Using PostgreSQL logs, reviewing application code, analysing query patterns
+
+== Common Deadlock Causes
+
+=== Inconsistent Lock Ordering
+
+The most common cause of deadlocks is acquiring locks in different orders:
+
+[source,sql]
+----
+-- Transaction A
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+COMMIT;
+
+-- Transaction B (running concurrently)
+BEGIN;
+UPDATE accounts SET balance = balance - 50 WHERE id = 2;  -- Locks row 2 first
+UPDATE accounts SET balance = balance + 50 WHERE id = 1;  -- Waits for row 1
+COMMIT;
+----
+
+*Solution*: Always acquire locks in a consistent order (e.g., by primary key ascending).
+
+=== Foreign Key Constraints
+
+Updates to parent tables can deadlock with updates to child tables:
+
+[source,sql]
+----
+-- Transaction A
+UPDATE orders SET status = 'shipped' WHERE id = 100;  -- Locks order
+UPDATE order_items SET shipped = true WHERE order_id = 100;  -- Locks items
+
+-- Transaction B
+UPDATE order_items SET quantity = 5 WHERE id = 500;  -- Locks item first
+UPDATE orders SET total = 250 WHERE id = 100;  -- Waits for order lock
+----
+
+*Solution*: Acquire parent locks before child locks, or use `SELECT FOR UPDATE` to explicitly control lock order.
+
+=== SELECT FOR UPDATE Conflicts
+
+Concurrent `SELECT FOR UPDATE` queries can deadlock:
+
+[source,sql]
+----
+-- Transaction A
+SELECT * FROM products WHERE id = 1 FOR UPDATE;  -- Locks product 1
+SELECT * FROM products WHERE id = 2 FOR UPDATE;  -- Waits for product 2
+
+-- Transaction B
+SELECT * FROM products WHERE id = 2 FOR UPDATE;  -- Locks product 2 first
+SELECT * FROM products WHERE id = 1 FOR UPDATE;  -- Waits for product 1
+----
+
+*Solution*: Sort rows before locking (e.g., `ORDER BY id`) to ensure consistent lock acquisition order.
+
+=== Long Transactions
+
+Longer transactions hold locks longer, increasing the probability of deadlocks:
+
+[source,sql]
+----
+BEGIN;
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 100;
+-- ... many other operations ...
+-- ... application logic, network calls, etc. ...
+UPDATE orders SET status = 'confirmed' WHERE id = 500;
+COMMIT;  -- Locks held for entire duration
+----
+
+*Solution*: Keep transactions as short as possible. Move non-database work outside transactions.
+
+== Preventing Deadlocks
+
+=== Strategy 1: Consistent Lock Ordering
+
+Always acquire locks in a predictable order:
+
+[source,sql]
+----
+-- Good: Always lock by ascending ID
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = LEAST(1, 2);
+UPDATE accounts SET balance = balance + 100 WHERE id = GREATEST(1, 2);
+COMMIT;
+
+-- Or use ORDER BY
+SELECT * FROM accounts WHERE id IN (1, 2) ORDER BY id FOR UPDATE;
+----
+
+=== Strategy 2: Explicit Locking
+
+Use `SELECT FOR UPDATE` to acquire all necessary locks upfront:
+
+[source,sql]
+----
+BEGIN;
+-- Lock all required rows first, in a consistent order
+SELECT * FROM accounts WHERE id IN (1, 2, 3) ORDER BY id FOR UPDATE;
+
+-- Now perform updates safely
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 50 WHERE id = 2;
+UPDATE accounts SET balance = balance + 50 WHERE id = 3;
+COMMIT;
+----
+
+=== Strategy 3: Shorter Transactions
+
+Minimise lock hold time:
+
+[source,sql]
+----
+-- Bad: Long transaction holding locks
+BEGIN;
+UPDATE orders SET status = 'processing' WHERE id = 100;
+-- ... fetch data from external API (slow!) ...
+-- ... send email notification (slow!) ...
+UPDATE orders SET status = 'complete' WHERE id = 100;
+COMMIT;
+
+-- Good: Move slow operations outside transaction
+-- 1. Fetch data needed for API call
+SELECT * FROM orders WHERE id = 100;
+
+-- 2. Call external API (outside transaction)
+-- ... external API call ...
+
+-- 3. Quick transaction to update state
+BEGIN;
+UPDATE orders SET status = 'complete', external_ref = 'XYZ' WHERE id = 100;
+COMMIT;
+----
+
+=== Strategy 4: Optimistic Locking
+
+Use version columns to detect conflicts without holding locks:
+
+[source,sql]
+----
+-- Add version column to table
+ALTER TABLE documents ADD COLUMN version integer DEFAULT 1;
+
+-- Application reads current version
+SELECT id, content, version FROM documents WHERE id = 100;
+-- Returns: id=100, version=5
+
+-- Application attempts update with version check
+UPDATE documents
+SET content = 'new content', version = version + 1
+WHERE id = 100 AND version = 5;  -- Only succeeds if version unchanged
+
+-- If affected rows = 0, someone else updated it first
+-- Application can retry or notify user of conflict
+----
+
+=== Strategy 5: Advisory Locks
+
+For custom locking logic, use advisory locks:
+
+[source,sql]
+----
+-- Acquire application-level lock (never deadlocks)
+SELECT pg_advisory_lock(12345);  -- Blocks until lock acquired
+
+-- Perform operations
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+
+-- Release lock
+SELECT pg_advisory_unlock(12345);
+----
+
+Advisory locks follow a consistent global ordering, preventing deadlocks.
+
+=== Strategy 6: Reduce Lock Scope
+
+Minimise the number of rows locked:
+
+[source,sql]
+----
+-- Bad: Locks entire table
+UPDATE products SET last_checked = now();
+
+-- Good: Lock only necessary rows
+UPDATE products SET last_checked = now()
+WHERE category = 'electronics' AND last_checked < now() - interval '1 day';
+----
+
+== Investigating Deadlocks
+
+When deadlocks occur, a systematic investigation approach helps identify the root cause and implement effective solutions. The following workflow guides you through the investigation process:
+
+.Deadlock Investigation Workflow
+[mermaid]
+----
+include::example$deadlock-investigation-flow.mmd[]
+----
+
+Follow these detailed steps to investigate and resolve deadlocks:
+
+=== Step 1: Review PostgreSQL Logs
+
+Enable `log_lock_waits` and check server logs for deadlock details:
+
+[source,bash]
+----
+# Find recent deadlocks in PostgreSQL logs
+grep "deadlock detected" /var/log/postgresql/postgresql-*.log | tail -20
+----
+
+Example log entry:
+
+[source,text]
+----
+2026-01-06 10:45:32 UTC [12345]: ERROR: deadlock detected
+2026-01-06 10:45:32 UTC [12345]: DETAIL: Process 12345 waits for ShareLock on transaction 67890; blocked by process 54321.
+        Process 54321 waits for ShareLock on transaction 12346; blocked by process 12345.
+2026-01-06 10:45:32 UTC [12345]: HINT: See server log for query details.
+2026-01-06 10:45:32 UTC [12345]: CONTEXT: while updating tuple (0,42) in relation "accounts"
+2026-01-06 10:45:32 UTC [12345]: STATEMENT: UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+----
+
+This reveals:
+
+* Which tables are involved (`accounts`)
+* Which processes deadlocked (PIDs 12345 and 54321)
+* Which rows caused the conflict (tuple 0,42)
+* The SQL statement that was aborted
+
+=== Step 2: Identify Deadlock Pattern
+
+Analyse multiple deadlock occurrences to identify patterns:
+
+* Do they involve the same tables?
+* Do they occur at specific times (e.g., end-of-day batch processing)?
+* Are they related to specific application workflows?
+
+=== Step 3: Check Application Code
+
+Review application code for inconsistent lock ordering:
+
+[source,python]
+----
+# Bad: Inconsistent ordering
+def transfer_funds(from_id, to_id, amount):
+    conn.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, from_id)
+    conn.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, to_id)
+
+# Good: Consistent ordering
+def transfer_funds(from_id, to_id, amount):
+    # Always lock lower ID first
+    first_id, second_id = sorted([from_id, to_id])
+    conn.execute("SELECT * FROM accounts WHERE id IN (?, ?) ORDER BY id FOR UPDATE", first_id, second_id)
+    # Now perform updates safely
+----
+
+=== Step 4: Use the Locks Dashboard
+
+Navigate to xref:dashboards.adoc#locks-dashboard[Locks & Blocking] to view real-time lock contention:
+
+* Check for long-running transactions holding locks
+* Review the blocking tree for circular dependencies
+* Identify queries in "idle in transaction" state
+
+=== Step 5: Monitor Deadlock Frequency
+
+Use the Deadlock Monitoring dashboard to track:
+
+* Which databases have the highest deadlock counts
+* Whether deadlock rates are increasing over time (sparkline)
+* Correlation with application deployments or traffic patterns
+
+== Configuration
+
+=== Enabling/Disabling the Dashboard
+
+The Deadlock Monitoring dashboard is enabled by default. To disable it:
+
+[source,bash]
+----
+# Disable Deadlock Monitoring dashboard
+export PG_CONSOLE_DASH_DEADLOCKS=false
+----
+
+To disable the entire monitoring section (including Deadlock Monitoring):
+
+[source,bash]
+----
+# Disable all monitoring dashboards
+export PG_CONSOLE_DASH_MONITORING=false
+----
+
+=== PostgreSQL Configuration
+
+Optimal PostgreSQL settings for deadlock monitoring:
+
+[source,conf]
+----
+# postgresql.conf
+
+# Deadlock detection timeout (recommended: 1s)
+deadlock_timeout = '1s'
+
+# Log lock waits (essential for investigation)
+log_lock_waits = on
+
+# Optional: Set lock timeout to prevent indefinite waits
+# lock_timeout = '30s'  # Uncomment if desired
+
+# Optional: Increase logging detail for deadlocks
+log_error_verbosity = default  # or 'verbose' for more detail
+----
+
+After changing `postgresql.conf`, reload configuration:
+
+[source,sql]
+----
+SELECT pg_reload_conf();
+----
+
+[WARNING]
+====
+Changing `deadlock_timeout` to very low values (< 100ms) increases CPU overhead for lock checking. The default of 1 second is appropriate for most workloads.
+====
+
+=== History Sampling
+
+Deadlock rate calculations and sparklines require xref:configuration.adoc#history-sampling[history sampling] to be enabled:
+
+[source,bash]
+----
+# Enable history sampling (default: true)
+export PG_CONSOLE_HISTORY_ENABLED=true
+
+# Sampling interval in seconds (default: 60)
+export PG_CONSOLE_HISTORY_INTERVAL=60
+
+# Retention period in days (default: 7)
+export PG_CONSOLE_HISTORY_RETENTION=7
+----
+
+Without history sampling, the dashboard shows cumulative deadlock counts but cannot calculate rates or display trends.
+
+== Data Sources
+
+The Deadlock Monitoring dashboard uses the following PostgreSQL data sources:
+
+[cols="1,3"]
+|===
+|Source |Description
+
+|`pg_stat_database.deadlocks`
+|Cumulative deadlock count for each database since statistics reset
+
+|`pg_settings`
+|Configuration values for `deadlock_timeout`, `log_lock_waits`, and `lock_timeout`
+
+|`pg_stat_database.stats_reset`
+|Timestamp when database statistics were last reset
+
+|`pgconsole.database_metrics_history`
+|Historical samples of database metrics (requires history schema) +
+Used to calculate deadlock rates and generate sparkline trends
+|===
+
+[NOTE]
+====
+The `pg_stat_database.deadlocks` counter resets when `pg_stat_reset()` is called for a database or when PostgreSQL restarts. Cumulative counts should be interpreted in the context of the "Since Reset" timestamp.
+====
+
+== Alerting
+
+For production environments, set up automated alerts for deadlock thresholds:
+
+[source,bash]
+----
+#!/bin/bash
+# Check for deadlock rate increases
+
+DEADLOCK_THRESHOLD=10  # Alert if more than 10 deadlocks/hour
+
+psql -Atc "
+SELECT datname, deadlocks
+FROM pg_stat_database
+WHERE datname NOT IN ('template0', 'template1')
+  AND deadlocks > 0
+" | while IFS='|' read db count; do
+    # Calculate rate (this is simplified; use history samples for accuracy)
+    rate=$((count / 24))  # Rough estimate: count / hours since reset
+
+    if [ "$rate" -gt "$DEADLOCK_THRESHOLD" ]; then
+        echo "ALERT: Database $db has $count deadlocks (rate: ~$rate/hour)"
+        # Send email, Slack notification, etc.
+    fi
+done
+----
+
+For integration with external monitoring systems, the dashboard data is available via REST API (see xref:#api-access[API Access]).
+
+[[api-access]]
+== API Access
+
+The Deadlock Monitoring dashboard data is available via REST API for programmatic access and integration with external monitoring systems.
+
+=== Endpoint
+
+[source,bash]
+----
+GET /api/monitoring/deadlocks
+----
+
+=== Example Request
+
+[source,bash]
+----
+# Get deadlock data as JSON
+curl http://localhost:8080/api/monitoring/deadlocks
+
+# Pretty-print with jq
+curl -s http://localhost:8080/api/monitoring/deadlocks | jq
+----
+
+=== Example Response
+
+[source,json]
+----
+{
+  "summary": {
+    "totalDeadlocks": 42,
+    "databasesMonitored": 3,
+    "configurationIssues": 1,
+    "highestRateDatabase": "production_db",
+    "highestRatePerHour": 2.5
+  },
+  "databases": [
+    {
+      "databaseName": "production_db",
+      "deadlocks": 35,
+      "ratePerHour": 2.5,
+      "statsReset": "2026-01-01T00:00:00Z",
+      "hoursSinceReset": 120,
+      "status": "WARNING",
+      "trendData": [0.5, 1.2, 2.1, 2.5, 2.8, 2.5]
+    },
+    {
+      "databaseName": "staging_db",
+      "deadlocks": 7,
+      "ratePerHour": 0.4,
+      "statsReset": "2026-01-01T00:00:00Z",
+      "hoursSinceReset": 120,
+      "status": "OK",
+      "trendData": [0.1, 0.2, 0.3, 0.4, 0.4, 0.4]
+    }
+  ],
+  "configuration": {
+    "deadlockTimeout": "1s",
+    "deadlockTimeoutStatus": "OPTIMAL",
+    "logLockWaits": true,
+    "logLockWaitsStatus": "ENABLED",
+    "lockTimeout": "0",
+    "lockTimeoutStatus": "NOT_SET"
+  },
+  "recommendations": [
+    "Review application logic for inconsistent lock ordering in production_db",
+    "Enable log_lock_waits to capture deadlock details in server logs"
+  ]
+}
+----
+
+=== Integration Example
+
+[source,python]
+----
+#!/usr/bin/env python3
+# Monitor deadlocks and send alerts
+
+import requests
+import smtplib
+from email.message import EmailMessage
+
+PG_CONSOLE_URL = "http://localhost:8080"
+DEADLOCK_RATE_THRESHOLD = 2.0  # Alert if > 2 deadlocks/hour
+
+response = requests.get(f"{PG_CONSOLE_URL}/api/monitoring/deadlocks")
+data = response.json()
+
+# Check each database
+for db in data['databases']:
+    if db['ratePerHour'] > DEADLOCK_RATE_THRESHOLD:
+        send_alert(
+            subject=f"High deadlock rate in {db['databaseName']}",
+            body=f"Database {db['databaseName']} has {db['deadlocks']} deadlocks "
+                 f"({db['ratePerHour']:.2f}/hour). Status: {db['status']}"
+        )
+
+# Check configuration issues
+if data['summary']['configurationIssues'] > 0:
+    send_alert(
+        subject="PostgreSQL deadlock configuration issues",
+        body=f"Found {data['summary']['configurationIssues']} configuration issues. "
+             f"Recommendations: {', '.join(data['recommendations'])}"
+    )
+----
+
+== Troubleshooting
+
+=== Dashboard Shows No Deadlocks But Application Logs Show Errors
+
+*Possible causes:*
+
+* Statistics were recently reset via `pg_stat_reset()`
+* Deadlocks occurring in a database not being monitored
+* Deadlock errors coming from application-level timeouts, not actual deadlocks
+
+*Resolution:*
+
+[source,sql]
+----
+-- Check statistics reset time
+SELECT datname, stats_reset FROM pg_stat_database;
+
+-- Verify deadlock counts are being tracked
+SELECT datname, deadlocks FROM pg_stat_database WHERE deadlocks > 0;
+
+-- Check which databases are being monitored
+SHOW pg_console.databases;  -- If filtered
+----
+
+=== Deadlock Count Increasing But No Details in Logs
+
+*Cause:* `log_lock_waits` is disabled.
+
+*Resolution:*
+
+[source,sql]
+----
+-- Enable lock wait logging
+ALTER SYSTEM SET log_lock_waits = on;
+SELECT pg_reload_conf();
+
+-- Verify setting
+SHOW log_lock_waits;
+----
+
+Deadlock details will now appear in PostgreSQL server logs.
+
+=== Deadlock Rate Shows "N/A" or Missing
+
+*Cause:* History sampling is not enabled.
+
+*Resolution:*
+
+Enable history sampling in `application.properties` or via environment variable:
+
+[source,bash]
+----
+export PG_CONSOLE_HISTORY_ENABLED=true
+----
+
+Restart pg-console. Historical samples will begin accumulating within the configured interval (default: 60 seconds).
+
+=== Dashboard Shows "Configuration Issues" But Everything Seems Fine
+
+*Cause:* Configuration values differ from recommended defaults.
+
+*Resolution:*
+
+Review the Configuration Panel on the dashboard to see which settings are flagged:
+
+* `deadlock_timeout` not set to recommended value (1s)
+* `log_lock_waits` disabled
+* `lock_timeout` set to an unexpected value
+
+Adjust settings in `postgresql.conf` or use `ALTER SYSTEM` if the recommendations are appropriate for your workload.
+
+=== Deadlocks Only Occur During Peak Hours
+
+*Pattern:* Deadlocks correlate with high concurrency.
+
+*Analysis:*
+
+* Review application workflows that run during peak times
+* Check if batch jobs or scheduled tasks introduce lock contention
+* Use xref:dashboards.adoc#activity-dashboard[Activity Dashboard] to see concurrent query patterns
+
+*Solutions:*
+
+* Stagger batch job execution to reduce concurrency
+* Optimise high-traffic queries to reduce transaction duration
+* Implement retry logic with exponential backoff in application
+
+=== Same Tables Always Involved in Deadlocks
+
+*Pattern:* Deadlocks consistently involve specific tables (e.g., `accounts`, `orders`).
+
+*Analysis:*
+
+* Identify lock ordering inconsistencies in application code
+* Check for foreign key relationships causing cascading locks
+* Review index usage (missing indexes can increase lock hold time)
+
+*Solutions:*
+
+* Refactor code to acquire locks in consistent order (by primary key)
+* Add indexes to reduce query execution time
+* Consider table partitioning to reduce lock contention
+
+== Best Practices
+
+=== Development
+
+* *Test concurrency* - Use tools like `pgbench` to simulate concurrent transactions
+* *Code reviews* - Check for inconsistent lock ordering during reviews
+* *Linting* - Add static analysis rules to detect potential deadlock patterns
+
+=== Production
+
+* *Monitor trends* - Track deadlock rates over time using sparklines
+* *Alert thresholds* - Set up alerts for deadlock rate increases
+* *Log retention* - Keep PostgreSQL logs long enough to investigate patterns
+* *Regular reviews* - Periodically review deadlock logs for recurring issues
+
+=== Application Design
+
+* *Retry logic* - Implement exponential backoff for deadlock errors
+* *Transaction duration* - Keep transactions as short as possible
+* *Lock ordering* - Document and enforce consistent lock acquisition order
+* *Optimistic locking* - Use version columns for conflict detection when appropriate
+
+== Related Topics
+
+* xref:dashboards.adoc#locks-dashboard[Locks & Blocking Dashboard] - Real-time lock contention monitoring
+* xref:dashboards.adoc#activity-dashboard[Activity Dashboard] - Current database connections and queries
+* xref:diagnostics.adoc[Advanced Diagnostics] - Overview of all diagnostic dashboards
+* xref:configuration.adoc#history-sampling[History Sampling] - Enable historical metric tracking
+* xref:troubleshooting.adoc[Troubleshooting] - General troubleshooting guide
+
+== Further Reading
+
+* https://www.postgresql.org/docs/current/explicit-locking.html[PostgreSQL Documentation: Explicit Locking]
+* https://www.postgresql.org/docs/current/runtime-config-locks.html[PostgreSQL Documentation: Lock Management Configuration]
+* https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-DATABASE-VIEW[PostgreSQL Documentation: pg_stat_database View]
+* https://www.postgresql.org/docs/current/view-pg-locks.html[PostgreSQL Documentation: pg_locks View]

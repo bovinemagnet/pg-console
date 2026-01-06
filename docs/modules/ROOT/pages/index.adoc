@@ -236,7 +236,7 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 |`/slow-queries?view=grouped`
 |Queries grouped by fingerprint
 
-|`/slow-queries/{id}`
+|`/slow-queries/\{id}`
 |Detailed query statistics with Explain Plan
 
 |`/activity`
@@ -254,7 +254,7 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 |`/databases`
 |Per-database metrics comparison
 
-|`/databases/{name}`
+|`/databases/\{name}`
 |Detailed metrics for a single database
 
 |`/index-advisor`

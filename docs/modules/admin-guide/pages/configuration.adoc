@@ -4,6 +4,8 @@ Paul Snow
 :description: Complete configuration reference for pg-console PostgreSQL monitoring dashboard
 :keywords: configuration, environment variables, application.properties, database connection, security, feature toggles, CORS
 
+include::_attributes.adoc[]
+
 This guide provides a comprehensive reference for all configuration options available in pg-console.
 
 == Overview
@@ -808,8 +810,8 @@ quarkus.http.auth.policy.role-policy-admin.roles-allowed=admin
 
 Admin-protected operations:
 
-* `POST /api/activity/{pid}/cancel` - Cancel a running query
-* `POST /api/activity/{pid}/terminate` - Terminate a database connection
+* `POST /api/activity/\{pid}/cancel` - Cancel a running query
+* `POST /api/activity/\{pid}/terminate` - Terminate a database connection
 
 === Development Profile
 
@@ -924,7 +926,7 @@ Format placeholders:
 * `%d{yyyy-MM-dd HH:mm:ss.SSS}` - Timestamp
 * `%-5p` - Log level (INFO, WARN, ERROR)
 * `%c{2.}` - Logger category (abbreviated)
-* `%X{correlationId}` - MDC correlation ID
+* `%X\{correlationId}` - MDC correlation ID
 * `%s` - Message
 * `%e` - Exception stack trace
 * `%n` - Newline

@@ -1,10 +1,14 @@
 package com.bovinemagnet.pgconsole.resource;
 
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
+import com.bovinemagnet.pgconsole.repository.HistoryRepository;
 import com.bovinemagnet.pgconsole.model.Activity;
 import com.bovinemagnet.pgconsole.model.BlockingTree;
 import com.bovinemagnet.pgconsole.model.DatabaseInfo;
 import com.bovinemagnet.pgconsole.model.DatabaseMetrics;
+import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
+import com.bovinemagnet.pgconsole.model.DeadlockConfig;
+import com.bovinemagnet.pgconsole.model.DeadlockStats;
 import com.bovinemagnet.pgconsole.model.ExplainPlan;
 import com.bovinemagnet.pgconsole.model.IncidentReport;
 import com.bovinemagnet.pgconsole.model.LockInfo;
@@ -107,6 +111,9 @@ public class DashboardResource {
     Template waitEvents;
 
     @Inject
+    Template deadlocks;
+
+    @Inject
     Template indexAdvisor;
 
     @Inject
@@ -177,6 +184,9 @@ public class DashboardResource {
 
     @Inject
     SparklineService sparklineService;
+
+    @Inject
+    HistoryRepository historyRepository;
 
     @Inject
     DataSourceManager dataSourceManager;
@@ -962,6 +972,72 @@ public class DashboardResource {
                     .data("schemaEnabled", config.schema().enabled())
                     .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                     .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Renders the deadlocks page showing deadlock statistics and configuration.
+     * <p>
+     * Displays cumulative deadlock counts per database from pg_stat_database,
+     * calculates deadlock rates from historical samples, and shows configuration
+     * settings with recommendations.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing deadlock statistics and configuration
+     */
+    @GET
+    @Path("/deadlocks")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance deadlocks(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("deadlocks");
+
+        List<DeadlockStats> stats = postgresService.getDeadlockStats(instance);
+        DeadlockConfig deadlockConfig = postgresService.getDeadlockConfig(instance);
+
+        // Calculate totals
+        long totalDeadlocks = stats.stream().mapToLong(DeadlockStats::getDeadlockCount).sum();
+
+        // Enrich with historical data if schema is enabled
+        String highestRateDb = null;
+        double highestRate = -1;
+        String highestRateFormatted = "N/A";
+
+        if (config.schema().enabled()) {
+            for (DeadlockStats stat : stats) {
+                List<DatabaseMetricsHistory> history = historyRepository.getDatabaseMetricsHistory(
+                        instance, stat.getDatabaseName(), 24);
+                double rate = postgresService.calculateDeadlockRate(history);
+                stat.setDeadlocksPerHour(rate);
+
+                // Generate sparkline from deadlock values
+                if (!history.isEmpty()) {
+                    List<Double> deadlockValues = history.stream()
+                            .map(h -> h.getDeadlocks() != null ? h.getDeadlocks().doubleValue() : 0.0)
+                            .toList();
+                    String sparkline = sparklineService.generateSparkline(deadlockValues, 100, 20);
+                    stat.setSparklineSvg(sparkline);
+                }
+
+                if (rate > highestRate) {
+                    highestRate = rate;
+                    highestRateDb = stat.getDatabaseName();
+                    highestRateFormatted = stat.getFormattedRate();
+                }
+            }
+        }
+
+        return deadlocks.data("stats", stats)
+                        .data("config", deadlockConfig)
+                        .data("totalDeadlocks", totalDeadlocks)
+                        .data("highestRateDb", highestRateDb)
+                        .data("highestRate", highestRate)
+                        .data("highestRateFormatted", highestRateFormatted)
+                        .data("instances", dataSourceManager.getInstanceInfoList())
+                        .data("currentInstance", instance)
+                        .data("securityEnabled", config.security().enabled())
+                        .data("schemaEnabled", config.schema().enabled())
+                        .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                        .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**

@@ -191,6 +191,15 @@ public class FeatureToggleService {
         return isMonitoringSectionEnabled() && dashboardConfig.monitoring().databasesEnabled();
     }
 
+    /**
+     * Checks if the Deadlocks page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isDeadlocksEnabled() {
+        return isMonitoringSectionEnabled() && dashboardConfig.monitoring().deadlocksEnabled();
+    }
+
     // ========================================
     // Analysis Section Pages
     // ========================================
@@ -597,6 +606,7 @@ public class FeatureToggleService {
             case "wait-events" -> isWaitEventsEnabled();
             case "tables" -> isTablesEnabled();
             case "databases" -> isDatabasesEnabled();
+            case "deadlocks" -> isDeadlocksEnabled();
             // Analysis
             case "index-advisor" -> isIndexAdvisorEnabled();
             case "query-regressions" -> isQueryRegressionsEnabled();
@@ -672,6 +682,7 @@ public class FeatureToggleService {
         toggles.put("waitEvents", isWaitEventsEnabled());
         toggles.put("tables", isTablesEnabled());
         toggles.put("databases", isDatabasesEnabled());
+        toggles.put("deadlocks", isDeadlocksEnabled());
 
         // Analysis pages
         toggles.put("indexAdvisor", isIndexAdvisorEnabled());

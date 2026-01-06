@@ -1,0 +1,36 @@
+%% Deadlock Cycle Diagram
+%% Shows how a circular dependency creates a deadlock between two transactions
+
+graph TB
+    %% Transaction A's path
+    TxA[Transaction A]
+    TxA -->|1. Acquires| LockX_A[Lock on Table X]
+    LockX_A -->|2. Requests| WaitY_A[Waiting for Lock on Table Y]
+
+    %% Transaction B's path
+    TxB[Transaction B]
+    TxB -->|1. Acquires| LockY_B[Lock on Table Y]
+    LockY_B -->|2. Requests| WaitX_B[Waiting for Lock on Table X]
+
+    %% The circular dependency (deadlock)
+    WaitY_A -.->|Blocked by| LockY_B
+    WaitX_B -.->|Blocked by| LockX_A
+
+    %% Deadlock detection
+    WaitY_A -.-> Deadlock{Deadlock<br/>Detected}
+    WaitX_B -.-> Deadlock
+
+    Deadlock -->|PostgreSQL aborts<br/>one transaction| Resolution[One Transaction<br/>Rolled Back]
+
+    %% Styling
+    classDef transaction fill:#e1f5ff,stroke:#0277bd,stroke-width:2px
+    classDef lock fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    classDef waiting fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef deadlock fill:#ffcdd2,stroke:#c62828,stroke-width:3px
+    classDef resolution fill:#f8bbd0,stroke:#880e4f,stroke-width:2px
+
+    class TxA,TxB transaction
+    class LockX_A,LockY_B lock
+    class WaitY_A,WaitX_B waiting
+    class Deadlock deadlock
+    class Resolution resolution

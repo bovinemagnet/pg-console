@@ -1,0 +1,86 @@
+graph TB
+    %% Styling
+    classDef userClass fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    classDef appClass fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    classDef dbClass fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    classDef configClass fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
+    classDef schemaClass fill:#FFC107,stroke:#F57C00,stroke-width:2px,color:#000
+
+    %% User Layer
+    Browser[Web Browser<br/>Users access dashboard<br/>Port: 8080]:::userClass
+
+    %% Configuration
+    subgraph Config[Configuration]
+        direction TB
+        EnvVars[Environment Variables<br/>POSTGRES_URL<br/>POSTGRES_USER<br/>POSTGRES_PASSWORD<br/>PG_CONSOLE_DATABASES<br/>PG_CONSOLE_HISTORY_*]:::configClass
+    end
+
+    %% Application Layer
+    subgraph AppLayer[pg-console Application]
+        direction TB
+        QuarkusApp[Quarkus 3.16.3<br/>REST API + Qute Templates<br/>htmx + Bootstrap 5]:::appClass
+        Services[Services<br/>PostgresService<br/>MetricsSamplerService<br/>SparklineService]:::appClass
+        QuarkusApp --> Services
+    end
+
+    %% Single Instance Deployment
+    subgraph SingleDeploy[Single Instance Deployment]
+        direction TB
+        PG1[PostgreSQL Instance<br/>Application Database]:::dbClass
+
+        subgraph Schema1[pgconsole schema]
+            direction TB
+            HistTables1[History Tables<br/>query_history<br/>connection_history<br/>cache_history<br/>database_metrics_history]:::schemaClass
+        end
+
+        PG1 -.->|Optional History Storage| Schema1
+    end
+
+    %% Multi-Instance Deployment
+    subgraph MultiDeploy[Multi-Instance Deployment]
+        direction TB
+
+        subgraph MonitoredDBs[Monitored Databases]
+            direction LR
+            PG2[PostgreSQL Instance 1<br/>Production Database]:::dbClass
+            PG3[PostgreSQL Instance 2<br/>Staging Database]:::dbClass
+            PG4[PostgreSQL Instance N<br/>Development Database]:::dbClass
+        end
+
+        MetadataDB[Metadata PostgreSQL<br/>Dedicated History Storage]:::dbClass
+
+        subgraph Schema2[pgconsole schema]
+            direction TB
+            HistTables2[History Tables<br/>query_history<br/>connection_history<br/>cache_history<br/>database_metrics_history]:::schemaClass
+        end
+
+        MetadataDB --> Schema2
+    end
+
+    %% Connections
+    Browser -->|HTTP/HTTPS| QuarkusApp
+    Config -.->|Configuration| QuarkusApp
+
+    Services -->|Read Statistics<br/>pg_stat_statements<br/>pg_stat_activity<br/>pg_locks| SingleDeploy
+    Services -->|Read Statistics<br/>pg_stat_statements<br/>pg_stat_activity<br/>pg_locks| MonitoredDBs
+    Services -->|Write History Samples<br/>Every 60s default| Schema1
+    Services -->|Write History Samples<br/>Every 60s default| Schema2
+
+    %% Notes
+    subgraph Notes[Deployment Notes]
+        direction TB
+        Note1[Single Instance: History stored in same database being monitored]
+        Note2[Multi-Instance: Separate metadata database for centralised history]
+        Note3[History sampling configurable via PG_CONSOLE_HISTORY_* variables]
+        Note4[Database filtering via PG_CONSOLE_DATABASES comma-separated list]
+    end
+
+    %% Legend
+    subgraph Legend
+        direction LR
+        L1[User/Browser]:::userClass
+        L2[Application]:::appClass
+        L3[Database]:::dbClass
+        L4[Configuration]:::configClass
+        L5[Schema/Tables]:::schemaClass
+    end

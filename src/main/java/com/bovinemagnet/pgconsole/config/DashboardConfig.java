@@ -167,6 +167,15 @@ public interface DashboardConfig {
 		@WithName("databases")
 		@WithDefault("true")
 		boolean databasesEnabled();
+
+		/**
+		 * Enable or disable the Deadlocks page (/deadlocks).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("deadlocks")
+		@WithDefault("true")
+		boolean deadlocksEnabled();
 	}
 
 	// ========================================

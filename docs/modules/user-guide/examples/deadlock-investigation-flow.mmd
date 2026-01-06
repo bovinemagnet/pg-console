@@ -1,0 +1,55 @@
+%% Deadlock Investigation Workflow
+%% Shows the step-by-step process for investigating and resolving deadlocks
+
+flowchart TD
+    Start([Deadlock Detected]) --> Console[Check pg-console<br/>Deadlocks Dashboard]
+
+    Console --> Trends{High Deadlock<br/>Rate or Trend?}
+
+    Trends -->|Yes| Urgent[Priority Investigation]
+    Trends -->|No| Monitor[Continue Monitoring]
+
+    Urgent --> Logs[Review PostgreSQL Logs<br/>for Deadlock Details]
+    Logs --> ExtractInfo[Extract Information:<br/>• Involved queries<br/>• Tables accessed<br/>• Lock types<br/>• Transaction details]
+
+    ExtractInfo --> IdentifyQueries[Identify Queries<br/>in Application Code]
+    IdentifyQueries --> AnalyseLocking[Analyse Lock<br/>Acquisition Order]
+
+    AnalyseLocking --> RootCause{Identify<br/>Root Cause}
+
+    RootCause -->|Inconsistent<br/>Lock Order| FixOrdering[Standardise Lock<br/>Acquisition Order]
+    RootCause -->|Long-Running<br/>Transactions| ReduceScope[Reduce Transaction<br/>Scope and Duration]
+    RootCause -->|Missing<br/>Indexes| AddIndexes[Add Appropriate<br/>Indexes]
+    RootCause -->|High<br/>Contention| OptimiseSchema[Optimise Schema<br/>or Partition Data]
+
+    FixOrdering --> Implement[Implement Fix<br/>in Application]
+    ReduceScope --> Implement
+    AddIndexes --> Implement
+    OptimiseSchema --> Implement
+
+    Implement --> Deploy[Deploy Changes<br/>to Production]
+    Deploy --> MonitorPost[Monitor Deadlock Rate<br/>in pg-console]
+
+    MonitorPost --> Resolved{Deadlock Rate<br/>Reduced?}
+
+    Resolved -->|Yes| Document[Document Solution<br/>and Close]
+    Resolved -->|No| Reassess[Reassess Root Cause]
+    Reassess --> AnalyseLocking
+
+    Document --> End([Investigation Complete])
+    Monitor --> End
+
+    %% Styling
+    classDef startEnd fill:#e1f5ff,stroke:#0277bd,stroke-width:2px,rx:10
+    classDef monitoring fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    classDef investigation fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef decision fill:#ffe0b2,stroke:#e65100,stroke-width:2px
+    classDef fixes fill:#e1bee7,stroke:#6a1b9a,stroke-width:2px
+    classDef implementation fill:#b2dfdb,stroke:#00695c,stroke-width:2px
+
+    class Start,End startEnd
+    class Console,MonitorPost,Monitor monitoring
+    class Logs,ExtractInfo,IdentifyQueries,AnalyseLocking investigation
+    class Trends,RootCause,Resolved decision
+    class FixOrdering,ReduceScope,AddIndexes,OptimiseSchema fixes
+    class Implement,Deploy,Document,Reassess implementation

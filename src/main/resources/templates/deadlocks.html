@@ -1,0 +1,265 @@
+{#include base}
+{#title}Deadlock Monitoring - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/deadlocks?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Deadlock Monitoring</h1>
+        <p class="text-muted">Monitor deadlock occurrences and configuration across databases</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {#if totalDeadlocks > 0}bg-warning text-dark{#else}bg-success{/if} mb-2">Total Deadlocks</span>
+                <h2 class="mb-0 {#if totalDeadlocks > 0}text-warning{#else}text-success{/if}">{totalDeadlocks}</h2>
+                <small class="text-muted">across all databases</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Databases</span>
+                <h2 class="mb-0">{stats.size}</h2>
+                <small class="text-muted">monitored</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {config.overallBadgeClass} mb-2">Configuration</span>
+                <h2 class="mb-0">{config.statusSummary}</h2>
+                <small class="text-muted">deadlock settings</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Highest Rate</span>
+                {#if highestRateDb != null}
+                <h2 class="mb-0 {#if highestRate > 1}text-danger{#else if highestRate > 0}text-warning{#else}text-muted{/if}">{highestRateFormatted}/hr</h2>
+                <small class="text-muted">{highestRateDb}</small>
+                {#else}
+                <h2 class="mb-0 text-muted">N/A</h2>
+                <small class="text-muted">no history data</small>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Database Deadlocks -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Per-Database Deadlocks</h5>
+                <span class="badge bg-info">{stats.size} database{#if stats.size != 1}s{/if}</span>
+            </div>
+            <div class="card-body p-0">
+                {#if stats.isEmpty}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No database statistics available</p>
+                </div>
+                {#else}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th class="text-end">Deadlock Count</th>
+                                <th class="text-end">Rate/Hour</th>
+                                {#if schemaEnabled}
+                                <th>Trend</th>
+                                {/if}
+                                <th>Stats Reset</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for stat in stats}
+                            <tr>
+                                <td>
+                                    <a href="/databases/{stat.databaseName}?instance={currentInstance ?: 'default'}">{stat.databaseName}</a>
+                                </td>
+                                <td class="text-end {stat.severityCssClass}">{stat.deadlockCount}</td>
+                                <td class="text-end {stat.severityCssClass}">{stat.formattedRate}</td>
+                                {#if schemaEnabled}
+                                <td>
+                                    {#if stat.hasSparkline}
+                                    {stat.sparklineSvg.raw}
+                                    {#else}
+                                    <span class="text-muted">-</span>
+                                    {/if}
+                                </td>
+                                {/if}
+                                <td><small class="text-muted">{stat.timeSinceReset}</small></td>
+                                <td>
+                                    <span class="badge {stat.badgeCssClass}">
+                                        {#if stat.hasDeadlocks}
+                                        {#if stat.hasHighRate}Critical{#else}Warning{/if}
+                                        {#else}
+                                        OK
+                                        {/if}
+                                    </span>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Section -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Deadlock Configuration</h5>
+                <span class="badge {config.overallBadgeClass}">{config.statusSummary}</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Setting</th>
+                            <th>Current Value</th>
+                            <th>Recommended</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <code>deadlock_timeout</code>
+                                <br><small class="text-muted">{config.deadlockTimeoutExplanation}</small>
+                            </td>
+                            <td><code>{config.deadlockTimeout}</code></td>
+                            <td><code>{config.recommendedDeadlockTimeout}</code></td>
+                            <td>
+                                <span class="badge {config.deadlockTimeoutBadgeClass}">
+                                    {#if config.deadlockTimeoutOptimal}OK{#else}Review{/if}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <code>log_lock_waits</code>
+                                <br><small class="text-muted">{config.logLockWaitsExplanation}</small>
+                            </td>
+                            <td><code>{#if config.logLockWaits}on{#else}off{/if}</code></td>
+                            <td><code>on</code></td>
+                            <td>
+                                <span class="badge {config.logLockWaitsBadgeClass}">
+                                    {#if config.logLockWaitsOptimal}OK{#else}Review{/if}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <code>lock_timeout</code>
+                                <br><small class="text-muted">{config.lockTimeoutExplanation}</small>
+                            </td>
+                            <td><code>{config.lockTimeout}</code></td>
+                            <td><code>0</code> (or app-specific)</td>
+                            <td>
+                                <span class="badge bg-secondary">Info</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Recommendations</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    {#for rec in config.recommendations}
+                    <li class="mb-2">{rec}</li>
+                    {/for}
+                </ul>
+                <hr>
+                <p class="mb-2"><strong>Related dashboards:</strong></p>
+                <a href="/locks?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="bi bi-lock"></i> Locks & Blocking
+                </a>
+                <a href="/activity?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="bi bi-activity"></i> Activity
+                </a>
+                <a href="/config-health?instance={currentInstance ?: 'default'}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-gear"></i> Config Health
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Understanding Deadlocks -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Deadlocks</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>What is a deadlock?</h6>
+                        <p>A deadlock occurs when two or more transactions are waiting for each other to release locks, creating a circular dependency. PostgreSQL automatically detects and resolves deadlocks by aborting one of the transactions.</p>
+
+                        <h6>Common causes:</h6>
+                        <ul>
+                            <li>Transactions locking rows in different orders</li>
+                            <li>Long-running transactions holding locks</li>
+                            <li>High concurrency on the same rows</li>
+                            <li>Missing or incorrect indexes causing table locks</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Prevention strategies:</h6>
+                        <ul>
+                            <li>Always access tables and rows in a consistent order</li>
+                            <li>Keep transactions short and focused</li>
+                            <li>Use appropriate isolation levels</li>
+                            <li>Consider using SELECT ... FOR UPDATE NOWAIT</li>
+                            <li>Review and optimise queries causing lock contention</li>
+                        </ul>
+
+                        <h6>Investigation:</h6>
+                        <p>When deadlocks occur, PostgreSQL logs the details including the queries involved. Enable <code>log_lock_waits</code> to also capture lock wait events that didn't result in deadlocks but indicate contention.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{#if !schemaEnabled}
+<div class="row mt-4">
+    <div class="col">
+        <div class="alert alert-info mb-0">
+            <strong>Note:</strong> Historical trends and rate calculations require the history schema to be enabled.
+            Set <code>PG_CONSOLE_SCHEMA_ENABLED=true</code> to enable metric history sampling.
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

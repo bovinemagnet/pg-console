@@ -6,6 +6,8 @@ Paul Snow
 
 Get pg-console up and running in minutes with this quick start guide.
 
+include::_attributes.adoc[]
+
 == Prerequisites
 
 Before you begin, ensure you have the following installed and configured:

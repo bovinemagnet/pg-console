@@ -4,6 +4,8 @@ Paul Snow
 :description: Deploying pg-console in production environments
 :keywords: deployment, systemd, docker, nginx, production, native executable
 
+include::_attributes.adoc[]
+
 This guide covers deploying pg-console in production environments using various deployment methods.
 
 == Prerequisites

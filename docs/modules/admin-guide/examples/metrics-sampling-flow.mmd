@@ -1,0 +1,80 @@
+graph TD
+    Config[Configuration Properties]
+
+    Config --> |PG_CONSOLE_HISTORY_ENABLED=true| Scheduler["MetricsSamplerService<br/>@Scheduled Job"]
+    Config --> |PG_CONSOLE_HISTORY_INTERVAL=60s| Scheduler
+    Config --> |PG_CONSOLE_HISTORY_TOP_QUERIES=50| QuerySampler
+    Config --> |PG_CONSOLE_HISTORY_RETENTION=7d| Cleanup
+
+    Scheduler --> |Every interval| SystemSampler[Sample System Metrics]
+    Scheduler --> |Every interval| QuerySampler[Sample Top N Queries]
+    Scheduler --> |Every interval| DBSampler[Sample Database Metrics]
+
+    SystemSampler --> ConnQuery["Query: pg_stat_database<br/>SUM connections"]
+    SystemSampler --> CacheQuery["Query: pg_stat_database<br/>CALCULATE cache hit ratio"]
+    SystemSampler --> ActiveQuery["Query: pg_stat_activity<br/>COUNT active queries"]
+    SystemSampler --> BlockedQuery["Query: pg_locks JOIN pg_stat_activity<br/>COUNT blocked queries"]
+
+    ConnQuery --> SystemStore[(pgconsole.system_metrics_history)]
+    CacheQuery --> SystemStore
+    ActiveQuery --> SystemStore
+    BlockedQuery --> SystemStore
+
+    QuerySampler --> SlowQuery["Query: pg_stat_statements<br/>ORDER BY total_exec_time<br/>LIMIT 50"]
+    SlowQuery --> QueryStore[(pgconsole.query_metrics_history)]
+
+    DBSampler --> DBQuery["Query: pg_stat_database<br/>ALL databases"]
+    DBQuery --> DBStore[(pgconsole.database_metrics_history)]
+
+    Migration["Flyway Migrations<br/>Create tables & indices"]
+    Migration -.-> |Creates| SystemStore
+    Migration -.-> |Creates| QueryStore
+    Migration -.-> |Creates| DBStore
+
+    Cleanup["Daily Cleanup Job<br/>@Scheduled cron"]
+    Cleanup --> RetentionDate["Calculate:<br/>NOW - RETENTION days"]
+    RetentionDate --> |DELETE old records| SystemStore
+    RetentionDate --> |DELETE old records| QueryStore
+    RetentionDate --> |DELETE old records| DBStore
+
+    HistoryRepo[HistoryRepository]
+    HistoryRepo --> |getSystemMetricsHistory| SystemStore
+    HistoryRepo --> |getQueryMetricsHistory| QueryStore
+    HistoryRepo --> |getDatabaseMetricsHistory| DBStore
+
+    HistoryRepo --> |Fetch historical data| SparklineService[SparklineService]
+
+    SparklineService --> |Generate SVG| ConnSparkline[Connections Sparkline]
+    SparklineService --> |Generate SVG| CacheSparkline[Cache Hit Sparkline]
+    SparklineService --> |Generate SVG| ActiveSparkline[Active Queries Sparkline]
+    SparklineService --> |Generate SVG| BlockedSparkline[Blocked Queries Sparkline]
+    SparklineService --> |Generate SVG| DBSparklines[Per-Database Sparklines]
+
+    ConnSparkline --> |Display on| Overview["Root Dashboard<br/>/"]
+    CacheSparkline --> |Display on| Overview
+    ActiveSparkline --> |Display on| Overview
+    BlockedSparkline --> |Display on| Overview
+    DBSparklines --> |Display on| DBDashboard["Databases Dashboard<br/>/databases"]
+    DBSparklines --> |Display on| DBDetail["Database Detail<br/>/databases/dbname"]
+
+    User[User Browser]
+    User --> |HTTP GET| Overview
+    User --> |HTTP GET| DBDashboard
+    User --> |HTTP GET| DBDetail
+    User --> |"Auto-refresh<br/>5s/10s/30s/60s"| Overview
+
+    classDef configClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef schedulerClass fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    classDef samplerClass fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef storageClass fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef serviceClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef sparklineClass fill:#ede7f6,stroke:#4527a0,stroke-width:2px
+    classDef dashboardClass fill:#e8eaf6,stroke:#311b92,stroke-width:2px
+
+    class Config configClass
+    class Scheduler,Cleanup schedulerClass
+    class SystemSampler,QuerySampler,DBSampler samplerClass
+    class SystemStore,QueryStore,DBStore,Migration storageClass
+    class SparklineService,HistoryRepo serviceClass
+    class ConnSparkline,CacheSparkline,ActiveSparkline,BlockedSparkline,DBSparklines sparklineClass
+    class Overview,DBDashboard,DBDetail,User dashboardClass

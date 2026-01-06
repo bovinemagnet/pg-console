@@ -4,6 +4,8 @@ Paul Snow
 :description: Complete reference for all pg-console REST API endpoints with request/response examples
 :keywords: api, endpoints, rest, json, monitoring, postgresql
 
+include::_attributes.adoc[]
+
 This page provides a complete reference for all pg-console REST API endpoints, including request parameters, response formats, and examples.
 
 == Endpoint Categories
@@ -2987,7 +2989,7 @@ Downloads a generated migration script as a SQL file.
 
 SQL file download with `Content-Disposition: attachment` header.
 
-Filename format: `migration_{source}_{destination}_{timestamp}.sql`
+Filename format: `migration_\{source}_\{destination}_\{timestamp}.sql`
 
 ==== Example
 
