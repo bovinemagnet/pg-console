@@ -85,6 +85,7 @@ test_endpoint "/replication?instance=${INSTANCE}"
 test_endpoint "/infrastructure?instance=${INSTANCE}"
 test_endpoint "/config-health?instance=${INSTANCE}"
 test_endpoint "/checkpoints?instance=${INSTANCE}"
+test_endpoint "/wal-checkpoints?instance=${INSTANCE}"
 test_endpoint "/health-check?instance=${INSTANCE}"
 
 echo ""

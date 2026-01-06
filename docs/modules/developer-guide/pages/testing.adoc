@@ -428,129 +428,715 @@ INSERT INTO test_table (name) VALUES
 
 == End-to-End Tests
 
-E2E tests validate the complete user experience using Playwright to automate browser interactions.
+End-to-end (E2E) tests validate the complete user experience by automating browser interactions using Microsoft Playwright. These tests verify that all pages load correctly, navigation works, and interactive features behave as expected from a user's perspective.
 
-=== Playwright Setup
+=== E2E Test Infrastructure
 
-Playwright tests run against a real application instance:
+pg-console uses a structured approach to E2E testing with:
+
+* *Playwright* - Browser automation framework supporting Chromium, Firefox, and WebKit
+* *Page Object Model* - Encapsulates page interactions in reusable classes
+* *Base test class* - Provides common setup, teardown, and helper methods
+* *Test tagging* - All E2E tests are tagged with `@Tag("e2e")` for filtering
+
+=== Running E2E Tests
+
+==== All E2E Tests
+
+Run the complete E2E test suite:
+
+[source,bash]
+----
+gradle21w test --tests '*E2ETest'
+----
+
+Alternatively, using the test tag:
+
+[source,bash]
+----
+gradle21w test --tests '*' --tests '*E2ETest'
+----
+
+==== Single E2E Test Class
+
+Run a specific E2E test class:
+
+[source,bash]
+----
+gradle21w test --tests NavigationE2ETest
+gradle21w test --tests ThemeE2ETest
+gradle21w test --tests DashboardE2ETest
+----
+
+==== Configuration Properties
+
+E2E tests can be configured using system properties:
+
+[cols="1,2,1"]
+|===
+|Property |Description |Default
+
+|`e2e.baseUrl`
+|Base URL for the application under test
+|`http://localhost:8080`
+
+|`e2e.browser`
+|Browser type: `chromium`, `firefox`, or `webkit`
+|`chromium`
+
+|`e2e.headless`
+|Run browser in headless mode (no GUI)
+|`true`
+
+|`e2e.slowMo`
+|Slow down operations by N milliseconds (for debugging)
+|`0`
+
+|`e2e.timeout`
+|Default timeout in milliseconds
+|`30000`
+
+|`e2e.screenshotDir`
+|Directory for failure screenshots
+|`build/e2e-screenshots`
+|===
+
+.Example: Run tests in Firefox with visible browser
+[source,bash]
+----
+gradle21w test --tests '*E2ETest' \
+  -De2e.browser=firefox \
+  -De2e.headless=false
+----
+
+.Example: Run tests with slow motion for debugging
+[source,bash]
+----
+gradle21w test --tests NavigationE2ETest \
+  -De2e.headless=false \
+  -De2e.slowMo=500
+----
+
+=== Test Base Class: PlaywrightTestBase
+
+All E2E tests extend `PlaywrightTestBase`, which provides:
 
 [source,java]
 ----
-@QuarkusTest
-class DashboardNavigationE2E {
+@Tag("e2e")
+public abstract class PlaywrightTestBase {
+    protected static Playwright playwright;
+    protected static Browser browser;
+    protected BrowserContext context;
+    protected Page page;
+    protected static final String BASE_URL =
+        System.getProperty("e2e.baseUrl", "http://localhost:8080");
 
-    private static final String BASE_URL = "http://localhost:8081";
+    // Lifecycle methods manage Playwright, browser, and page instances
+    // Helper methods for common operations
+}
+----
+
+*Key Features:*
+
+* *Shared Playwright instance* - Created once for all tests in a class
+* *Per-test isolation* - Each test gets a fresh browser context and page
+* *Automatic cleanup* - Contexts and pages closed after each test
+* *Screenshot capture* - Screenshots saved on test failure
+* *Helper methods* - Common operations like navigation, waiting, clicking
+
+*Common Helper Methods:*
+
+[source,java]
+----
+// Navigation
+navigateTo("/slow-queries")
+navigateToWithInstance("/activity")  // Adds ?instance=default
+
+// Waiting
+waitForPageLoad()
+waitForElement("table.table")
+
+// Interactions
+clickAndWait("a.nav-link")
+toggleDarkMode()
+setAutoRefresh(30)
+
+// Verification
+pageLoadedWithoutErrors()
+isVisible("#widget")
+getText(".card-title")
+getTableRowCount("table.queries")
+----
+
+=== Page Object Model
+
+E2E tests use the Page Object Model pattern to encapsulate page-specific interactions.
+
+==== BasePage
+
+The `BasePage` class provides common functionality available on all pages:
+
+[source,java]
+----
+public class BasePage {
+    protected final Page page;
+    protected final String baseUrl;
+
+    // Navigation
+    public void navigateTo(String path)
+    public void navigateToWithInstance(String path)
+    public String getCurrentUrl()
+
+    // Common elements
+    public String getPageTitle()
+    public String getBrowserTitle()
+    public boolean isSidebarVisible()
+    public void clickNavLink(String linkText)
+
+    // Theme toggle
+    public void toggleTheme()
+    public boolean isDarkMode()
+    public void enableDarkMode()
+    public void enableLightMode()
+
+    // Auto-refresh
+    public void setAutoRefresh(int seconds)
+    public void disableAutoRefresh()
+
+    // Instance selection
+    public void selectInstance(String instanceName)
+    public String getSelectedInstance()
+
+    // Element helpers
+    public boolean isVisible(String selector)
+    public String getText(String selector)
+    public void click(String selector)
+    public int countElements(String selector)
+
+    // Table helpers
+    public int getTableRowCount(String tableSelector)
+    public void sortTableBy(String headerText)
+    public String getTableCell(String tableSelector, int row, int col)
+}
+----
+
+==== DashboardPage
+
+Encapsulates dashboard-specific interactions:
+
+[source,java]
+----
+public class DashboardPage extends BasePage {
+    public void navigate()
+
+    // Widget visibility checks
+    public boolean hasConnectionsWidget()
+    public boolean hasActiveQueriesWidget()
+    public boolean hasCacheHitWidget()
+    public boolean hasDatabaseSizeWidget()
+    public boolean hasTopTablesCard()
+    public boolean hasTopIndexesCard()
+
+    // Widget values
+    public String getConnectionsValue()
+    public String getActiveQueriesValue()
+    public String getCacheHitValue()
+    public String getDatabaseSizeValue()
+
+    // Widget interactions
+    public void clickConnectionsWidget()
+    public void clickActiveQueriesWidget()
+
+    // Verification
+    public boolean allCoreWidgetsVisible()
+    public int getTopTablesCount()
+    public int getTopIndexesCount()
+}
+----
+
+==== SlowQueriesPage
+
+Encapsulates slow queries page interactions:
+
+[source,java]
+----
+public class SlowQueriesPage extends BasePage {
+    public void navigate()
+
+    // Table presence
+    public boolean hasQueriesTable()
+    public boolean hasNoDataMessage()
+    public int getQueryCount()
+
+    // Sorting
+    public void sortByTotalTime()
+    public void sortByMeanTime()
+    public void sortByCalls()
+    public void sortByRows()
+
+    // Query details
+    public void clickFirstQuery()
+    public void clickQuery(int index)
+    public String getQueryText(int index)
+    public String getCalls(int index)
+    public String getMeanTime(int index)
+    public String getTotalTime(int index)
+
+    // Verification
+    public boolean isPageValid()
+    public boolean hasSortableHeaders()
+}
+----
+
+=== Test Categories
+
+E2E tests are organised by functionality:
+
+==== NavigationE2ETest
+
+Verifies that all pages load without errors and navigation works correctly.
+
+[source,java]
+----
+@DisplayName("Navigation E2E Tests")
+class NavigationE2ETest extends PlaywrightTestBase {
+
+    private BasePage basePage;
+
+    @BeforeEach
+    void setUpBasePage() {
+        basePage = new BasePage(page, BASE_URL);
+    }
 
     @Test
-    void shouldNavigateToAllDashboardPages() {
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch();
-            BrowserContext context = browser.newContext();
-            Page page = context.newPage();
+    @DisplayName("Dashboard page loads without errors")
+    void dashboardPageLoads() {
+        basePage.navigateToWithInstance("/");
 
-            // Navigate to home page
-            page.navigate(BASE_URL);
-            assertThat(page.title()).contains("Overview");
+        assertTrue(basePage.pageLoadedWithoutErrors(),
+            "Dashboard should load without errors");
+        assertTrue(basePage.isSidebarVisible(),
+            "Sidebar should be visible");
+        assertNotNull(basePage.getPageTitle(),
+            "Page should have a title");
+    }
 
-            // Navigate to slow queries
-            page.click("a[href='/slow-queries']");
-            assertThat(page.url()).contains("/slow-queries");
+    @Test
+    @DisplayName("Sidebar navigation to slow queries works")
+    void sidebarNavigationWorks() {
+        basePage.navigateToWithInstance("/");
+        basePage.clickNavLink("Slow Queries");
 
-            // Navigate to activity
-            page.click("a[href='/activity']");
-            assertThat(page.url()).contains("/activity");
-
-            // Navigate to locks
-            page.click("a[href='/locks']");
-            assertThat(page.url()).contains("/locks");
-
-            // Navigate to tables
-            page.click("a[href='/tables']");
-            assertThat(page.url()).contains("/tables");
-
-            context.close();
-            browser.close();
-        }
+        assertTrue(basePage.getCurrentUrl().contains("/slow-queries"),
+            "Should navigate to slow queries");
+        assertTrue(basePage.pageLoadedWithoutErrors(),
+            "Page should load without errors");
     }
 }
 ----
 
-=== Testing Auto-Refresh
+*Pages Tested:*
 
-Validate htmx auto-refresh functionality:
+* Dashboard (`/`)
+* Slow Queries (`/slow-queries`)
+* Activity (`/activity`)
+* Locks (`/locks`)
+* Deadlocks (`/deadlocks`)
+* Wait Events (`/wait-events`)
+* Tables (`/tables`)
+* Databases (`/databases`)
+* About (`/about`)
+* Index Advisor (`/index-advisor`)
+* Query Regressions (`/query-regressions`)
+* Table Maintenance (`/table-maintenance`)
+* Replication (`/replication`)
+* Infrastructure (`/infrastructure`)
+* Config Health (`/config-health`)
+* Checkpoints (`/checkpoints`)
+* WAL Checkpoints (`/wal-checkpoints`)
+* Health Check (`/health-check`)
+* Security (`/security`)
+* Security Roles (`/security/roles`)
+
+==== ThemeE2ETest
+
+Validates dark mode toggle functionality and persistence.
 
 [source,java]
 ----
-@QuarkusTest
-class AutoRefreshE2E {
+@DisplayName("Theme Toggle E2E Tests")
+class ThemeE2ETest extends PlaywrightTestBase {
+
+    private BasePage basePage;
+
+    @BeforeEach
+    void setUpBasePage() {
+        basePage = new BasePage(page, BASE_URL);
+    }
 
     @Test
-    void shouldAutoRefreshActivityPage() {
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch();
-            Page page = browser.newPage();
+    @DisplayName("Toggle to dark mode")
+    void toggleToDarkMode() {
+        basePage.navigateToWithInstance("/");
+        basePage.enableLightMode(); // Start from known state
 
-            page.navigate(BASE_URL + "/activity");
+        basePage.toggleTheme();
 
-            // Set refresh interval to 5 seconds
-            page.selectOption("#refreshInterval", "5");
+        assertTrue(basePage.isDarkMode(),
+            "Should be in dark mode after toggle");
+    }
 
-            // Wait for localStorage to be set
-            page.waitForTimeout(100);
+    @Test
+    @DisplayName("Dark mode persists across page navigation")
+    void darkModePersistsAcrossNavigation() {
+        basePage.navigateToWithInstance("/");
+        basePage.enableDarkMode();
+        assertTrue(basePage.isDarkMode(), "Should be in dark mode");
 
-            // Verify localStorage value
-            String interval = (String) page.evaluate(
-                "localStorage.getItem('refreshInterval')"
-            );
-            assertThat(interval).isEqualTo("5");
+        basePage.navigateToWithInstance("/slow-queries");
 
-            // Verify htmx polling is active
-            page.waitForTimeout(5500);
-            // Page should have refreshed
-
-            browser.close();
-        }
+        assertTrue(basePage.isDarkMode(),
+            "Dark mode should persist after navigation");
     }
 }
 ----
 
-=== Testing Dark Mode
+*Tests Cover:*
 
-Validate dark mode toggle:
+* Theme toggle button visibility
+* Toggle to dark mode
+* Toggle to light mode
+* Dark mode persistence across navigation
+* Light mode persistence across navigation
+* Theme toggle on multiple pages
+
+==== DashboardE2ETest
+
+Validates dashboard widget display and data.
 
 [source,java]
 ----
-@QuarkusTest
-class DarkModeE2E {
+@DisplayName("Dashboard E2E Tests")
+class DashboardE2ETest extends PlaywrightTestBase {
+
+    private DashboardPage dashboardPage;
+
+    @BeforeEach
+    void setUpDashboardPage() {
+        dashboardPage = new DashboardPage(page, BASE_URL);
+    }
 
     @Test
-    void shouldToggleDarkMode() {
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch();
-            Page page = browser.newPage();
+    @DisplayName("Dashboard displays all core widgets")
+    void dashboardDisplaysAllWidgets() {
+        dashboardPage.navigate();
 
-            page.navigate(BASE_URL);
+        assertTrue(dashboardPage.allCoreWidgetsVisible(),
+            "All core widgets should be visible");
+    }
 
-            // Click dark mode toggle
-            page.click("#darkModeToggle");
+    @Test
+    @DisplayName("Connections widget displays value")
+    void connectionsWidgetHasValue() {
+        dashboardPage.navigate();
 
-            // Verify theme attribute
-            String theme = (String) page.evaluate(
-                "document.documentElement.getAttribute('data-bs-theme')"
-            );
-            assertThat(theme).isEqualTo("dark");
-
-            // Verify localStorage
-            String storedTheme = (String) page.evaluate(
-                "localStorage.getItem('theme')"
-            );
-            assertThat(storedTheme).isEqualTo("dark");
-
-            browser.close();
-        }
+        assertTrue(dashboardPage.hasConnectionsWidget(),
+            "Connections widget should be visible");
+        String value = dashboardPage.getConnectionsValue();
+        assertNotNull(value, "Connections value should not be null");
+        assertFalse(value.isEmpty(), "Connections value should not be empty");
     }
 }
 ----
+
+*Widget Tests:*
+
+* Connections widget
+* Active queries widget
+* Blocked queries widget
+* Cache hit ratio widget
+* Database size widget
+* Top tables card
+* Top indexes card
+* Sparkline visualisations
+
+=== Writing New E2E Tests
+
+==== Step 1: Create Test Class
+
+Create a new test class extending `PlaywrightTestBase`:
+
+[source,java]
+----
+package com.bovinemagnet.pgconsole.e2e;
+
+import com.bovinemagnet.pgconsole.e2e.page.BasePage;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("My Feature E2E Tests")
+class MyFeatureE2ETest extends PlaywrightTestBase {
+
+    private BasePage basePage;
+
+    @BeforeEach
+    void setUpBasePage() {
+        basePage = new BasePage(page, BASE_URL);
+    }
+
+    @Test
+    @DisplayName("Feature should work as expected")
+    void featureWorks() {
+        // Given: Navigate to the page
+        basePage.navigateToWithInstance("/my-feature");
+
+        // When: Perform action
+        basePage.click("#myButton");
+
+        // Then: Verify outcome
+        assertTrue(basePage.isVisible("#result"),
+            "Result should be visible");
+        assertEquals("Success", basePage.getText("#result"),
+            "Result should show success message");
+    }
+}
+----
+
+==== Step 2: Use Page Objects
+
+For complex pages, create a dedicated Page Object:
+
+[source,java]
+----
+package com.bovinemagnet.pgconsole.e2e.page;
+
+import com.microsoft.playwright.Page;
+
+public class MyFeaturePage extends BasePage {
+
+    private static final String FEATURE_BUTTON = "#myButton";
+    private static final String RESULT_PANEL = "#result";
+
+    public MyFeaturePage(Page page, String baseUrl) {
+        super(page, baseUrl);
+    }
+
+    public void navigate() {
+        navigateToWithInstance("/my-feature");
+    }
+
+    public void clickFeatureButton() {
+        click(FEATURE_BUTTON);
+        waitForElement(RESULT_PANEL);
+    }
+
+    public String getResult() {
+        return getText(RESULT_PANEL);
+    }
+
+    public boolean isFeatureActive() {
+        return isVisible(FEATURE_BUTTON);
+    }
+}
+----
+
+Then use it in your test:
+
+[source,java]
+----
+@DisplayName("My Feature E2E Tests")
+class MyFeatureE2ETest extends PlaywrightTestBase {
+
+    private MyFeaturePage featurePage;
+
+    @BeforeEach
+    void setUpFeaturePage() {
+        featurePage = new MyFeaturePage(page, BASE_URL);
+    }
+
+    @Test
+    @DisplayName("Feature button triggers expected result")
+    void featureButtonWorks() {
+        featurePage.navigate();
+
+        featurePage.clickFeatureButton();
+
+        assertEquals("Success", featurePage.getResult());
+    }
+}
+----
+
+==== Step 3: Use @DisplayName Annotations
+
+Use `@DisplayName` for readable test names in reports:
+
+[source,java]
+----
+@Test
+@DisplayName("User can sort queries by total time descending")
+void sortQueriesByTotalTime() {
+    // Test implementation
+}
+----
+
+This produces readable test output:
+
+[source,text]
+----
+SlowQueriesE2ETest
+  ✓ User can sort queries by total time descending
+  ✓ Query details page displays full SQL text
+  ✓ Copy button copies query to clipboard
+----
+
+==== Step 4: Follow Best Practices
+
+*Test Independence:*
+
+* Each test should start from a clean state
+* Don't rely on execution order
+* Use `@BeforeEach` to set up consistent state
+
+*Explicit Waits:*
+
+* Wait for elements before interacting: `waitForElement("#button")`
+* Wait for page loads after navigation: `waitForPageLoad()`
+* Use timeouts for async operations
+
+*Meaningful Assertions:*
+
+* Include descriptive assertion messages
+* Verify positive and negative cases
+* Check both presence and content
+
+*Example:*
+
+[source,java]
+----
+@Test
+@DisplayName("Search returns relevant results")
+void searchReturnsResults() {
+    // Given
+    searchPage.navigate();
+
+    // When
+    searchPage.enterSearchTerm("SELECT");
+    searchPage.clickSearchButton();
+
+    // Then
+    assertTrue(searchPage.hasResults(),
+        "Search should return at least one result");
+    assertTrue(searchPage.getResultCount() > 0,
+        "Result count should be greater than zero");
+    assertTrue(searchPage.getFirstResultText().contains("SELECT"),
+        "First result should contain search term");
+}
+----
+
+=== CI/CD Integration
+
+E2E tests can be integrated into CI/CD pipelines with special considerations:
+
+==== GitHub Actions Configuration
+
+[source,yaml]
+----
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start application
+        run: |
+          gradle21w quarkusBuild
+          java -jar build/quarkus-app/quarkus-run.jar &
+          sleep 10  # Wait for application to start
+
+      - name: Run E2E tests
+        run: gradle21w test --tests '*E2ETest'
+        env:
+          E2E_BASE_URL: http://localhost:8080
+          E2E_HEADLESS: true
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e-screenshots
+          path: build/e2e-screenshots/
+----
+
+==== Considerations for CI/CD
+
+*Headless Mode:*
+
+* Always run in headless mode in CI: `-De2e.headless=true`
+* Use visible browser only for local debugging
+
+*Timeouts:*
+
+* Increase timeouts for slower CI environments
+* Use `e2e.timeout` property to adjust: `-De2e.timeout=60000`
+
+*Browser Installation:*
+
+* Install Playwright browsers in CI: `npx playwright install --with-deps`
+* Use specific browser for consistency: `-De2e.browser=chromium`
+
+*Screenshot Capture:*
+
+* Screenshots automatically saved to `build/e2e-screenshots/` on failure
+* Upload as CI artifacts for debugging failed tests
+
+*Application Startup:*
+
+* Ensure application is fully started before running tests
+* Use health check endpoint to verify: `curl --retry 30 http://localhost:8080/q/health`
+
+*Parallel Execution:*
+
+* Playwright tests can run in parallel with isolated browser contexts
+* Configure Gradle for parallel test execution if needed
+
+*Test Stability:*
+
+* Use explicit waits instead of hard-coded delays
+* Verify element visibility before interaction
+* Handle dynamic content with proper waiting strategies
 
 == Code Coverage
 
@@ -765,27 +1351,42 @@ class MyRepositoryIT {
 
 [source,java]
 ----
-@QuarkusTest
-class MyFeatureE2E {
+package com.bovinemagnet.pgconsole.e2e;
+
+import com.bovinemagnet.pgconsole.e2e.page.BasePage;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("My Feature E2E Tests")
+class MyFeatureE2ETest extends PlaywrightTestBase {
+
+    private BasePage basePage;
+
+    @BeforeEach
+    void setUpBasePage() {
+        basePage = new BasePage(page, BASE_URL);
+    }
 
     @Test
+    @DisplayName("Feature should perform expected workflow")
     void shouldPerformUserWorkflow() {
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch();
-            Page page = browser.newPage();
+        // Given: Navigate to the feature page
+        basePage.navigateToWithInstance("/my-feature");
+        assertTrue(basePage.pageLoadedWithoutErrors(),
+            "Page should load without errors");
 
-            // Given
-            page.navigate(BASE_URL + "/page");
+        // When: Perform user action
+        basePage.click("button#action");
+        basePage.waitForElement("#result");
 
-            // When
-            page.click("button#action");
-
-            // Then
-            assertThat(page.locator("#result").textContent())
-                .contains("Expected text");
-
-            browser.close();
-        }
+        // Then: Verify expected outcome
+        assertTrue(basePage.isVisible("#result"),
+            "Result should be visible");
+        assertTrue(basePage.getText("#result").contains("Expected text"),
+            "Result should contain expected text");
     }
 }
 ----

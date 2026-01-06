@@ -180,6 +180,9 @@ public class DashboardResource {
     Template securityRecommendations;
 
     @Inject
+    Template walCheckpoints;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -1316,6 +1319,38 @@ public class DashboardResource {
                           .data("schemaEnabled", config.schema().enabled())
                           .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                           .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Renders the comprehensive WAL and checkpoint monitoring dashboard.
+     * <p>
+     * Provides detailed metrics from multiple PostgreSQL system views:
+     * <ul>
+     *   <li>{@code pg_stat_wal} (PG14+) - WAL generation metrics</li>
+     *   <li>{@code pg_stat_bgwriter} - Background writer statistics</li>
+     *   <li>{@code pg_stat_checkpointer} (PG17+) - Checkpoint-specific metrics</li>
+     *   <li>{@code pg_stat_archiver} - WAL archiving status</li>
+     * </ul>
+     * <p>
+     * Includes health status, recommendations, and version-aware feature availability.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing WAL and checkpoint statistics
+     */
+    @GET
+    @Path("/wal-checkpoints")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance walCheckpointsPage(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var overview = infrastructureService.getWalCheckpointOverview(instance);
+
+        return walCheckpoints.data("overview", overview)
+                             .data("instances", dataSourceManager.getInstanceInfoList())
+                             .data("currentInstance", instance)
+                             .data("securityEnabled", config.security().enabled())
+                             .data("schemaEnabled", config.schema().enabled())
+                             .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                             .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**
