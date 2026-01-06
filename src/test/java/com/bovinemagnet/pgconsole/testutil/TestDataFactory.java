@@ -142,6 +142,69 @@ public final class TestDataFactory {
         return createOverviewStats(95, 100, 20, 5, 85.0);
     }
 
+    /**
+     * Creates OverviewStats with enhanced alerting metrics.
+     *
+     * @param connectionsUsed current connection count
+     * @param connectionsMax maximum connections
+     * @param activeQueries active query count
+     * @param blockedQueries blocked query count
+     * @param cacheHitRatio cache hit percentage
+     * @param deadlocksPerHour deadlock rate per hour (-1 if unavailable)
+     * @param replicationLagSeconds replication lag in seconds (-1 if no replicas)
+     * @param maxTableBloatPercent maximum table bloat percentage
+     * @param maxBloatTableName name of table with max bloat
+     * @param xidWraparoundPercent XID wraparound percentage
+     * @param xidWraparoundDatabase database name closest to wraparound
+     * @param maxQueryMeanTimeMs maximum query mean time in milliseconds
+     * @return configured OverviewStats instance
+     */
+    public static OverviewStats createOverviewStatsWithEnhancedMetrics(
+            int connectionsUsed,
+            int connectionsMax,
+            int activeQueries,
+            int blockedQueries,
+            double cacheHitRatio,
+            double deadlocksPerHour,
+            double replicationLagSeconds,
+            double maxTableBloatPercent,
+            String maxBloatTableName,
+            double xidWraparoundPercent,
+            String xidWraparoundDatabase,
+            double maxQueryMeanTimeMs) {
+        OverviewStats stats = createOverviewStats(
+            connectionsUsed, connectionsMax, activeQueries, blockedQueries, cacheHitRatio
+        );
+        stats.setDeadlockCount(deadlocksPerHour >= 0 ? (long) (deadlocksPerHour * 24) : 0);
+        stats.setDeadlocksPerHour(deadlocksPerHour);
+        stats.setReplicationLagSeconds(replicationLagSeconds);
+        stats.setMaxTableBloatPercent(maxTableBloatPercent);
+        stats.setMaxBloatTableName(maxBloatTableName);
+        stats.setXidWraparoundPercent(xidWraparoundPercent);
+        stats.setXidWraparoundDatabase(xidWraparoundDatabase);
+        stats.setMaxQueryMeanTimeMs(maxQueryMeanTimeMs);
+        return stats;
+    }
+
+    /**
+     * Creates OverviewStats with critical enhanced alerting values.
+     * All enhanced metrics are set to trigger alerts.
+     */
+    public static OverviewStats createCriticalStats() {
+        return createOverviewStatsWithEnhancedMetrics(
+            95, 100,  // 95% connections
+            20, 5,    // active/blocked queries
+            85.0,     // low cache hit ratio
+            15.0,     // high deadlock rate
+            120.0,    // high replication lag
+            60.0,     // high bloat
+            "public.large_table",
+            55.0,     // high XID wraparound
+            "production",
+            2500.0    // high query time
+        );
+    }
+
     // =========================================================================
     // TableStats
     // =========================================================================

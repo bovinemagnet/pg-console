@@ -752,5 +752,124 @@ public interface InstanceConfig {
 		@WithName("cache-hit-ratio")
 		@WithDefault("90")
 		int cacheHitRatio();
+
+		/**
+		 * Retrieves the deadlock rate threshold (deadlocks per hour).
+		 * <p>
+		 * Triggers an alert when the calculated deadlock rate exceeds this threshold.
+		 * Deadlocks occur when two or more transactions block each other indefinitely,
+		 * requiring PostgreSQL to abort one transaction to break the cycle. High deadlock
+		 * rates indicate application-level concurrency issues that should be investigated.
+		 * <p>
+		 * The rate is calculated from {@code pg_stat_database.deadlocks} by tracking
+		 * changes over time. A value of 0 disables this alert.
+		 * <p>
+		 * <strong>Recommended values:</strong>
+		 * <ul>
+		 *   <li><strong>1-5:</strong> Sensitive threshold for low-latency OLTP systems</li>
+		 *   <li><strong>10:</strong> Default, suitable for most workloads</li>
+		 *   <li><strong>20+:</strong> Relaxed threshold for high-concurrency systems
+		 *       where some deadlocks are expected</li>
+		 * </ul>
+		 *
+		 * @return threshold deadlocks per hour (default: 10), 0 to disable
+		 */
+		@WithName("deadlock-rate")
+		@WithDefault("10")
+		int deadlockRate();
+
+		/**
+		 * Retrieves the replication lag threshold in seconds.
+		 * <p>
+		 * Triggers an alert when streaming replication lag exceeds this threshold.
+		 * High replication lag can indicate network issues, replica overload, or
+		 * insufficient resources on standby servers. This is critical for read
+		 * replica consistency and failover readiness.
+		 * <p>
+		 * The lag is measured from {@code pg_stat_replication.replay_lag} on the
+		 * primary server. A value of 0 disables this alert.
+		 * <p>
+		 * <strong>Recommended values:</strong>
+		 * <ul>
+		 *   <li><strong>10-30:</strong> Strict threshold for synchronous-like behaviour</li>
+		 *   <li><strong>60:</strong> Default, suitable for most read replica setups</li>
+		 *   <li><strong>300+:</strong> Relaxed threshold for asynchronous replicas
+		 *       where eventual consistency is acceptable</li>
+		 * </ul>
+		 *
+		 * @return threshold in seconds (default: 60), 0 to disable
+		 */
+		@WithName("replication-lag-seconds")
+		@WithDefault("60")
+		int replicationLagSeconds();
+
+		/**
+		 * Retrieves the table bloat percentage threshold.
+		 * <p>
+		 * Triggers an alert when any table's estimated bloat exceeds this percentage.
+		 * Table bloat occurs when dead tuples accumulate faster than autovacuum can
+		 * clean them, leading to increased storage usage and query performance degradation.
+		 * <p>
+		 * Bloat is estimated from dead tuple ratios in {@code pg_stat_user_tables}.
+		 * A value of 0 disables this alert.
+		 * <p>
+		 * <strong>Recommended values:</strong>
+		 * <ul>
+		 *   <li><strong>20-30%:</strong> Conservative threshold for critical tables</li>
+		 *   <li><strong>50%:</strong> Default, triggers when bloat becomes significant</li>
+		 *   <li><strong>70%+:</strong> Relaxed threshold for tables with expected churn</li>
+		 * </ul>
+		 *
+		 * @return threshold percentage (0-100, default: 50), 0 to disable
+		 */
+		@WithName("table-bloat-percent")
+		@WithDefault("50")
+		int tableBloatPercent();
+
+		/**
+		 * Retrieves the XID wraparound proximity threshold as a percentage.
+		 * <p>
+		 * Triggers an alert when any database approaches transaction ID wraparound
+		 * at this percentage of the danger threshold. XID wraparound is a critical
+		 * PostgreSQL limitation that can cause the database to shut down if not addressed.
+		 * <p>
+		 * The percentage is calculated from {@code age(datfrozenxid)} relative to
+		 * the 2 billion transaction limit. A value of 0 disables this alert.
+		 * <p>
+		 * <strong>Recommended values:</strong>
+		 * <ul>
+		 *   <li><strong>50%:</strong> Default, early warning for investigation</li>
+		 *   <li><strong>75%:</strong> Critical threshold requiring immediate action</li>
+		 *   <li><strong>25%:</strong> Very early warning for proactive maintenance</li>
+		 * </ul>
+		 *
+		 * @return threshold percentage (0-100, default: 50), 0 to disable
+		 */
+		@WithName("xid-wraparound-percent")
+		@WithDefault("50")
+		int xidWraparoundPercent();
+
+		/**
+		 * Retrieves the query response time threshold in milliseconds.
+		 * <p>
+		 * Triggers an alert when any query's mean execution time in {@code pg_stat_statements}
+		 * exceeds this threshold. High mean query times indicate performance issues that
+		 * may impact application responsiveness.
+		 * <p>
+		 * The metric uses the maximum {@code mean_time} across all tracked queries.
+		 * A value of 0 disables this alert.
+		 * <p>
+		 * <strong>Recommended values:</strong>
+		 * <ul>
+		 *   <li><strong>100-500ms:</strong> Strict threshold for OLTP systems</li>
+		 *   <li><strong>1000ms:</strong> Default, suitable for mixed workloads</li>
+		 *   <li><strong>5000ms+:</strong> Relaxed threshold for analytics queries</li>
+		 * </ul>
+		 *
+		 * @return threshold in milliseconds (default: 1000), 0 to disable
+		 */
+		@WithName("query-mean-time-ms")
+		@WithDefault("1000")
+		int queryMeanTimeMs();
 	}
 }
