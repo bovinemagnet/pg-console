@@ -134,6 +134,243 @@ class AlertingServiceTest {
 
             verify(thresholdsConfig, atLeast(1)).cacheHitRatio();
         }
+
+        @Test
+        @DisplayName("Triggers deadlock rate alert when threshold exceeded")
+        void triggersDeadlockRateAlert() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            when(thresholdsConfig.deadlockRate()).thenReturn(10); // 10/hour threshold
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // 15/hour deadlock rate should trigger
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,  // base metrics - safe
+                15.0,  // high deadlock rate - should trigger
+                -1, 0, null, 0, null, 0  // other enhanced metrics - safe
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            verify(thresholdsConfig, atLeast(1)).deadlockRate();
+        }
+
+        @Test
+        @DisplayName("Does not trigger deadlock alert when rate is unavailable (-1)")
+        void noDeadlockAlertWhenUnavailable() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(10);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // Deadlock rate unavailable (-1) should not trigger and should short-circuit
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                -1,  // unavailable - short-circuits before threshold check
+                -1, 0, null, 0, null, 0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            // When deadlocksPerHour is -1, the code short-circuits and never checks the threshold
+            // This is correct behaviour - we don't need to compare against threshold if data unavailable
+            verify(thresholdsConfig, never()).deadlockRate();
+        }
+
+        @Test
+        @DisplayName("Triggers replication lag alert when threshold exceeded")
+        void triggersReplicationLagAlert() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            when(thresholdsConfig.replicationLagSeconds()).thenReturn(60); // 60s threshold
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // 120s lag should trigger
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                0,     // no deadlocks
+                120.0, // high replication lag - should trigger
+                0, null, 0, null, 0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            verify(thresholdsConfig, atLeast(1)).replicationLagSeconds();
+        }
+
+        @Test
+        @DisplayName("Does not trigger replication lag alert when no replicas (-1)")
+        void noReplicationLagAlertWhenNoReplicas() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(60);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // No replicas (-1) should not trigger and should short-circuit
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                0, -1, // no replicas - short-circuits before threshold check
+                0, null, 0, null, 0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            // When replicationLag is -1, the code short-circuits and never checks the threshold
+            // This is correct behaviour - we don't need to compare against threshold if no replicas
+            verify(thresholdsConfig, never()).replicationLagSeconds();
+        }
+
+        @Test
+        @DisplayName("Triggers table bloat alert when threshold exceeded")
+        void triggersTableBloatAlert() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            when(thresholdsConfig.tableBloatPercent()).thenReturn(50); // 50% threshold
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // 60% bloat should trigger
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                0, -1,
+                60.0, "public.bloated_table", // high bloat - should trigger
+                0, null, 0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            verify(thresholdsConfig, atLeast(1)).tableBloatPercent();
+        }
+
+        @Test
+        @DisplayName("Triggers XID wraparound alert when threshold exceeded")
+        void triggersXidWraparoundAlert() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            when(thresholdsConfig.xidWraparoundPercent()).thenReturn(50); // 50% threshold
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // 55% XID usage should trigger
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                0, -1, 0, null,
+                55.0, "production", // high XID usage - should trigger
+                0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            verify(thresholdsConfig, atLeast(1)).xidWraparoundPercent();
+        }
+
+        @Test
+        @DisplayName("Triggers query mean time alert when threshold exceeded")
+        void triggersQueryMeanTimeAlert() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            when(thresholdsConfig.queryMeanTimeMs()).thenReturn(1000); // 1000ms threshold
+
+            // 2500ms mean time should trigger
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                0, -1, 0, null, 0, null,
+                2500.0 // high query time - should trigger
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            verify(thresholdsConfig, atLeast(1)).queryMeanTimeMs();
+        }
+
+        @Test
+        @DisplayName("All enhanced thresholds checked when enabled")
+        void allEnhancedThresholdsChecked() {
+            when(alertingConfig.enabled()).thenReturn(true);
+            when(alertingConfig.thresholds()).thenReturn(thresholdsConfig);
+            lenient().when(alertingConfig.cooldownSeconds()).thenReturn(0);
+            lenient().when(alertingConfig.webhookUrl()).thenReturn(Optional.empty());
+            lenient().when(alertingConfig.emailTo()).thenReturn(Optional.empty());
+
+            // Set all thresholds high so nothing triggers
+            lenient().when(thresholdsConfig.connectionPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.blockedQueries()).thenReturn(100);
+            lenient().when(thresholdsConfig.cacheHitRatio()).thenReturn(0);
+            lenient().when(thresholdsConfig.deadlockRate()).thenReturn(100);
+            lenient().when(thresholdsConfig.replicationLagSeconds()).thenReturn(1000);
+            lenient().when(thresholdsConfig.tableBloatPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.xidWraparoundPercent()).thenReturn(100);
+            lenient().when(thresholdsConfig.queryMeanTimeMs()).thenReturn(10000);
+
+            // Create stats with all metrics populated but below thresholds
+            OverviewStats stats = TestDataFactory.createOverviewStatsWithEnhancedMetrics(
+                50, 100, 5, 0, 99.5,
+                5.0, 30.0, 25.0, "public.table", 30.0, "testdb", 500.0
+            );
+            alertingService.checkAndAlert("default", stats);
+
+            // Verify all enhanced thresholds were checked
+            verify(thresholdsConfig, atLeast(1)).deadlockRate();
+            verify(thresholdsConfig, atLeast(1)).replicationLagSeconds();
+            verify(thresholdsConfig, atLeast(1)).tableBloatPercent();
+            verify(thresholdsConfig, atLeast(1)).xidWraparoundPercent();
+            verify(thresholdsConfig, atLeast(1)).queryMeanTimeMs();
+        }
     }
 
     @Nested

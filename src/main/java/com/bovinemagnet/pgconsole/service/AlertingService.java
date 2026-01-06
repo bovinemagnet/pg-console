@@ -43,7 +43,17 @@ public class AlertingService {
     /**
      * Evaluates database metrics against configured thresholds and sends alerts when exceeded.
      * <p>
-     * Checks connection usage percentage, blocked query count, and cache hit ratio.
+     * Checks the following metrics:
+     * <ul>
+     *     <li>Connection usage percentage - alerts when connections approach max_connections</li>
+     *     <li>Blocked query count - alerts when queries are waiting on locks</li>
+     *     <li>Cache hit ratio - alerts when buffer cache efficiency is low</li>
+     *     <li>Deadlock rate - alerts when deadlocks per hour exceed threshold</li>
+     *     <li>Replication lag - alerts when replica falls behind primary</li>
+     *     <li>Table bloat - alerts when table bloat percentage is high</li>
+     *     <li>XID wraparound - alerts when approaching transaction ID wraparound</li>
+     *     <li>Query mean time - alerts when query execution times are high</li>
+     * </ul>
      * Alerts are subject to cooldown periods to prevent alert fatigue.
      * This method returns silently if alerting is disabled in configuration.
      *
@@ -84,6 +94,55 @@ public class AlertingService {
                 "Cache hit ratio is low",
                 String.format("Cache hit ratio is %.2f%%. Threshold: %d%%",
                     cacheHitRatio, thresholds.cacheHitRatio()));
+        }
+
+        // Check deadlock rate (deadlocks per hour)
+        double deadlocksPerHour = stats.getDeadlocksPerHour();
+        if (deadlocksPerHour >= 0 && deadlocksPerHour >= thresholds.deadlockRate()) {
+            sendAlert(instanceName, "HIGH_DEADLOCK_RATE",
+                "High deadlock rate detected",
+                String.format("Deadlock rate is %.2f/hour (total: %d). Threshold: %d/hour",
+                    deadlocksPerHour, stats.getDeadlockCount(), thresholds.deadlockRate()));
+        }
+
+        // Check replication lag (only if replicas exist, indicated by >= 0)
+        double replicationLag = stats.getReplicationLagSeconds();
+        if (replicationLag >= 0 && replicationLag >= thresholds.replicationLagSeconds()) {
+            sendAlert(instanceName, "HIGH_REPLICATION_LAG",
+                "Replication lag is high",
+                String.format("Replication lag is %.1f seconds. Threshold: %d seconds",
+                    replicationLag, thresholds.replicationLagSeconds()));
+        }
+
+        // Check table bloat percentage
+        double tableBloat = stats.getMaxTableBloatPercent();
+        if (tableBloat >= thresholds.tableBloatPercent()) {
+            String tableName = stats.getMaxBloatTableName();
+            sendAlert(instanceName, "HIGH_TABLE_BLOAT",
+                "Table bloat is high",
+                String.format("Table %s has %.1f%% bloat. Threshold: %d%%",
+                    tableName != null ? tableName : "unknown",
+                    tableBloat, thresholds.tableBloatPercent()));
+        }
+
+        // Check XID wraparound percentage
+        double xidPercent = stats.getXidWraparoundPercent();
+        if (xidPercent >= thresholds.xidWraparoundPercent()) {
+            String dbName = stats.getXidWraparoundDatabase();
+            sendAlert(instanceName, "XID_WRAPAROUND_WARNING",
+                "XID wraparound approaching",
+                String.format("Database %s is at %.2f%% XID usage. Threshold: %d%%. Run VACUUM FREEZE urgently.",
+                    dbName != null ? dbName : "unknown",
+                    xidPercent, thresholds.xidWraparoundPercent()));
+        }
+
+        // Check maximum query mean execution time
+        double queryMeanTime = stats.getMaxQueryMeanTimeMs();
+        if (queryMeanTime >= thresholds.queryMeanTimeMs()) {
+            sendAlert(instanceName, "SLOW_QUERY_MEAN_TIME",
+                "Slow query detected",
+                String.format("Maximum mean query time is %.2f ms. Threshold: %d ms",
+                    queryMeanTime, thresholds.queryMeanTimeMs()));
         }
     }
 

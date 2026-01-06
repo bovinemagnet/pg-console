@@ -52,6 +52,32 @@ public class OverviewStats {
     /** Top indices ordered by size, typically limited to the largest 5-10 indices */
     private List<IndexSize> topIndexesBySize;
 
+    // ========== Enhanced Alerting Metrics ==========
+
+    /** Total deadlock count across all databases since stats reset */
+    private long deadlockCount;
+
+    /** Calculated deadlock rate per hour (-1 if unavailable) */
+    private double deadlocksPerHour = -1;
+
+    /** Maximum replication lag in seconds across all replicas (-1 if no replicas) */
+    private double replicationLagSeconds = -1;
+
+    /** Maximum table bloat percentage across all user tables */
+    private double maxTableBloatPercent;
+
+    /** Name of the table with maximum bloat */
+    private String maxBloatTableName;
+
+    /** Maximum XID wraparound percentage across all databases */
+    private double xidWraparoundPercent;
+
+    /** Name of the database closest to XID wraparound */
+    private String xidWraparoundDatabase;
+
+    /** Maximum mean query execution time in milliseconds from pg_stat_statements */
+    private double maxQueryMeanTimeMs;
+
     /**
      * Returns the PostgreSQL server version string.
      *
@@ -316,6 +342,186 @@ public class OverviewStats {
      */
     public String getCacheHitRatioFormatted() {
         return String.format("%.1f%%", cacheHitRatio);
+    }
+
+    // ========== Enhanced Alerting Metrics Getters/Setters ==========
+
+    /**
+     * Returns the total deadlock count across all databases since stats reset.
+     *
+     * @return the cumulative deadlock count
+     */
+    public long getDeadlockCount() {
+        return deadlockCount;
+    }
+
+    /**
+     * Sets the total deadlock count.
+     *
+     * @param deadlockCount the cumulative deadlock count
+     */
+    public void setDeadlockCount(long deadlockCount) {
+        this.deadlockCount = deadlockCount;
+    }
+
+    /**
+     * Returns the calculated deadlock rate per hour.
+     * <p>
+     * A value of -1 indicates the rate is unavailable (e.g., insufficient
+     * historical data or stats recently reset).
+     *
+     * @return the deadlocks per hour, or -1 if unavailable
+     */
+    public double getDeadlocksPerHour() {
+        return deadlocksPerHour;
+    }
+
+    /**
+     * Sets the calculated deadlock rate per hour.
+     *
+     * @param deadlocksPerHour the rate, or -1 if unavailable
+     */
+    public void setDeadlocksPerHour(double deadlocksPerHour) {
+        this.deadlocksPerHour = deadlocksPerHour;
+    }
+
+    /**
+     * Returns the maximum replication lag in seconds across all replicas.
+     * <p>
+     * A value of -1 indicates no replicas are configured or lag data
+     * is unavailable.
+     *
+     * @return the maximum lag in seconds, or -1 if no replicas
+     */
+    public double getReplicationLagSeconds() {
+        return replicationLagSeconds;
+    }
+
+    /**
+     * Sets the maximum replication lag in seconds.
+     *
+     * @param replicationLagSeconds the lag in seconds, or -1 if unavailable
+     */
+    public void setReplicationLagSeconds(double replicationLagSeconds) {
+        this.replicationLagSeconds = replicationLagSeconds;
+    }
+
+    /**
+     * Returns the maximum table bloat percentage across all user tables.
+     * <p>
+     * Bloat represents wasted space from dead tuples that haven't been
+     * reclaimed by VACUUM. Values above 30-50% may indicate autovacuum
+     * issues.
+     *
+     * @return the maximum bloat percentage (0.0 to 100.0+)
+     */
+    public double getMaxTableBloatPercent() {
+        return maxTableBloatPercent;
+    }
+
+    /**
+     * Sets the maximum table bloat percentage.
+     *
+     * @param maxTableBloatPercent the bloat percentage
+     */
+    public void setMaxTableBloatPercent(double maxTableBloatPercent) {
+        this.maxTableBloatPercent = maxTableBloatPercent;
+    }
+
+    /**
+     * Returns the name of the table with maximum bloat.
+     *
+     * @return the fully qualified table name, or null if not available
+     */
+    public String getMaxBloatTableName() {
+        return maxBloatTableName;
+    }
+
+    /**
+     * Sets the name of the table with maximum bloat.
+     *
+     * @param maxBloatTableName the fully qualified table name
+     */
+    public void setMaxBloatTableName(String maxBloatTableName) {
+        this.maxBloatTableName = maxBloatTableName;
+    }
+
+    /**
+     * Returns the maximum XID wraparound percentage across all databases.
+     * <p>
+     * As this value approaches 100%, the database will eventually shut down
+     * to prevent data corruption. Values above 50% require immediate attention.
+     *
+     * @return the XID wraparound percentage (0.0 to 100.0)
+     */
+    public double getXidWraparoundPercent() {
+        return xidWraparoundPercent;
+    }
+
+    /**
+     * Sets the maximum XID wraparound percentage.
+     *
+     * @param xidWraparoundPercent the percentage (0.0 to 100.0)
+     */
+    public void setXidWraparoundPercent(double xidWraparoundPercent) {
+        this.xidWraparoundPercent = xidWraparoundPercent;
+    }
+
+    /**
+     * Returns the name of the database closest to XID wraparound.
+     *
+     * @return the database name, or null if not available
+     */
+    public String getXidWraparoundDatabase() {
+        return xidWraparoundDatabase;
+    }
+
+    /**
+     * Sets the name of the database closest to XID wraparound.
+     *
+     * @param xidWraparoundDatabase the database name
+     */
+    public void setXidWraparoundDatabase(String xidWraparoundDatabase) {
+        this.xidWraparoundDatabase = xidWraparoundDatabase;
+    }
+
+    /**
+     * Returns the maximum mean query execution time in milliseconds.
+     * <p>
+     * This is derived from {@code pg_stat_statements.mean_time} for the
+     * slowest query. High values may indicate inefficient queries.
+     *
+     * @return the maximum mean time in milliseconds
+     */
+    public double getMaxQueryMeanTimeMs() {
+        return maxQueryMeanTimeMs;
+    }
+
+    /**
+     * Sets the maximum mean query execution time.
+     *
+     * @param maxQueryMeanTimeMs the time in milliseconds
+     */
+    public void setMaxQueryMeanTimeMs(double maxQueryMeanTimeMs) {
+        this.maxQueryMeanTimeMs = maxQueryMeanTimeMs;
+    }
+
+    /**
+     * Checks if replication lag data is available.
+     *
+     * @return true if replication lag is available (not -1)
+     */
+    public boolean hasReplicationLag() {
+        return replicationLagSeconds >= 0;
+    }
+
+    /**
+     * Checks if deadlock rate data is available.
+     *
+     * @return true if deadlock rate is available (not -1)
+     */
+    public boolean hasDeadlockRate() {
+        return deadlocksPerHour >= 0;
     }
 
     /**

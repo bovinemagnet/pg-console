@@ -738,6 +738,137 @@ public class PostgresService {
 		}
 		stats.setTopIndexesBySize(indexes);
 
+		// ========== Enhanced Alerting Metrics ==========
+
+		// Get deadlock count and calculate rate per hour
+		String deadlockSql = """
+			SELECT
+			    COALESCE(SUM(deadlocks), 0) as total_deadlocks,
+			    MIN(stats_reset) as oldest_reset
+			FROM pg_stat_database
+			WHERE datname IS NOT NULL
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(deadlockSql)) {
+			if (rs.next()) {
+				long deadlocks = rs.getLong("total_deadlocks");
+				stats.setDeadlockCount(deadlocks);
+
+				java.sql.Timestamp resetTs = rs.getTimestamp("oldest_reset");
+				if (resetTs != null && deadlocks > 0) {
+					long hoursSinceReset = java.time.Duration.between(
+						resetTs.toInstant(), java.time.Instant.now()
+					).toHours();
+					if (hoursSinceReset > 0) {
+						stats.setDeadlocksPerHour((double) deadlocks / hoursSinceReset);
+					}
+				} else if (deadlocks == 0) {
+					stats.setDeadlocksPerHour(0);
+				}
+			}
+		} catch (SQLException e) {
+			// Leave defaults (-1 for rate)
+		}
+
+		// Get maximum replication lag in seconds
+		String replicationLagSql = """
+			SELECT
+			    EXTRACT(EPOCH FROM (now() - replay_lag))::numeric as lag_seconds
+			FROM pg_stat_replication
+			WHERE replay_lag IS NOT NULL
+			ORDER BY replay_lag DESC NULLS LAST
+			LIMIT 1
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(replicationLagSql)) {
+			if (rs.next()) {
+				stats.setReplicationLagSeconds(rs.getDouble("lag_seconds"));
+			}
+			// If no rows, leave default -1 (no replicas)
+		} catch (SQLException e) {
+			// Leave default -1
+		}
+
+		// Get maximum table bloat percentage
+		String bloatSql = """
+			SELECT
+			    schemaname || '.' || relname as table_name,
+			    CASE WHEN pg_class.relpages = 0 THEN 0
+			         ELSE round(
+			             100 * (1 - (pg_stat_user_tables.n_live_tup::float * 0.05) /
+			                    NULLIF(pg_class.relpages * 8192, 0))::numeric, 2
+			         )
+			    END as bloat_percent
+			FROM pg_stat_user_tables
+			JOIN pg_class ON pg_class.relname = pg_stat_user_tables.relname
+			    AND pg_class.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = schemaname)
+			WHERE pg_class.relpages > 0
+			ORDER BY bloat_percent DESC NULLS LAST
+			LIMIT 1
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(bloatSql)) {
+			if (rs.next()) {
+				double bloatPercent = rs.getDouble("bloat_percent");
+				if (bloatPercent > 0) {
+					stats.setMaxTableBloatPercent(bloatPercent);
+					stats.setMaxBloatTableName(rs.getString("table_name"));
+				}
+			}
+		} catch (SQLException e) {
+			// Leave defaults (0)
+		}
+
+		// Get XID wraparound percentage (closest database to wraparound)
+		String xidSql = """
+			SELECT
+			    datname,
+			    age(datfrozenxid) as xid_age,
+			    round(100 * age(datfrozenxid)::numeric / 2147483647, 2) as wraparound_percent
+			FROM pg_database
+			WHERE datname NOT LIKE 'template%'
+			ORDER BY age(datfrozenxid) DESC
+			LIMIT 1
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(xidSql)) {
+			if (rs.next()) {
+				stats.setXidWraparoundPercent(rs.getDouble("wraparound_percent"));
+				stats.setXidWraparoundDatabase(rs.getString("datname"));
+			}
+		} catch (SQLException e) {
+			// Leave defaults (0)
+		}
+
+		// Get maximum mean query time from pg_stat_statements
+		String queryTimeSql = """
+			SELECT
+			    max(mean_exec_time) as max_mean_time_ms
+			FROM pg_stat_statements
+			WHERE calls > 0
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(queryTimeSql)) {
+			if (rs.next()) {
+				double meanTime = rs.getDouble("max_mean_time_ms");
+				if (!rs.wasNull()) {
+					stats.setMaxQueryMeanTimeMs(meanTime);
+				}
+			}
+		} catch (SQLException e) {
+			// pg_stat_statements might not be installed - leave default (0)
+		}
+
 		return stats;
 	}
 
