@@ -31,8 +31,8 @@ dependencies {
 
     // PDF generation (OpenHTMLtoPDF for HTML-to-PDF conversion)
     // https://mvnrepository.com/artifact/com.openhtmltopdf/openhtmltopdf-core
-    implementation 'com.openhtmltopdf:openhtmltopdf-core:1.0.10'
-    implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
+    implementation "com.openhtmltopdf:openhtmltopdf-core:$openhtmltopdfVersion"
+    implementation "com.openhtmltopdf:openhtmltopdf-pdfbox:$openhtmltopdfVersion"
 
     // Test dependencies - Core
     testImplementation 'io.quarkus:quarkus-junit5'
@@ -46,10 +46,10 @@ dependencies {
     testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
     // Test dependencies - Better assertions
-    testImplementation 'org.assertj:assertj-core:3.25.1'
+    testImplementation "org.assertj:assertj-core${assertjVersion}"
 
     // Test dependencies - Playwright for E2E tests
-    testImplementation 'com.microsoft.playwright:playwright:1.40.0'
+    testImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 }
 
 group 'com.bovinemagnet'
@@ -113,7 +113,7 @@ tasks.register('e2eTest', Test) {
 // JaCoCo Code Coverage Configuration
 // =============================================================================
 jacoco {
-    toolVersion = '0.8.11'
+    toolVersion = "$jacocoVersion}"
 }
 
 jacocoTestReport {
@@ -185,11 +185,40 @@ compileTestJava {
 }
 
 
+// =============================================================================
+// Documentation Integration (Optional)
+// =============================================================================
+// Include documentation only when:
+//   - gradle21w build -PincludeDocs
+//   - gradle21w buildWithDocs
+
+// Check at configuration time if docs should be included
+def includeDocs = project.hasProperty('includeDocs') ||
+    gradle.startParameter.taskNames.any { it.contains('buildWithDocs') }
+
+// Use embedded playbook (relative URLs) when building for JAR inclusion
+// Use standard playbook (GitHub Pages URLs) for normal antora builds
 antora {
-    playbook = file('antora-playbook.yml')
+    playbook = file(includeDocs ? 'antora-playbook-embedded.yml' : 'antora-playbook.yml')
     options = [clean: true, fetch: true, stacktrace: true]
     packages = [
         '@antora/lunr-extension': 'latest',
         '@sntke/antora-mermaid-extension': 'latest'
     ]
+}
+
+if (includeDocs) {
+    processResources {
+        dependsOn 'antora'
+        from("${buildDir}/site") {
+            into 'META-INF/resources/docs'
+        }
+    }
+}
+
+// Convenience task for building with documentation
+tasks.register('buildWithDocs') {
+    description = 'Build with embedded documentation'
+    group = 'build'
+    dependsOn 'build'
 }

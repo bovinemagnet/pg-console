@@ -437,6 +437,35 @@ Generate the documentation site locally:
 
 The generated site is available at `build/site/index.html`.
 
+### Embedded Documentation
+
+Documentation can be embedded directly into the application JAR and served at `/docs/` when the application is running. This is useful for offline access or when deploying without a separate documentation site.
+
+**Default builds do not include documentation** - this keeps build times faster and JAR sizes smaller.
+
+To build with embedded documentation:
+
+```bash
+# Using the convenience task
+./gradlew buildWithDocs
+
+# Or using the property flag
+./gradlew build -PincludeDocs
+```
+
+When built with embedded documentation:
+- Documentation is available at `http://localhost:8080/docs/`
+- The Antora site is bundled into `META-INF/resources/docs` within the JAR
+- The embedded playbook uses relative URLs suitable for JAR-based serving
+
+For publishing documentation to GitHub Pages (or other static hosting), use the standard Antora build:
+
+```bash
+./gradlew antora
+```
+
+This generates the documentation site in `build/site/` with URLs configured for external hosting.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
