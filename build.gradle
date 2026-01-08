@@ -46,7 +46,7 @@ dependencies {
     testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
     // Test dependencies - Better assertions
-    testImplementation "org.assertj:assertj-core${assertjVersion}"
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
 
     // Test dependencies - Playwright for E2E tests
     testImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
@@ -113,7 +113,7 @@ tasks.register('e2eTest', Test) {
 // JaCoCo Code Coverage Configuration
 // =============================================================================
 jacoco {
-    toolVersion = "$jacocoVersion}"
+    toolVersion = "${jacocoVersion}"
 }
 
 jacocoTestReport {
