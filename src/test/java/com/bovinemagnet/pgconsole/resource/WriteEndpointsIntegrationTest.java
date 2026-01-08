@@ -1,5 +1,6 @@
 package com.bovinemagnet.pgconsole.resource;
 
+import com.bovinemagnet.pgconsole.testutil.DockerAvailableCondition;
 import com.bovinemagnet.pgconsole.testutil.IntegrationTestProfile;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -7,7 +8,7 @@ import io.restassured.http.ContentType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -28,6 +29,7 @@ import static org.hamcrest.Matchers.*;
  */
 @QuarkusTest
 @TestProfile(IntegrationTestProfile.class)
+@ExtendWith(DockerAvailableCondition.class)
 @Tag("integration")
 @DisplayName("Write Endpoints Integration Tests")
 class WriteEndpointsIntegrationTest {
@@ -40,6 +42,7 @@ class WriteEndpointsIntegrationTest {
     @DisplayName("POST /schema-comparison/compare - should compare schemas")
     void testSchemaCompare() {
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.URLENC)
             .formParam("sourceInstance", INSTANCE)
             .formParam("destInstance", INSTANCE)
@@ -61,6 +64,7 @@ class WriteEndpointsIntegrationTest {
         String profileName = "test-profile-" + System.currentTimeMillis();
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.URLENC)
             .formParam("name", profileName)
             .formParam("description", "Integration test profile")
@@ -132,6 +136,7 @@ class WriteEndpointsIntegrationTest {
         String dashboardName = "test-dashboard-" + System.currentTimeMillis();
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.URLENC)
             .formParam("name", dashboardName)
             .formParam("description", "Integration test dashboard")
@@ -182,6 +187,7 @@ class WriteEndpointsIntegrationTest {
             channelName);
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
             .body(json)
         .when()
@@ -200,6 +206,7 @@ class WriteEndpointsIntegrationTest {
             "\"expiresAt\":\"2099-12-31T23:59:59Z\"}";
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
             .body(json)
         .when()
@@ -213,6 +220,7 @@ class WriteEndpointsIntegrationTest {
     @DisplayName("POST /notifications/api/silences/quick - should create quick silence")
     void testCreateQuickSilence() {
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.URLENC)
             .formParam("alertType", "HIGH_CONNECTIONS")
             .formParam("instanceName", INSTANCE)
@@ -235,6 +243,7 @@ class WriteEndpointsIntegrationTest {
             windowName);
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
             .body(json)
         .when()
@@ -254,6 +263,7 @@ class WriteEndpointsIntegrationTest {
             policyName);
 
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
             .body(json)
         .when()
@@ -269,6 +279,7 @@ class WriteEndpointsIntegrationTest {
     @DisplayName("POST /api/v1/logging/debug - should enable debug mode")
     void testEnableDebugMode() {
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
             .queryParam("duration", "1")
         .when()
@@ -282,6 +293,7 @@ class WriteEndpointsIntegrationTest {
     @DisplayName("DELETE /api/v1/logging/debug - should disable debug mode")
     void testDisableDebugMode() {
         given()
+            .auth().basic("admin", "admin")
         .when()
             .delete("/api/v1/logging/debug")
         .then()
@@ -293,6 +305,7 @@ class WriteEndpointsIntegrationTest {
     @DisplayName("POST /api/v1/logging/preset/{preset} - should apply logging preset")
     void testApplyLoggingPreset() {
         given()
+            .auth().basic("admin", "admin")
             .contentType(ContentType.JSON)
         .when()
             .post("/api/v1/logging/preset/INFO")
