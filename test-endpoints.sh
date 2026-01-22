@@ -283,6 +283,10 @@ test_endpoint "/api/v1/logging/presets"
 # Note: /api/v1/logging/debug is POST/DELETE only (requires auth)
 
 echo ""
+echo -e "${YELLOW}=== Documentation ===${NC}"
+test_endpoint "/docs/index.html"
+
+echo ""
 echo "=============================================="
 echo "Test Summary"
 echo "=============================================="

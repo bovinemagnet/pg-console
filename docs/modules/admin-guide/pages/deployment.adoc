@@ -28,6 +28,96 @@ gradle21w clean build
 
 The built JAR will be located at `build/quarkus-app/quarkus-run.jar`.
 
+=== Building with Embedded Documentation
+
+pg-console can optionally include its complete documentation within the application JAR for self-contained deployment. This is useful for air-gapped environments or when you want documentation available directly from the running application.
+
+==== Build Commands
+
+Build with embedded documentation using either of these commands:
+
+[source,bash]
+----
+# Using the dedicated task
+gradle21w buildWithDocs
+
+# Using the property flag
+gradle21w build -PincludeDocs
+----
+
+The standard `gradle21w build` command does *not* include documentation by default, resulting in faster builds and smaller JAR files.
+
+==== Documentation Playbook Files
+
+The build process uses different Antora playbook configurations depending on the build target:
+
+* `antora-playbook.yml` - Used for GitHub Pages publishing with absolute URLs (e.g., `https://bovinemagnet.github.io/pg-console`)
+* `antora-playbook-embedded.yml` - Used for JAR embedding with relative URLs starting from `/docs`
+
+The key difference is the `site.url` configuration:
+
+[source,yaml]
+----
+# antora-playbook.yml (GitHub Pages)
+site:
+  url: https://bovinemagnet.github.io/pg-console
+
+# antora-playbook-embedded.yml (embedded in JAR)
+site:
+  url: /docs
+----
+
+==== Accessing Embedded Documentation
+
+When built with embedded documentation, the complete documentation site is accessible at:
+
+[source,text]
+----
+http://localhost:8080/docs/index.html
+----
+
+A "Documentation" link automatically appears in the application sidebar under the "System" section when documentation is embedded.
+
+==== Build Artefacts
+
+When building with documentation:
+
+* Documentation is generated in `build/site/`
+* The Antora-generated HTML is packaged into `build/quarkus-app/quarkus/generated-resources/docs/`
+* The complete documentation is served as static resources by Quarkus
+
+==== Publishing Documentation Separately
+
+To build documentation for GitHub Pages or separate hosting without building the entire application:
+
+[source,bash]
+----
+gradle21w antora
+----
+
+This generates documentation in `build/site/` using `antora-playbook.yml` with absolute URLs.
+
+==== Build Size Comparison
+
+[cols="1,1,1"]
+|===
+| Build Type | JAR Size | Build Time
+
+| Standard (`gradle21w build`)
+| ~15 MB
+| ~30 seconds
+
+| With Documentation (`gradle21w buildWithDocs`)
+| ~20 MB
+| ~60 seconds
+
+| Native Executable
+| ~50 MB
+| ~5 minutes
+|===
+
+TIP: For development and testing, use the standard build without documentation for faster iteration. Reserve documentation-enabled builds for production deployments where self-contained documentation is required.
+
 == Systemd Service Deployment
 
 Running pg-console as a systemd service provides automatic startup, restart on failure, and integration with system logging.

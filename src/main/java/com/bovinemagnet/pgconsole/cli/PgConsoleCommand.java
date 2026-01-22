@@ -85,22 +85,44 @@ public class PgConsoleCommand implements Runnable {
 	 * HTTP server port to bind to.
 	 * <p>
 	 * Overrides the {@code quarkus.http.port} property when specified.
-	 * Default value is 8080.
+	 * When not specified, uses the configured Quarkus HTTP port.
 	 * </p>
 	 */
-	@Option(names = { "-p", "--port" }, description = "HTTP server port (default: ${DEFAULT-VALUE})", defaultValue = "8080")
-	private int port;
+	@Option(names = { "-p", "--port" }, description = "HTTP server port (overrides configured port)")
+	private Integer port;
 
 	/**
 	 * HTTP bind address for the server.
 	 * <p>
 	 * Overrides the {@code quarkus.http.host} property when specified.
-	 * Default value is "0.0.0.0" (all network interfaces). Use "localhost"
-	 * or "127.0.0.1" to restrict to local connections only.
+	 * When not specified, uses the configured Quarkus HTTP host.
+	 * Use "localhost" or "127.0.0.1" to restrict to local connections only.
 	 * </p>
 	 */
-	@Option(names = { "--host" }, description = "HTTP bind address (default: ${DEFAULT-VALUE})", defaultValue = "0.0.0.0")
+	@Option(names = { "--host" }, description = "HTTP bind address (overrides configured host)")
 	private String host;
+
+	/**
+	 * Configured HTTP port from Quarkus configuration.
+	 * <p>
+	 * Retrieved from {@code quarkus.http.port} property with fallback to 8080.
+	 * Used when no CLI port override is specified.
+	 * </p>
+	 */
+	@Inject
+	@ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+	Integer configuredPort;
+
+	/**
+	 * Configured HTTP host from Quarkus configuration.
+	 * <p>
+	 * Retrieved from {@code quarkus.http.host} property with fallback to "0.0.0.0".
+	 * Used when no CLI host override is specified.
+	 * </p>
+	 */
+	@Inject
+	@ConfigProperty(name = "quarkus.http.host", defaultValue = "0.0.0.0")
+	String configuredHost;
 
 	/**
 	 * Flag to disable history sampling at startup.
@@ -204,10 +226,10 @@ public class PgConsoleCommand implements Runnable {
 	@Override
 	public void run() {
 		// Apply CLI overrides as system properties before Quarkus starts
-		if (port != 8080) {
+		if (port != null) {
 			System.setProperty("quarkus.http.port", String.valueOf(port));
 		}
-		if (!"0.0.0.0".equals(host)) {
+		if (host != null) {
 			System.setProperty("quarkus.http.host", host);
 		}
 		if (noHistory) {
@@ -259,6 +281,10 @@ public class PgConsoleCommand implements Runnable {
 	 * </p>
 	 */
 	private void printBanner() {
+		// Determine effective host and port (CLI override takes precedence)
+		String effectiveHost = (host != null) ? host : configuredHost;
+		int effectivePort = (port != null) ? port : configuredPort;
+
 		System.out.println();
 		System.out.println("  ____   ____    ____                      _      ");
 		System.out.println(" |  _ \\ / ___|  / ___|___  _ __  ___  ___ | | ___ ");
@@ -267,7 +293,7 @@ public class PgConsoleCommand implements Runnable {
 		System.out.println(" |_|    \\____|  \\____\\___/|_| |_|___/\\___/|_|\\___|");
 		System.out.println();
 		System.out.println(" PostgreSQL Monitoring Console v" + applicationVersion);
-		System.out.println(" Starting server on " + host + ":" + port);
+		System.out.println(" Starting server on " + effectiveHost + ":" + effectivePort);
 		if (noHistory) {
 			System.out.println(" History sampling: DISABLED");
 		}

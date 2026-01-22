@@ -29,11 +29,17 @@ public class IntegrationTestProfile implements QuarkusTestProfile {
                 Map.entry("quarkus.flyway.migrate-at-start", "false"),
                 Map.entry("pg-console.history.enabled", "false"),
                 Map.entry("pg-console.alerting.enabled", "false"),
-                Map.entry("pg-console.security.enabled", "false"),
                 Map.entry("quarkus.scheduler.enabled", "false"),
                 Map.entry("pg-console.instances", "default"),
                 Map.entry("pg-console.instances.default.display-name", "Test Instance"),
-                Map.entry("quarkus.log.level", "WARN")
+                Map.entry("quarkus.log.level", "WARN"),
+                // Enable security with test users
+                Map.entry("pg-console.security.enabled", "true"),
+                Map.entry("quarkus.security.users.file.enabled", "true"),
+                Map.entry("quarkus.security.users.file.plain-text", "true"),
+                Map.entry("quarkus.security.users.file.users", "users.properties"),
+                Map.entry("quarkus.security.users.file.roles", "roles.properties"),
+                Map.entry("quarkus.http.auth.basic", "true")
             );
         }
 
@@ -54,8 +60,15 @@ public class IntegrationTestProfile implements QuarkusTestProfile {
             // Disable background services
             Map.entry("pg-console.history.enabled", "false"),
             Map.entry("pg-console.alerting.enabled", "false"),
-            Map.entry("pg-console.security.enabled", "false"),
             Map.entry("quarkus.scheduler.enabled", "false"),
+
+            // Enable security with test users
+            Map.entry("pg-console.security.enabled", "true"),
+            Map.entry("quarkus.security.users.file.enabled", "true"),
+            Map.entry("quarkus.security.users.file.plain-text", "true"),
+            Map.entry("quarkus.security.users.file.users", "users.properties"),
+            Map.entry("quarkus.security.users.file.roles", "roles.properties"),
+            Map.entry("quarkus.http.auth.basic", "true"),
 
             // Configure test instance
             Map.entry("pg-console.instances", "default"),
