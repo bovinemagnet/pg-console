@@ -49,3 +49,7 @@ target/**
 
 ## CLaude specific stuff
 .playwright-mcp
+
+
+# Enfironment stuff
+.env

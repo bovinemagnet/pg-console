@@ -191,9 +191,11 @@ compileTestJava {
 // Include documentation only when:
 //   - gradle21w build -PincludeDocs
 //   - gradle21w buildWithDocs
+//   - gradle21w quarkusDev -PwithDocs
 
 // Check at configuration time if docs should be included
 def includeDocs = project.hasProperty('includeDocs') ||
+    project.hasProperty('withDocs') ||
     gradle.startParameter.taskNames.any { it.contains('buildWithDocs') }
 
 // Use embedded playbook (relative URLs) when building for JAR inclusion
@@ -221,4 +223,15 @@ tasks.register('buildWithDocs') {
     description = 'Build with embedded documentation'
     group = 'build'
     dependsOn 'build'
+}
+
+// =============================================================================
+// Dev Mode Documentation
+// =============================================================================
+// Build documentation in dev mode when -PwithDocs is passed
+// Usage: gradle21w quarkusDev -PwithDocs
+if (project.hasProperty('withDocs')) {
+    tasks.named('quarkusDev') {
+        dependsOn 'processResources'
+    }
 }
