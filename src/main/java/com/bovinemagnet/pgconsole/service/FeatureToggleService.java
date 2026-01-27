@@ -262,6 +262,87 @@ public class FeatureToggleService {
         return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().infrastructureEnabled();
     }
 
+    /**
+     * Checks if the WAL Receiver page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isWalReceiverEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().walReceiverEnabled();
+    }
+
+    /**
+     * Checks if the Maintenance Progress page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isMaintenanceProgressEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().maintenanceProgressEnabled();
+    }
+
+    /**
+     * Checks if the I/O Statistics page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isIoStatisticsEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().ioStatisticsEnabled();
+    }
+
+    /**
+     * Checks if the Functions page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isFunctionsEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().functionsEnabled();
+    }
+
+    /**
+     * Checks if the Config Files page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isConfigFilesEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().configFilesEnabled();
+    }
+
+    /**
+     * Checks if the Prepared Statements page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isPreparedStatementsEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().preparedStatementsEnabled();
+    }
+
+    /**
+     * Checks if the Materialised Views page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isMatviewsEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().matviewsEnabled();
+    }
+
+    /**
+     * Checks if the Sequences page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isSequencesEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().sequencesEnabled();
+    }
+
+    /**
+     * Checks if the Extensions page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isExtensionsEnabled() {
+        return isInfrastructureSectionEnabled() && dashboardConfig.infrastructure().extensionsEnabled();
+    }
+
     // ========================================
     // Data Control Section Pages
     // ========================================
@@ -615,6 +696,15 @@ public class FeatureToggleService {
             // Infrastructure
             case "replication" -> isReplicationEnabled();
             case "infrastructure" -> isInfrastructureEnabled();
+            case "wal-receiver" -> isWalReceiverEnabled();
+            case "maintenance-progress" -> isMaintenanceProgressEnabled();
+            case "io-statistics" -> isIoStatisticsEnabled();
+            case "functions" -> isFunctionsEnabled();
+            case "config-files" -> isConfigFilesEnabled();
+            case "prepared-statements" -> isPreparedStatementsEnabled();
+            case "matviews" -> isMatviewsEnabled();
+            case "sequences" -> isSequencesEnabled();
+            case "extensions" -> isExtensionsEnabled();
             // Data Control
             case "logical-replication" -> isLogicalReplicationEnabled();
             case "cdc" -> isCdcEnabled();
@@ -693,6 +783,15 @@ public class FeatureToggleService {
         // Infrastructure pages
         toggles.put("replication", isReplicationEnabled());
         toggles.put("infrastructure", isInfrastructureEnabled());
+        toggles.put("walReceiver", isWalReceiverEnabled());
+        toggles.put("maintenanceProgress", isMaintenanceProgressEnabled());
+        toggles.put("ioStatistics", isIoStatisticsEnabled());
+        toggles.put("functions", isFunctionsEnabled());
+        toggles.put("configFiles", isConfigFilesEnabled());
+        toggles.put("preparedStatements", isPreparedStatementsEnabled());
+        toggles.put("matviews", isMatviewsEnabled());
+        toggles.put("sequences", isSequencesEnabled());
+        toggles.put("extensions", isExtensionsEnabled());
 
         // Data Control pages
         toggles.put("logicalReplication", isLogicalReplicationEnabled());

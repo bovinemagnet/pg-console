@@ -1,0 +1,135 @@
+{#include base}
+{#title}Materialised Views - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/matviews?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Materialised Views</h1>
+        <p class="text-muted">
+            Materialised view status and information from pg_matviews
+        </p>
+    </div>
+</div>
+
+{#if views.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-muted">No Materialised Views Found</h4>
+                <p class="text-muted mb-0">
+                    This database does not have any materialised views defined.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<!-- Summary Card -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Total Views</span>
+                <h2 class="mb-0">{views.size}</h2>
+                <small class="text-muted">materialised views</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title">Status Legend</h6>
+                <p class="small mb-1"><span class="badge bg-success">Populated</span> - View contains data from last REFRESH</p>
+                <p class="small mb-0"><span class="badge bg-warning text-dark">Empty</span> - View needs REFRESH MATERIALIZED VIEW</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Materialised Views</h5>
+                <span class="badge bg-info">{views.size} views</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>View</th>
+                                <th>Owner</th>
+                                <th>Status</th>
+                                <th>Indexes</th>
+                                <th>Size</th>
+                                <th>Definition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for v in views}
+                            <tr class="{v.rowCssClass}">
+                                <td><strong>{v.fullName}</strong></td>
+                                <td><small class="text-muted">{v.matviewOwner}</small></td>
+                                <td><span class="badge {v.populatedCssClass}">{v.populatedDisplay}</span></td>
+                                <td>
+                                    {#if v.hasIndexes}
+                                    <span class="badge {v.indexesCssClass}">Yes</span>
+                                    {#else}
+                                    <span class="badge bg-secondary">No</span>
+                                    {/if}
+                                </td>
+                                <td>{v.sizeFormatted ?: v.formatSize()}</td>
+                                <td><code class="small" title="{v.definition}">{v.getDefinitionTruncated(50)}</code></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Materialised Views</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt><span class="badge bg-success">Populated</span></dt>
+                    <dd class="text-muted">View contains data from last REFRESH</dd>
+                    <dt><span class="badge bg-warning text-dark">Empty</span></dt>
+                    <dd class="text-muted">View needs REFRESH MATERIALIZED VIEW</dd>
+                    <dt>Indexes</dt>
+                    <dd class="text-muted">Indexes improve query performance on the view</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Common Operations</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt>Refresh View</dt>
+                    <dd><code>REFRESH MATERIALIZED VIEW schema.view_name;</code></dd>
+                    <dt>Concurrent Refresh</dt>
+                    <dd><code>REFRESH MATERIALIZED VIEW CONCURRENTLY schema.view_name;</code></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

@@ -1,0 +1,133 @@
+{#include base}
+{#title}Functions - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/functions?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Function Performance</h1>
+        <p class="text-muted">
+            User function execution statistics from pg_stat_user_functions
+            <br><small>Requires track_functions = 'pl' or 'all' in postgresql.conf</small>
+        </p>
+    </div>
+</div>
+
+{#if stats.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-muted">No Function Statistics Available</h4>
+                <p class="text-muted mb-0">
+                    Either no user functions have been called, or track_functions is not enabled.
+                    <br>Enable function tracking with: <code>track_functions = 'all'</code> in postgresql.conf
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Functions</span>
+                <h2 class="mb-0">{stats.size}</h2>
+                <small class="text-muted">tracked functions</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Function Statistics</h5>
+                <span class="badge bg-info">{stats.size} functions</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Function</th>
+                                <th class="text-end">Calls</th>
+                                <th class="text-end">Total Time</th>
+                                <th class="text-end">Self Time</th>
+                                <th class="text-end">Mean Time</th>
+                                <th class="text-end">Self %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for f in stats}
+                            <tr class="{f.rowCssClass}">
+                                <td>
+                                    <strong>{f.fullName}</strong>
+                                </td>
+                                <td class="text-end">{f.callsFormatted}</td>
+                                <td class="text-end">
+                                    <span class="{#if f.highTotalTime}text-danger fw-bold{/if}">
+                                        {f.totalTimeFormatted}
+                                    </span>
+                                </td>
+                                <td class="text-end">{f.selfTimeFormatted}</td>
+                                <td class="text-end">
+                                    <span class="{#if f.highMeanTime}text-warning fw-bold{/if}">
+                                        {f.meanTimeFormatted}
+                                    </span>
+                                </td>
+                                <td class="text-end">{f.selfTimePercentFormatted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Function Statistics</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt>Total Time</dt>
+                    <dd class="text-muted">Time spent in the function including time in called functions</dd>
+                    <dt>Self Time</dt>
+                    <dd class="text-muted">Time spent in the function excluding called functions</dd>
+                    <dt>Mean Time</dt>
+                    <dd class="text-muted">Average execution time per call</dd>
+                    <dt>Self %</dt>
+                    <dd class="text-muted">Percentage of time spent in function itself vs nested calls</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Performance Indicators</h5>
+            </div>
+            <div class="card-body">
+                <p class="small mb-2">Rows are highlighted based on performance:</p>
+                <ul class="small mb-0">
+                    <li><span class="text-danger">Red</span>: Total time &gt; 1s AND mean time &gt; 10ms</li>
+                    <li><span class="text-warning">Yellow</span>: Total time &gt; 1s OR mean time &gt; 10ms</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

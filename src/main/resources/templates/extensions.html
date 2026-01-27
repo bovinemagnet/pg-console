@@ -1,0 +1,157 @@
+{#include base}
+{#title}Extensions - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/extensions?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>PostgreSQL Extensions</h1>
+        <p class="text-muted">
+            Installed and available extensions from pg_extension and pg_available_extensions
+        </p>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="extTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="installed-tab" data-bs-toggle="tab" data-bs-target="#installed-pane" type="button" role="tab">
+            Installed <span class="badge bg-success">{installed.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab">
+            Available <span class="badge bg-secondary">{available.size}</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="extTabContent">
+    <!-- Installed Extensions Tab -->
+    <div class="tab-pane fade show active" id="installed-pane" role="tabpanel">
+        {#if installed.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No extensions installed in this database
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Extension</th>
+                                <th>Version</th>
+                                <th>Schema</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for e in installed}
+                            <tr class="{e.rowCssClass}">
+                                <td>
+                                    <strong>{e.name}</strong>
+                                    {#if e.common}<span class="badge bg-info ms-1">Common</span>{/if}
+                                </td>
+                                <td>
+                                    {#if e.upgradeAvailable}
+                                    <span class="badge bg-warning text-dark" title="Upgrade available">{e.versionDisplay}</span>
+                                    {#else}
+                                    <span class="badge bg-success">{e.installedVersion}</span>
+                                    {/if}
+                                </td>
+                                <td><small class="text-muted">{e.schemaDisplay}</small></td>
+                                <td><small title="{e.comment}">{e.getCommentTruncated(60)}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- Available Extensions Tab -->
+    <div class="tab-pane fade" id="available-pane" role="tabpanel">
+        {#if available.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No additional extensions available for installation
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Extension</th>
+                                <th>Version</th>
+                                <th>Category</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for e in available}
+                            <tr>
+                                <td>
+                                    <strong>{e.name}</strong>
+                                    {#if e.common}<span class="badge bg-info ms-1">Common</span>{/if}
+                                </td>
+                                <td><span class="badge bg-secondary">{e.defaultVersion}</span></td>
+                                <td><small class="text-muted">{e.category}</small></td>
+                                <td><small title="{e.comment}">{e.getCommentTruncated(60)}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Managing Extensions</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt>Install Extension</dt>
+                    <dd><code>CREATE EXTENSION extension_name;</code></dd>
+                    <dt>Upgrade Extension</dt>
+                    <dd><code>ALTER EXTENSION extension_name UPDATE;</code></dd>
+                    <dt>Remove Extension</dt>
+                    <dd><code>DROP EXTENSION extension_name;</code></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recommended Extensions</h5>
+            </div>
+            <div class="card-body">
+                <ul class="small mb-0">
+                    <li><strong>pg_stat_statements</strong> - Query performance statistics</li>
+                    <li><strong>pgcrypto</strong> - Cryptographic functions</li>
+                    <li><strong>uuid-ossp</strong> - UUID generation</li>
+                    <li><strong>pg_trgm</strong> - Trigram-based text similarity</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

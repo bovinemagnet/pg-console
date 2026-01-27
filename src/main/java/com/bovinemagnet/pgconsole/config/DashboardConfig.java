@@ -238,7 +238,8 @@ public interface DashboardConfig {
 
 	/**
 	 * Configuration for the Infrastructure section.
-	 * Pages: Replication, Infrastructure.
+	 * Pages: Replication, Infrastructure, WAL Receiver, Maintenance Progress, I/O Statistics,
+	 * Functions, Config Files, Prepared Statements, Materialised Views, Sequences, Extensions.
 	 */
 	interface InfrastructureConfig {
 		/**
@@ -266,6 +267,96 @@ public interface DashboardConfig {
 		@WithName("infrastructure")
 		@WithDefault("true")
 		boolean infrastructureEnabled();
+
+		/**
+		 * Enable or disable the WAL Receiver page (/wal-receiver).
+		 * Shows WAL receiver status for standby servers.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("wal-receiver")
+		@WithDefault("true")
+		boolean walReceiverEnabled();
+
+		/**
+		 * Enable or disable the Maintenance Progress page (/maintenance-progress).
+		 * Shows progress of VACUUM, ANALYZE, CREATE INDEX, CLUSTER, COPY, and base backup operations.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("maintenance-progress")
+		@WithDefault("true")
+		boolean maintenanceProgressEnabled();
+
+		/**
+		 * Enable or disable the I/O Statistics page (/io-statistics).
+		 * Shows I/O statistics by backend type (PostgreSQL 16+).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("io-statistics")
+		@WithDefault("true")
+		boolean ioStatisticsEnabled();
+
+		/**
+		 * Enable or disable the Functions page (/functions).
+		 * Shows function/procedure performance statistics.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("functions")
+		@WithDefault("true")
+		boolean functionsEnabled();
+
+		/**
+		 * Enable or disable the Config Files page (/config-files).
+		 * Shows configuration file settings and errors.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("config-files")
+		@WithDefault("true")
+		boolean configFilesEnabled();
+
+		/**
+		 * Enable or disable the Prepared Statements page (/prepared-statements).
+		 * Shows prepared statements and open cursors.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("prepared-statements")
+		@WithDefault("true")
+		boolean preparedStatementsEnabled();
+
+		/**
+		 * Enable or disable the Materialised Views page (/matviews).
+		 * Shows materialised view information and refresh status.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("matviews")
+		@WithDefault("true")
+		boolean matviewsEnabled();
+
+		/**
+		 * Enable or disable the Sequences page (/sequences).
+		 * Shows sequence information and exhaustion warnings.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("sequences")
+		@WithDefault("true")
+		boolean sequencesEnabled();
+
+		/**
+		 * Enable or disable the Extensions page (/extensions).
+		 * Shows installed and available PostgreSQL extensions.
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("extensions")
+		@WithDefault("true")
+		boolean extensionsEnabled();
 	}
 
 	// ========================================

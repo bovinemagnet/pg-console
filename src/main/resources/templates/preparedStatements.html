@@ -1,0 +1,156 @@
+{#include base}
+{#title}Prepared Statements - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/prepared-statements?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Prepared Statements & Cursors</h1>
+        <p class="text-muted">
+            Session-level prepared statements and open cursors
+        </p>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="stmtTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="prepared-tab" data-bs-toggle="tab" data-bs-target="#prepared" type="button" role="tab">
+            Prepared Statements <span class="badge bg-secondary">{statements.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="cursors-tab" data-bs-toggle="tab" data-bs-target="#cursors" type="button" role="tab">
+            Open Cursors <span class="badge bg-secondary">{cursors.size}</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="stmtTabContent">
+    <!-- Prepared Statements Tab -->
+    <div class="tab-pane fade show active" id="prepared" role="tabpanel">
+        {#if statements.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No prepared statements in the current session
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Statement</th>
+                                <th class="text-center">Params</th>
+                                <th>Source</th>
+                                <th>Age</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for s in statements}
+                            <tr>
+                                <td><strong>{s.name}</strong></td>
+                                <td><span class="badge {s.statementTypeCssClass}">{s.statementType}</span></td>
+                                <td><code class="small" title="{s.statement}">{s.getStatementTruncated(60)}</code></td>
+                                <td class="text-center">{s.parameterCount}</td>
+                                <td><span class="badge {s.sourceCssClass}">{s.sourceDisplay}</span></td>
+                                <td><small class="text-muted">{s.ageFormatted}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- Open Cursors Tab -->
+    <div class="tab-pane fade" id="cursors" role="tabpanel">
+        {#if cursors.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No open cursors in the current session
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Statement</th>
+                                <th>Properties</th>
+                                <th>Age</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for c in cursors}
+                            <tr>
+                                <td><strong>{c.name}</strong></td>
+                                <td><code class="small" title="{c.statement}">{c.getStatementTruncated(60)}</code></td>
+                                <td>
+                                    {#if c.holdable}<span class="badge {c.holdableCssClass} me-1">Holdable</span>{/if}
+                                    {#if c.scrollable}<span class="badge {c.scrollableCssClass} me-1">Scrollable</span>{/if}
+                                    {#if c.binary}<span class="badge bg-secondary">Binary</span>{/if}
+                                    {#if !c.holdable && !c.scrollable && !c.binary}<span class="badge bg-secondary">Standard</span>{/if}
+                                </td>
+                                <td><small class="text-muted">{c.ageFormatted}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Prepared Statements</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt>SQL Source</dt>
+                    <dd class="text-muted">Created using PREPARE statement</dd>
+                    <dt>Protocol Source</dt>
+                    <dd class="text-muted">Created by client library (JDBC, etc.)</dd>
+                    <dt>Parameters</dt>
+                    <dd class="text-muted">Number of $1, $2, etc. placeholders</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Cursor Properties</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt><span class="badge bg-warning text-dark">Holdable</span></dt>
+                    <dd class="text-muted">Survives transaction commit</dd>
+                    <dt><span class="badge bg-info">Scrollable</span></dt>
+                    <dd class="text-muted">Can fetch backwards and jump to positions</dd>
+                    <dt><span class="badge bg-secondary">Binary</span></dt>
+                    <dd class="text-muted">Returns data in binary format</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{/include}

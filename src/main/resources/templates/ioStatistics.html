@@ -1,0 +1,147 @@
+{#include base}
+{#title}I/O Statistics - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/io-statistics?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>I/O Statistics</h1>
+        <p class="text-muted">
+            I/O operations by backend type, object type, and context (PostgreSQL 16+)
+        </p>
+    </div>
+</div>
+
+{#if !supported}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning">
+            <h5 class="alert-heading">PostgreSQL 16+ Required</h5>
+            <p class="mb-0">
+                The pg_stat_io view is only available in PostgreSQL 16 and later.
+                Your current version is {pgVersion / 10000}.{(pgVersion % 10000) / 100}.
+            </p>
+        </div>
+    </div>
+</div>
+{#else if stats.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-muted">No I/O Statistics Available</h4>
+                <p class="text-muted mb-0">
+                    No I/O statistics have been collected yet.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">I/O Operations</h5>
+                <span class="badge bg-info">{stats.size} entries</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Backend Type</th>
+                                <th>Object</th>
+                                <th>Context</th>
+                                <th class="text-end">Reads</th>
+                                <th class="text-end">Read Time</th>
+                                <th class="text-end">Writes</th>
+                                <th class="text-end">Write Time</th>
+                                <th class="text-end">Hits</th>
+                                <th class="text-end">Hit Ratio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for s in stats}
+                            <tr>
+                                <td><span class="badge {s.backendTypeCssClass}">{s.backendType}</span></td>
+                                <td>{s.object}</td>
+                                <td><span class="badge {s.contextCssClass}">{s.context}</span></td>
+                                <td class="text-end">{s.formatCount(s.reads)}</td>
+                                <td class="text-end">{s.readTimeFormatted}</td>
+                                <td class="text-end">{s.formatCount(s.writes)}</td>
+                                <td class="text-end">{s.writeTimeFormatted}</td>
+                                <td class="text-end">{s.formatCount(s.hits)}</td>
+                                <td class="text-end">
+                                    <span class="{#if s.hitRatio >= 99}text-success{#else if s.hitRatio >= 90}text-info{#else}text-warning{/if}">
+                                        {s.hitRatioFormatted}
+                                    </span>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Stats -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding I/O Statistics</h5>
+            </div>
+            <div class="card-body">
+                <h6>Context Types</h6>
+                <dl class="small mb-3">
+                    <dt><span class="badge bg-primary">normal</span></dt>
+                    <dd class="text-muted">Standard buffer pool operations</dd>
+                    <dt><span class="badge bg-warning text-dark">vacuum</span></dt>
+                    <dd class="text-muted">Operations during vacuum processes</dd>
+                    <dt><span class="badge bg-info">bulkread</span></dt>
+                    <dd class="text-muted">Large sequential reads (e.g., COPY, bulk scans)</dd>
+                    <dt><span class="badge bg-success">bulkwrite</span></dt>
+                    <dd class="text-muted">Large sequential writes</dd>
+                </dl>
+                <h6>Object Types</h6>
+                <dl class="small mb-0">
+                    <dt>relation</dt>
+                    <dd class="text-muted">Tables and indexes</dd>
+                    <dt>temp relation</dt>
+                    <dd class="text-muted">Temporary tables used during query processing</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Key Metrics</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt>Reads</dt>
+                    <dd class="text-muted">Number of read operations that went to storage</dd>
+                    <dt>Hits</dt>
+                    <dd class="text-muted">Reads satisfied from the buffer cache</dd>
+                    <dt>Hit Ratio</dt>
+                    <dd class="text-muted">Percentage of reads from cache (higher is better)</dd>
+                    <dt>Writes</dt>
+                    <dd class="text-muted">Number of write operations to storage</dd>
+                    <dt>Evictions</dt>
+                    <dd class="text-muted">Buffers evicted to make room for new data</dd>
+                    <dt>Fsyncs</dt>
+                    <dd class="text-muted">Synchronous writes to durable storage</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

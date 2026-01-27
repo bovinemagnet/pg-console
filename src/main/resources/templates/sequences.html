@@ -1,0 +1,160 @@
+{#include base}
+{#title}Sequences - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/sequences?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Sequences</h1>
+        <p class="text-muted">
+            Sequence information and exhaustion warnings from pg_sequences (PostgreSQL 10+)
+        </p>
+    </div>
+</div>
+
+{#if !supported}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning">
+            <h5 class="alert-heading">PostgreSQL 10+ Required</h5>
+            <p class="mb-0">
+                The pg_sequences view is only available in PostgreSQL 10 and later.
+                Your current version is {pgVersion / 10000}.{(pgVersion % 10000) / 100}.
+            </p>
+        </div>
+    </div>
+</div>
+{#else if sequences.isEmpty()}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-muted">No Sequences Found</h4>
+                <p class="text-muted mb-0">
+                    This database does not have any sequences defined.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<!-- Summary Card -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">Total Sequences</span>
+                <h2 class="mb-0">{sequences.size}</h2>
+                <small class="text-muted">defined in database</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title">Usage Indicators</h6>
+                <p class="small mb-1"><span class="badge bg-danger">Critical</span> - Over 80% used, approaching exhaustion</p>
+                <p class="small mb-1"><span class="badge bg-warning text-dark">Warning</span> - Over 50% used, monitor usage</p>
+                <p class="small mb-0"><span class="badge bg-info">Cycling</span> - Will automatically restart at boundary</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Sequence Details</h5>
+                <span class="badge bg-info">{sequences.size} sequences</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Sequence</th>
+                                <th>Type</th>
+                                <th>Last Value</th>
+                                <th>Usage</th>
+                                <th>Cycle</th>
+                                <th>Owner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for s in sequences}
+                            <tr class="{s.rowCssClass}">
+                                <td><strong>{s.fullName}</strong></td>
+                                <td><span class="badge {s.dataTypeCssClass}">{s.dataType}</span></td>
+                                <td><code>{s.lastValueDisplay}</code></td>
+                                <td style="min-width: 120px;">
+                                    {#if !s.unused}
+                                    <div class="progress" style="height: 18px;">
+                                        <div class="progress-bar {s.progressBarCssClass}" style="width: {s.usagePercent}%">
+                                            {s.usagePercentFormatted}
+                                        </div>
+                                    </div>
+                                    {#else}
+                                    <span class="text-muted small">Unused</span>
+                                    {/if}
+                                </td>
+                                <td>
+                                    {#if s.cycle}
+                                    <span class="badge {s.cycleCssClass}">Yes</span>
+                                    {#else}
+                                    <span class="badge bg-secondary">No</span>
+                                    {/if}
+                                </td>
+                                <td><small class="text-muted">{s.sequenceOwner}</small></td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Understanding Sequence Usage</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt><span class="badge bg-danger">Critical (&gt;80%)</span></dt>
+                    <dd class="text-muted">Sequence approaching maximum value</dd>
+                    <dt><span class="badge bg-warning text-dark">Warning (&gt;50%)</span></dt>
+                    <dd class="text-muted">Sequence usage should be monitored</dd>
+                    <dt><span class="badge bg-info">Cycling</span></dt>
+                    <dd class="text-muted">Sequence will restart at min/max value</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Data Type Limits</h5>
+            </div>
+            <div class="card-body">
+                <dl class="small mb-0">
+                    <dt><span class="badge bg-warning text-dark">smallint</span></dt>
+                    <dd class="text-muted">Max: 32,767</dd>
+                    <dt><span class="badge bg-info">integer</span></dt>
+                    <dd class="text-muted">Max: 2,147,483,647</dd>
+                    <dt><span class="badge bg-success">bigint</span></dt>
+                    <dd class="text-muted">Max: 9,223,372,036,854,775,807</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

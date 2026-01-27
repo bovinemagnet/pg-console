@@ -1,0 +1,159 @@
+{#include base}
+{#title}WAL Receiver - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/wal-receiver?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>WAL Receiver Status</h1>
+        <p class="text-muted">
+            {#if isStandby}
+            <span class="badge bg-info me-2">Standby Server</span>
+            Streaming replication receiver status
+            {#else}
+            <span class="badge bg-success me-2">Primary Server</span>
+            This server is not a standby - WAL receiver is not applicable
+            {/if}
+        </p>
+    </div>
+</div>
+
+{#if !isStandby}
+<!-- Not a Standby Message -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-muted">Not a Standby Server</h4>
+                <p class="text-muted mb-0">
+                    The WAL receiver is only available on standby servers that receive
+                    streaming replication from a primary server.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else if status == null}
+<!-- No WAL Receiver Running -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <h4 class="text-warning">No WAL Receiver Running</h4>
+                <p class="text-muted mb-0">
+                    This standby server does not currently have an active WAL receiver process.
+                    This may indicate a connection issue with the primary server.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{#else}
+<!-- Status Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge {status.statusCssClass} mb-2">Status</span>
+                <h3 class="mb-0">{status.status}</h3>
+                <small class="text-muted">receiver state</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-primary mb-2">PID</span>
+                <h3 class="mb-0">{status.pid}</h3>
+                <small class="text-muted">process ID</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-info mb-2">Sender</span>
+                <h5 class="mb-0">{status.senderDisplay}</h5>
+                <small class="text-muted">primary server</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <span class="badge bg-secondary mb-2">Last Message</span>
+                <h5 class="mb-0">{status.timeSinceLastMessage}</h5>
+                <small class="text-muted">from primary</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LSN Positions -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">LSN Positions</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Receive Start LSN</dt>
+                    <dd class="col-sm-6"><code>{status.receiveStartLsn ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">Written LSN</dt>
+                    <dd class="col-sm-6"><code>{status.writtenLsn ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">Flushed LSN</dt>
+                    <dd class="col-sm-6"><code>{status.flushedLsn ?: 'N/A'}</code></dd>
+
+                    <dt class="col-sm-6">Latest End LSN</dt>
+                    <dd class="col-sm-6"><code>{status.latestEndLsn ?: 'N/A'}</code></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Connection Details</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Sender Host</dt>
+                    <dd class="col-sm-6">{status.senderHost ?: 'N/A'}</dd>
+
+                    <dt class="col-sm-6">Sender Port</dt>
+                    <dd class="col-sm-6">{status.senderPort > 0 ? status.senderPort : 'N/A'}</dd>
+
+                    <dt class="col-sm-6">Slot Name</dt>
+                    <dd class="col-sm-6">{status.slotName ?: 'None'}</dd>
+
+                    <dt class="col-sm-6">Timeline</dt>
+                    <dd class="col-sm-6">{status.receivedTli}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connection Info -->
+{#if status.conninfo}
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Connection String</h5>
+            </div>
+            <div class="card-body">
+                <code class="small text-break">{status.conninfo}</code>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+{/if}
+
+</div>
+
+{/include}

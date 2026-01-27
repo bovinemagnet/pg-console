@@ -183,6 +183,33 @@ public class DashboardResource {
     Template walCheckpoints;
 
     @Inject
+    Template walReceiver;
+
+    @Inject
+    Template maintenanceProgress;
+
+    @Inject
+    Template ioStatistics;
+
+    @Inject
+    Template functions;
+
+    @Inject
+    Template configFiles;
+
+    @Inject
+    Template preparedStatements;
+
+    @Inject
+    Template matviews;
+
+    @Inject
+    Template sequences;
+
+    @Inject
+    Template extensions;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -2116,6 +2143,312 @@ public class DashboardResource {
         return Response.ok(reportText)
                       .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                       .build();
+    }
+
+    // ========================================
+    // WAL Receiver Dashboard
+    // ========================================
+
+    /**
+     * Renders the WAL receiver status page for standby servers.
+     * <p>
+     * Displays WAL receiver process information including connection to the primary,
+     * LSN positions, and replication lag indicators.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing WAL receiver status
+     */
+    @GET
+    @Path("/wal-receiver")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance walReceiver(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("wal-receiver");
+
+        var status = postgresService.getWalReceiverStatus(instance);
+        boolean isStandby = postgresService.isStandby(instance);
+
+        return walReceiver.data("status", status)
+                          .data("isStandby", isStandby)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                          .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Maintenance Progress Dashboard
+    // ========================================
+
+    /**
+     * Renders the maintenance progress page showing ongoing database operations.
+     * <p>
+     * Displays progress for VACUUM, ANALYZE, CREATE INDEX, CLUSTER, COPY, and
+     * base backup operations.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing maintenance progress data
+     */
+    @GET
+    @Path("/maintenance-progress")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance maintenanceProgress(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("maintenance-progress");
+
+        var vacuumProgress = postgresService.getVacuumProgress(instance);
+        var createIndexProgress = postgresService.getCreateIndexProgress(instance);
+        var clusterProgress = postgresService.getClusterProgress(instance);
+        var analyzeProgress = postgresService.getAnalyzeProgress(instance);
+        var basebackupProgress = postgresService.getBasebackupProgress(instance);
+        var copyProgress = postgresService.getCopyProgress(instance);
+
+        int pgVersion = postgresService.getPostgresVersionNum(instance);
+
+        return maintenanceProgress.data("vacuumProgress", vacuumProgress)
+                                  .data("createIndexProgress", createIndexProgress)
+                                  .data("clusterProgress", clusterProgress)
+                                  .data("analyzeProgress", analyzeProgress)
+                                  .data("basebackupProgress", basebackupProgress)
+                                  .data("copyProgress", copyProgress)
+                                  .data("pgVersion", pgVersion)
+                                  .data("instances", dataSourceManager.getInstanceInfoList())
+                                  .data("currentInstance", instance)
+                                  .data("securityEnabled", config.security().enabled())
+                                  .data("schemaEnabled", config.schema().enabled())
+                                  .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                                  .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // I/O Statistics Dashboard
+    // ========================================
+
+    /**
+     * Renders the I/O statistics page (PostgreSQL 16+).
+     * <p>
+     * Displays I/O operations grouped by backend type, object type, and context.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing I/O statistics
+     */
+    @GET
+    @Path("/io-statistics")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance ioStatistics(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("io-statistics");
+
+        var stats = postgresService.getIoStatistics(instance);
+        int pgVersion = postgresService.getPostgresVersionNum(instance);
+        boolean supported = pgVersion >= 160000;
+
+        return ioStatistics.data("stats", stats)
+                           .data("pgVersion", pgVersion)
+                           .data("supported", supported)
+                           .data("instances", dataSourceManager.getInstanceInfoList())
+                           .data("currentInstance", instance)
+                           .data("securityEnabled", config.security().enabled())
+                           .data("schemaEnabled", config.schema().enabled())
+                           .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                           .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Functions Dashboard
+    // ========================================
+
+    /**
+     * Renders the function performance statistics page.
+     * <p>
+     * Displays user function execution statistics including call counts and timing.
+     * Requires track_functions to be enabled in postgresql.conf.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing function statistics
+     */
+    @GET
+    @Path("/functions")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance functions(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("functions");
+
+        var stats = postgresService.getFunctionStats(instance);
+
+        return functions.data("stats", stats)
+                        .data("instances", dataSourceManager.getInstanceInfoList())
+                        .data("currentInstance", instance)
+                        .data("securityEnabled", config.security().enabled())
+                        .data("schemaEnabled", config.schema().enabled())
+                        .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                        .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Config Files Dashboard
+    // ========================================
+
+    /**
+     * Renders the configuration files settings page.
+     * <p>
+     * Displays settings from postgresql.conf and other config files,
+     * highlighting any errors that would prevent settings from being applied.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing config file settings
+     */
+    @GET
+    @Path("/config-files")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance configFiles(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("config-files");
+
+        var settings = postgresService.getConfigFileSettings(instance);
+
+        return configFiles.data("settings", settings)
+                          .data("instances", dataSourceManager.getInstanceInfoList())
+                          .data("currentInstance", instance)
+                          .data("securityEnabled", config.security().enabled())
+                          .data("schemaEnabled", config.schema().enabled())
+                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                          .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Prepared Statements Dashboard
+    // ========================================
+
+    /**
+     * Renders the prepared statements and cursors page.
+     * <p>
+     * Displays prepared statements and open cursors in the current session.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing prepared statement and cursor data
+     */
+    @GET
+    @Path("/prepared-statements")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance preparedStatements(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("prepared-statements");
+
+        var statements = postgresService.getPreparedStatements(instance);
+        var cursors = postgresService.getOpenCursors(instance);
+
+        return preparedStatements.data("statements", statements)
+                                 .data("cursors", cursors)
+                                 .data("instances", dataSourceManager.getInstanceInfoList())
+                                 .data("currentInstance", instance)
+                                 .data("securityEnabled", config.security().enabled())
+                                 .data("schemaEnabled", config.schema().enabled())
+                                 .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                                 .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Materialised Views Dashboard
+    // ========================================
+
+    /**
+     * Renders the materialised views page.
+     * <p>
+     * Displays materialised view information including size, population status,
+     * and definition.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing materialised view data
+     */
+    @GET
+    @Path("/matviews")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance matviews(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("matviews");
+
+        var views = postgresService.getMaterialisedViews(instance);
+
+        return matviews.data("views", views)
+                       .data("instances", dataSourceManager.getInstanceInfoList())
+                       .data("currentInstance", instance)
+                       .data("securityEnabled", config.security().enabled())
+                       .data("schemaEnabled", config.schema().enabled())
+                       .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                       .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Sequences Dashboard
+    // ========================================
+
+    /**
+     * Renders the sequences page (PostgreSQL 10+).
+     * <p>
+     * Displays sequence information including usage percentage and exhaustion warnings.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing sequence data
+     */
+    @GET
+    @Path("/sequences")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance sequences(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("sequences");
+
+        var seqs = postgresService.getSequences(instance);
+        int pgVersion = postgresService.getPostgresVersionNum(instance);
+        boolean supported = pgVersion >= 100000;
+
+        return sequences.data("sequences", seqs)
+                        .data("pgVersion", pgVersion)
+                        .data("supported", supported)
+                        .data("instances", dataSourceManager.getInstanceInfoList())
+                        .data("currentInstance", instance)
+                        .data("securityEnabled", config.security().enabled())
+                        .data("schemaEnabled", config.schema().enabled())
+                        .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                        .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    // ========================================
+    // Extensions Dashboard
+    // ========================================
+
+    /**
+     * Renders the extensions page.
+     * <p>
+     * Displays installed and available PostgreSQL extensions with upgrade indicators.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return template instance containing extension data
+     */
+    @GET
+    @Path("/extensions")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance extensions(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        featureToggleService.requirePageEnabled("extensions");
+
+        var exts = postgresService.getExtensions(instance);
+
+        // Separate installed from available
+        var installed = exts.stream().filter(e -> e.isInstalled()).toList();
+        var available = exts.stream().filter(e -> !e.isInstalled()).toList();
+
+        return extensions.data("extensions", exts)
+                         .data("installed", installed)
+                         .data("available", available)
+                         .data("instances", dataSourceManager.getInstanceInfoList())
+                         .data("currentInstance", instance)
+                         .data("securityEnabled", config.security().enabled())
+                         .data("schemaEnabled", config.schema().enabled())
+                         .data("inMemoryMinutes", config.schema().inMemoryMinutes())
+                         .data("toggles", featureToggleService.getAllToggles());
     }
 
     /**

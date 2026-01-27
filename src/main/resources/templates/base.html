@@ -1390,6 +1390,60 @@
                         <i class="bi bi-heart-pulse" aria-hidden="true"></i>
                         <span class="nav-link-text">Health Check</span>
                     </a>
+                    {#if toggles.walReceiver}
+                    <a class="nav-link" href="/wal-receiver?instance={currentInstance ?: 'default'}" data-title="WAL Receiver">
+                        <i class="bi bi-reception-4" aria-hidden="true"></i>
+                        <span class="nav-link-text">WAL Receiver</span>
+                    </a>
+                    {/if}
+                    {#if toggles.maintenanceProgress}
+                    <a class="nav-link" href="/maintenance-progress?instance={currentInstance ?: 'default'}" data-title="Maintenance Progress">
+                        <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                        <span class="nav-link-text">Maintenance Progress</span>
+                    </a>
+                    {/if}
+                    {#if toggles.ioStatistics}
+                    <a class="nav-link" href="/io-statistics?instance={currentInstance ?: 'default'}" data-title="I/O Statistics">
+                        <i class="bi bi-hdd-stack" aria-hidden="true"></i>
+                        <span class="nav-link-text">I/O Statistics</span>
+                    </a>
+                    {/if}
+                    {#if toggles.functions}
+                    <a class="nav-link" href="/functions?instance={currentInstance ?: 'default'}" data-title="Functions">
+                        <i class="bi bi-code-square" aria-hidden="true"></i>
+                        <span class="nav-link-text">Functions</span>
+                    </a>
+                    {/if}
+                    {#if toggles.configFiles}
+                    <a class="nav-link" href="/config-files?instance={currentInstance ?: 'default'}" data-title="Config Files">
+                        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                        <span class="nav-link-text">Config Files</span>
+                    </a>
+                    {/if}
+                    {#if toggles.preparedStatements}
+                    <a class="nav-link" href="/prepared-statements?instance={currentInstance ?: 'default'}" data-title="Prepared Statements">
+                        <i class="bi bi-file-earmark-code" aria-hidden="true"></i>
+                        <span class="nav-link-text">Prepared Statements</span>
+                    </a>
+                    {/if}
+                    {#if toggles.matviews}
+                    <a class="nav-link" href="/matviews?instance={currentInstance ?: 'default'}" data-title="Materialised Views">
+                        <i class="bi bi-layers" aria-hidden="true"></i>
+                        <span class="nav-link-text">Materialised Views</span>
+                    </a>
+                    {/if}
+                    {#if toggles.sequences}
+                    <a class="nav-link" href="/sequences?instance={currentInstance ?: 'default'}" data-title="Sequences">
+                        <i class="bi bi-sort-numeric-up" aria-hidden="true"></i>
+                        <span class="nav-link-text">Sequences</span>
+                    </a>
+                    {/if}
+                    {#if toggles.extensions}
+                    <a class="nav-link" href="/extensions?instance={currentInstance ?: 'default'}" data-title="Extensions">
+                        <i class="bi bi-puzzle" aria-hidden="true"></i>
+                        <span class="nav-link-text">Extensions</span>
+                    </a>
+                    {/if}
                 </div>
             </div>
             {/if}

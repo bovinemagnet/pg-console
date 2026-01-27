@@ -1,0 +1,419 @@
+{#include base}
+{#title}Maintenance Progress - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/maintenance-progress?instance={currentInstance ?: 'default'}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Maintenance Progress</h1>
+        <p class="text-muted">
+            Real-time progress of ongoing maintenance operations (VACUUM, ANALYZE, CREATE INDEX, CLUSTER, COPY, Base Backup)
+        </p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{vacuumProgress.size}</h4>
+                <small class="text-muted">VACUUM</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{analyzeProgress.size}</h4>
+                <small class="text-muted">ANALYZE</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{createIndexProgress.size}</h4>
+                <small class="text-muted">CREATE INDEX</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{clusterProgress.size}</h4>
+                <small class="text-muted">CLUSTER</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{copyProgress.size}</h4>
+                <small class="text-muted">COPY</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 mb-3">
+        <div class="card h-100 text-center">
+            <div class="card-body py-3">
+                <h4 class="mb-0">{basebackupProgress.size}</h4>
+                <small class="text-muted">BACKUP</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs for different operation types -->
+<ul class="nav nav-tabs mb-3" id="progressTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="vacuum-tab" data-bs-toggle="tab" data-bs-target="#vacuum" type="button" role="tab">
+            VACUUM <span class="badge bg-secondary">{vacuumProgress.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="analyze-tab" data-bs-toggle="tab" data-bs-target="#analyze" type="button" role="tab">
+            ANALYZE <span class="badge bg-secondary">{analyzeProgress.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="createindex-tab" data-bs-toggle="tab" data-bs-target="#createindex" type="button" role="tab">
+            CREATE INDEX <span class="badge bg-secondary">{createIndexProgress.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="cluster-tab" data-bs-toggle="tab" data-bs-target="#cluster" type="button" role="tab">
+            CLUSTER <span class="badge bg-secondary">{clusterProgress.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="copy-tab" data-bs-toggle="tab" data-bs-target="#copy" type="button" role="tab">
+            COPY <span class="badge bg-secondary">{copyProgress.size}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup" type="button" role="tab">
+            BASE BACKUP <span class="badge bg-secondary">{basebackupProgress.size}</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="progressTabContent">
+    <!-- VACUUM Tab -->
+    <div class="tab-pane fade show active" id="vacuum" role="tabpanel">
+        {#if vacuumProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No VACUUM operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Table</th>
+                                <th>Phase</th>
+                                <th>Progress</th>
+                                <th>Dead Tuples</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for v in vacuumProgress}
+                            <tr>
+                                <td>{v.pid}</td>
+                                <td><strong>{v.fullTableName}</strong></td>
+                                <td><span class="badge {v.phaseCssClass}">{v.phase.displayName}</span></td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {v.progressBarCssClass}" style="width: {v.progressPercent}%">
+                                            {v.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{v.numDeadTuples} / {v.maxDeadTuples}</td>
+                                <td>
+                                    {#if v.autovacuum}
+                                    <span class="badge bg-warning text-dark">Auto</span>
+                                    {#else}
+                                    <span class="badge bg-primary">Manual</span>
+                                    {/if}
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- ANALYZE Tab -->
+    <div class="tab-pane fade" id="analyze" role="tabpanel">
+        {#if pgVersion < 130000}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                ANALYZE progress monitoring requires PostgreSQL 13+
+            </div>
+        </div>
+        {#else if analyzeProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No ANALYZE operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Table</th>
+                                <th>Phase</th>
+                                <th>Progress</th>
+                                <th>Sample Blocks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for a in analyzeProgress}
+                            <tr>
+                                <td>{a.pid}</td>
+                                <td><strong>{a.fullTableName}</strong></td>
+                                <td><span class="badge {a.phaseCssClass}">{a.phase}</span></td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {a.progressBarCssClass}" style="width: {a.progressPercent}%">
+                                            {a.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{a.sampleBlksScanned} / {a.sampleBlksTotal}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- CREATE INDEX Tab -->
+    <div class="tab-pane fade" id="createindex" role="tabpanel">
+        {#if pgVersion < 120000}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                CREATE INDEX progress monitoring requires PostgreSQL 12+
+            </div>
+        </div>
+        {#else if createIndexProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No CREATE INDEX operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Table</th>
+                                <th>Index</th>
+                                <th>Phase</th>
+                                <th>Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for c in createIndexProgress}
+                            <tr>
+                                <td>{c.pid}</td>
+                                <td><strong>{c.fullTableName}</strong></td>
+                                <td>{c.indexName ?: 'N/A'}</td>
+                                <td><span class="badge {c.phaseCssClass}">{c.phase}</span></td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {c.progressBarCssClass}" style="width: {c.progressPercent}%">
+                                            {c.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- CLUSTER Tab -->
+    <div class="tab-pane fade" id="cluster" role="tabpanel">
+        {#if pgVersion < 120000}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                CLUSTER progress monitoring requires PostgreSQL 12+
+            </div>
+        </div>
+        {#else if clusterProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No CLUSTER or VACUUM FULL operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Command</th>
+                                <th>Table</th>
+                                <th>Phase</th>
+                                <th>Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for c in clusterProgress}
+                            <tr>
+                                <td>{c.pid}</td>
+                                <td><span class="badge {c.commandCssClass}">{c.command}</span></td>
+                                <td><strong>{c.fullTableName}</strong></td>
+                                <td><span class="badge {c.phaseCssClass}">{c.phase}</span></td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {c.progressBarCssClass}" style="width: {c.progressPercent}%">
+                                            {c.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- COPY Tab -->
+    <div class="tab-pane fade" id="copy" role="tabpanel">
+        {#if pgVersion < 140000}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                COPY progress monitoring requires PostgreSQL 14+
+            </div>
+        </div>
+        {#else if copyProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No COPY operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Command</th>
+                                <th>Table</th>
+                                <th>Type</th>
+                                <th>Tuples</th>
+                                <th>Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for c in copyProgress}
+                            <tr>
+                                <td>{c.pid}</td>
+                                <td><span class="badge {c.commandCssClass}">COPY {c.command}</span></td>
+                                <td><strong>{c.fullTableName ?: 'N/A'}</strong></td>
+                                <td>{c.type}</td>
+                                <td>{c.tuplesProcessedFormatted}</td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {c.progressBarCssClass}" style="width: {c.progressPercent >= 0 ? c.progressPercent : 0}%">
+                                            {c.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+
+    <!-- BASE BACKUP Tab -->
+    <div class="tab-pane fade" id="backup" role="tabpanel">
+        {#if pgVersion < 130000}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                Base backup progress monitoring requires PostgreSQL 13+
+            </div>
+        </div>
+        {#else if basebackupProgress.isEmpty()}
+        <div class="card">
+            <div class="card-body text-center py-4 text-muted">
+                No base backup operations in progress
+            </div>
+        </div>
+        {#else}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Phase</th>
+                                <th>Progress</th>
+                                <th>Streamed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#for b in basebackupProgress}
+                            <tr>
+                                <td>{b.pid}</td>
+                                <td><span class="badge {b.phaseCssClass}">{b.phase}</span></td>
+                                <td style="min-width: 150px;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {b.progressBarCssClass}" style="width: {b.progressPercent}%">
+                                            {b.progressFormatted}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{b.tablespaceStreamedFormatted} / {b.tablespaceTotalFormatted}</td>
+                            </tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+
+</div>
+
+{/include}

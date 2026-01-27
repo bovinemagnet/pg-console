@@ -2736,4 +2736,841 @@ public class PostgresService {
 
 		return (double) deadlockDelta / hoursBetween;
 	}
+
+	// ========== WAL Receiver Status ==========
+
+	/**
+	 * Retrieves WAL receiver status for the specified instance.
+	 * <p>
+	 * This information is only available on standby servers that are receiving
+	 * streaming replication from a primary.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return WAL receiver status, or null if not a standby or no receiver running
+	 */
+	public com.bovinemagnet.pgconsole.model.WalReceiverStatus getWalReceiverStatus(String instanceName) {
+		String sql = """
+			SELECT
+			    pid,
+			    status,
+			    receive_start_lsn::text,
+			    receive_start_tli,
+			    written_lsn::text,
+			    flushed_lsn::text,
+			    received_tli,
+			    last_msg_send_time,
+			    last_msg_receipt_time,
+			    latest_end_lsn::text,
+			    latest_end_time,
+			    slot_name,
+			    sender_host,
+			    sender_port,
+			    regexp_replace(conninfo, 'password=[^ ]*', 'password=***') as conninfo
+			FROM pg_stat_wal_receiver
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				var status = new com.bovinemagnet.pgconsole.model.WalReceiverStatus();
+				status.setPid(rs.getInt("pid"));
+				status.setStatusFromString(rs.getString("status"));
+				status.setReceiveStartLsn(rs.getString("receive_start_lsn"));
+				status.setReceiveStartTli(rs.getInt("receive_start_tli"));
+				status.setWrittenLsn(rs.getString("written_lsn"));
+				status.setFlushedLsn(rs.getString("flushed_lsn"));
+				status.setReceivedTli(rs.getInt("received_tli"));
+				Timestamp sendTime = rs.getTimestamp("last_msg_send_time");
+				status.setLastMsgSendTime(sendTime != null ? sendTime.toInstant() : null);
+				Timestamp receiptTime = rs.getTimestamp("last_msg_receipt_time");
+				status.setLastMsgReceiptTime(receiptTime != null ? receiptTime.toInstant() : null);
+				status.setLatestEndLsn(rs.getString("latest_end_lsn"));
+				Timestamp endTime = rs.getTimestamp("latest_end_time");
+				status.setLatestEndTime(endTime != null ? endTime.toInstant() : null);
+				status.setSlotName(rs.getString("slot_name"));
+				status.setSenderHost(rs.getString("sender_host"));
+				status.setSenderPort(rs.getInt("sender_port"));
+				status.setConninfo(rs.getString("conninfo"));
+				status.setStandby(true);
+				return status;
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query pg_stat_wal_receiver on %s: %s", instanceName, e.getMessage());
+		}
+		return null;
+	}
+
+	/**
+	 * Checks if the specified instance is a standby server.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return true if this is a standby server
+	 */
+	public boolean isStandby(String instanceName) {
+		String sql = "SELECT pg_is_in_recovery()";
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				return rs.getBoolean(1);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not check recovery status on %s: %s", instanceName, e.getMessage());
+		}
+		return false;
+	}
+
+	// ========== Maintenance Progress ==========
+
+	/**
+	 * Retrieves ongoing VACUUM progress for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of vacuum progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.VacuumProgress> getVacuumProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.VacuumProgress> results = new ArrayList<>();
+		String sql = """
+			SELECT
+			    p.pid,
+			    d.datname as database,
+			    n.nspname as schema_name,
+			    c.relname as table_name,
+			    p.phase,
+			    p.heap_blks_total,
+			    p.heap_blks_scanned,
+			    p.heap_blks_vacuumed,
+			    p.index_vacuum_count,
+			    p.max_dead_tuples,
+			    p.num_dead_tuples,
+			    a.application_name
+			FROM pg_stat_progress_vacuum p
+			JOIN pg_database d ON p.datid = d.oid
+			JOIN pg_class c ON p.relid = c.oid
+			JOIN pg_namespace n ON c.relnamespace = n.oid
+			LEFT JOIN pg_stat_activity a ON p.pid = a.pid
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.VacuumProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setDatabase(rs.getString("database"));
+				progress.setSchemaName(rs.getString("schema_name"));
+				progress.setTableName(rs.getString("table_name"));
+				progress.setPhaseFromString(rs.getString("phase"));
+				progress.setHeapBlksTotal(rs.getLong("heap_blks_total"));
+				progress.setHeapBlksScanned(rs.getLong("heap_blks_scanned"));
+				progress.setHeapBlksVacuumed(rs.getLong("heap_blks_vacuumed"));
+				progress.setIndexVacuumCount(rs.getLong("index_vacuum_count"));
+				progress.setMaxDeadTuples(rs.getLong("max_dead_tuples"));
+				progress.setNumDeadTuples(rs.getLong("num_dead_tuples"));
+				String appName = rs.getString("application_name");
+				progress.setAutovacuum(appName != null && appName.toLowerCase().contains("autovacuum"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query vacuum progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves ongoing CREATE INDEX progress for the specified instance (PostgreSQL 12+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of create index progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.CreateIndexProgress> getCreateIndexProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.CreateIndexProgress> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 120000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    p.pid,
+			    d.datname as database,
+			    n.nspname as schema_name,
+			    t.relname as table_name,
+			    i.relname as index_name,
+			    p.phase,
+			    p.lockers_total,
+			    p.lockers_done,
+			    p.current_locker_pid,
+			    p.blocks_total,
+			    p.blocks_done,
+			    p.tuples_total,
+			    p.tuples_done,
+			    p.partitions_total,
+			    p.partitions_done
+			FROM pg_stat_progress_create_index p
+			JOIN pg_database d ON p.datid = d.oid
+			JOIN pg_class t ON p.relid = t.oid
+			JOIN pg_namespace n ON t.relnamespace = n.oid
+			LEFT JOIN pg_class i ON p.index_relid = i.oid
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.CreateIndexProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setDatabase(rs.getString("database"));
+				progress.setSchemaName(rs.getString("schema_name"));
+				progress.setTableName(rs.getString("table_name"));
+				progress.setIndexName(rs.getString("index_name"));
+				progress.setPhase(rs.getString("phase"));
+				progress.setLockersTotal(rs.getLong("lockers_total"));
+				progress.setLockersDone(rs.getLong("lockers_done"));
+				progress.setCurrentLockerPid(rs.getInt("current_locker_pid"));
+				progress.setBlocksTotal(rs.getLong("blocks_total"));
+				progress.setBlocksDone(rs.getLong("blocks_done"));
+				progress.setTuplesTotal(rs.getLong("tuples_total"));
+				progress.setTuplesDone(rs.getLong("tuples_done"));
+				progress.setPartitionsTotal(rs.getLong("partitions_total"));
+				progress.setPartitionsDone(rs.getLong("partitions_done"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query create index progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves ongoing CLUSTER/VACUUM FULL progress for the specified instance (PostgreSQL 12+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of cluster progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.ClusterProgress> getClusterProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.ClusterProgress> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 120000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    p.pid,
+			    d.datname as database,
+			    n.nspname as schema_name,
+			    c.relname as table_name,
+			    p.command,
+			    p.phase,
+			    i.relname as cluster_index,
+			    p.heap_blks_total,
+			    p.heap_blks_scanned,
+			    p.heap_tuples_scanned,
+			    p.heap_tuples_written,
+			    ri.relname as index_rebuild_name
+			FROM pg_stat_progress_cluster p
+			JOIN pg_database d ON p.datid = d.oid
+			JOIN pg_class c ON p.relid = c.oid
+			JOIN pg_namespace n ON c.relnamespace = n.oid
+			LEFT JOIN pg_class i ON p.cluster_index_relid = i.oid
+			LEFT JOIN pg_class ri ON p.index_rebuild_count > 0
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.ClusterProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setDatabase(rs.getString("database"));
+				progress.setSchemaName(rs.getString("schema_name"));
+				progress.setTableName(rs.getString("table_name"));
+				progress.setCommand(rs.getString("command"));
+				progress.setPhase(rs.getString("phase"));
+				progress.setClusterIndexName(rs.getString("cluster_index"));
+				progress.setHeapBlksTotal(rs.getLong("heap_blks_total"));
+				progress.setHeapBlksScanned(rs.getLong("heap_blks_scanned"));
+				progress.setHeapTuplesScanned(rs.getLong("heap_tuples_scanned"));
+				progress.setHeapTuplesWritten(rs.getLong("heap_tuples_written"));
+				progress.setIndexRebuildName(rs.getString("index_rebuild_name"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query cluster progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves ongoing ANALYZE progress for the specified instance (PostgreSQL 13+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of analyze progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.AnalyzeProgress> getAnalyzeProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.AnalyzeProgress> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 130000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    p.pid,
+			    d.datname as database,
+			    n.nspname as schema_name,
+			    c.relname as table_name,
+			    p.phase,
+			    p.sample_blks_total,
+			    p.sample_blks_scanned,
+			    p.ext_stats_total,
+			    p.ext_stats_computed,
+			    p.child_tables_total,
+			    p.child_tables_done,
+			    p.current_child_table_relid
+			FROM pg_stat_progress_analyze p
+			JOIN pg_database d ON p.datid = d.oid
+			JOIN pg_class c ON p.relid = c.oid
+			JOIN pg_namespace n ON c.relnamespace = n.oid
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.AnalyzeProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setDatabase(rs.getString("database"));
+				progress.setSchemaName(rs.getString("schema_name"));
+				progress.setTableName(rs.getString("table_name"));
+				progress.setPhase(rs.getString("phase"));
+				progress.setSampleBlksTotal(rs.getLong("sample_blks_total"));
+				progress.setSampleBlksScanned(rs.getLong("sample_blks_scanned"));
+				progress.setExtStatsTotal(rs.getLong("ext_stats_total"));
+				progress.setExtStatsComputed(rs.getLong("ext_stats_computed"));
+				progress.setChildTablesTotal(rs.getLong("child_tables_total"));
+				progress.setChildTablesDone(rs.getLong("child_tables_done"));
+				progress.setCurrentChildTableRelid(rs.getLong("current_child_table_relid"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query analyze progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves ongoing base backup progress for the specified instance (PostgreSQL 13+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of base backup progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.BasebackupProgress> getBasebackupProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.BasebackupProgress> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 130000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    pid,
+			    phase,
+			    backup_total,
+			    backup_streamed,
+			    tablespaces_total,
+			    tablespaces_streamed
+			FROM pg_stat_progress_basebackup
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.BasebackupProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setPhase(rs.getString("phase"));
+				progress.setBackupTotal(rs.getLong("backup_total"));
+				progress.setBackupStreamed(rs.getLong("backup_streamed"));
+				progress.setTablespaceTotal(rs.getLong("tablespaces_total"));
+				progress.setTablespaceStreamed(rs.getLong("tablespaces_streamed"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query basebackup progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves ongoing COPY progress for the specified instance (PostgreSQL 14+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of copy progress entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.CopyProgress> getCopyProgress(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.CopyProgress> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 140000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    p.pid,
+			    d.datname as database,
+			    n.nspname as schema_name,
+			    c.relname as table_name,
+			    p.command,
+			    p.type,
+			    p.bytes_processed,
+			    p.bytes_total,
+			    p.tuples_processed,
+			    p.tuples_excluded
+			FROM pg_stat_progress_copy p
+			JOIN pg_database d ON p.datid = d.oid
+			LEFT JOIN pg_class c ON p.relid = c.oid
+			LEFT JOIN pg_namespace n ON c.relnamespace = n.oid
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var progress = new com.bovinemagnet.pgconsole.model.CopyProgress();
+				progress.setPid(rs.getInt("pid"));
+				progress.setDatabase(rs.getString("database"));
+				progress.setSchemaName(rs.getString("schema_name"));
+				progress.setTableName(rs.getString("table_name"));
+				progress.setCommand(rs.getString("command"));
+				progress.setType(rs.getString("type"));
+				progress.setBytesProcessed(rs.getLong("bytes_processed"));
+				progress.setBytesTotal(rs.getLong("bytes_total"));
+				progress.setTuplesProcessed(rs.getLong("tuples_processed"));
+				progress.setTuplesExcluded(rs.getLong("tuples_excluded"));
+				progress.calculateProgress();
+				results.add(progress);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query copy progress on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== I/O Statistics ==========
+
+	/**
+	 * Retrieves I/O statistics for the specified instance (PostgreSQL 16+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of I/O statistics entries
+	 */
+	public List<com.bovinemagnet.pgconsole.model.IoStatistics> getIoStatistics(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.IoStatistics> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 160000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    backend_type,
+			    object,
+			    context,
+			    reads,
+			    read_time,
+			    writes,
+			    write_time,
+			    writebacks,
+			    writeback_time,
+			    extends,
+			    extend_time,
+			    hits,
+			    evictions,
+			    reuses,
+			    fsyncs,
+			    fsync_time,
+			    stats_reset
+			FROM pg_stat_io
+			ORDER BY backend_type, object, context
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var stats = new com.bovinemagnet.pgconsole.model.IoStatistics();
+				stats.setBackendType(rs.getString("backend_type"));
+				stats.setObject(rs.getString("object"));
+				stats.setContext(rs.getString("context"));
+				stats.setReads(rs.getLong("reads"));
+				stats.setReadTime(rs.getDouble("read_time"));
+				stats.setWrites(rs.getLong("writes"));
+				stats.setWriteTime(rs.getDouble("write_time"));
+				stats.setWritebacks(rs.getLong("writebacks"));
+				stats.setWritebackTime(rs.getDouble("writeback_time"));
+				stats.setExtends(rs.getLong("extends"));
+				stats.setExtendTime(rs.getDouble("extend_time"));
+				stats.setHits(rs.getLong("hits"));
+				stats.setEvictions(rs.getLong("evictions"));
+				stats.setReuses(rs.getLong("reuses"));
+				stats.setFsyncs(rs.getLong("fsyncs"));
+				stats.setFsyncTime(rs.getDouble("fsync_time"));
+				Timestamp statsReset = rs.getTimestamp("stats_reset");
+				stats.setStatsReset(statsReset != null ? statsReset.toInstant() : null);
+				results.add(stats);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query I/O statistics on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Function Performance ==========
+
+	/**
+	 * Retrieves function performance statistics for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of function statistics
+	 */
+	public List<com.bovinemagnet.pgconsole.model.FunctionStats> getFunctionStats(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.FunctionStats> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    funcid,
+			    schemaname,
+			    funcname,
+			    calls,
+			    total_time,
+			    self_time
+			FROM pg_stat_user_functions
+			ORDER BY total_time DESC
+			LIMIT 100
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var stats = new com.bovinemagnet.pgconsole.model.FunctionStats();
+				stats.setFuncid(rs.getLong("funcid"));
+				stats.setSchemaName(rs.getString("schemaname"));
+				stats.setFuncName(rs.getString("funcname"));
+				stats.setCalls(rs.getLong("calls"));
+				stats.setTotalTime(rs.getDouble("total_time"));
+				stats.setSelfTime(rs.getDouble("self_time"));
+				stats.calculateMeanTime();
+				results.add(stats);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query function statistics on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Config File Settings ==========
+
+	/**
+	 * Retrieves configuration file settings for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of config file settings
+	 */
+	public List<com.bovinemagnet.pgconsole.model.ConfigFileSetting> getConfigFileSettings(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.ConfigFileSetting> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    sourcefile,
+			    sourceline,
+			    seqno,
+			    name,
+			    setting,
+			    applied,
+			    error
+			FROM pg_file_settings
+			ORDER BY sourcefile, sourceline
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var setting = new com.bovinemagnet.pgconsole.model.ConfigFileSetting();
+				setting.setSourcefile(rs.getString("sourcefile"));
+				setting.setSourceline(rs.getInt("sourceline"));
+				setting.setSeqno(rs.getInt("seqno"));
+				setting.setName(rs.getString("name"));
+				setting.setSetting(rs.getString("setting"));
+				setting.setApplied(rs.getBoolean("applied"));
+				setting.setError(rs.getString("error"));
+				results.add(setting);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query config file settings on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Prepared Statements ==========
+
+	/**
+	 * Retrieves prepared statements for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of prepared statements
+	 */
+	public List<com.bovinemagnet.pgconsole.model.PreparedStatementInfo> getPreparedStatements(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.PreparedStatementInfo> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    name,
+			    statement,
+			    prepare_time,
+			    parameter_types::text,
+			    from_sql
+			FROM pg_prepared_statements
+			ORDER BY prepare_time DESC
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var info = new com.bovinemagnet.pgconsole.model.PreparedStatementInfo();
+				info.setName(rs.getString("name"));
+				info.setStatement(rs.getString("statement"));
+				Timestamp prepareTime = rs.getTimestamp("prepare_time");
+				info.setPrepareTime(prepareTime != null ? prepareTime.toInstant() : null);
+				info.setParameterTypes(rs.getString("parameter_types"));
+				info.setFromSql(rs.getBoolean("from_sql"));
+				results.add(info);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query prepared statements on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	/**
+	 * Retrieves open cursors for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of open cursors
+	 */
+	public List<com.bovinemagnet.pgconsole.model.OpenCursor> getOpenCursors(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.OpenCursor> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    name,
+			    statement,
+			    is_holdable,
+			    is_binary,
+			    is_scrollable,
+			    creation_time
+			FROM pg_cursors
+			ORDER BY creation_time DESC
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var cursor = new com.bovinemagnet.pgconsole.model.OpenCursor();
+				cursor.setName(rs.getString("name"));
+				cursor.setStatement(rs.getString("statement"));
+				cursor.setHoldable(rs.getBoolean("is_holdable"));
+				cursor.setBinary(rs.getBoolean("is_binary"));
+				cursor.setScrollable(rs.getBoolean("is_scrollable"));
+				Timestamp creationTime = rs.getTimestamp("creation_time");
+				cursor.setCreationTime(creationTime != null ? creationTime.toInstant() : null);
+				results.add(cursor);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query open cursors on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Materialised Views ==========
+
+	/**
+	 * Retrieves materialised views for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of materialised views
+	 */
+	public List<com.bovinemagnet.pgconsole.model.MaterialisedView> getMaterialisedViews(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.MaterialisedView> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    m.schemaname,
+			    m.matviewname,
+			    m.matviewowner,
+			    m.tablespace,
+			    m.hasindexes,
+			    m.ispopulated,
+			    m.definition,
+			    pg_relation_size(c.oid) as size_bytes,
+			    pg_size_pretty(pg_relation_size(c.oid)) as size_formatted
+			FROM pg_matviews m
+			JOIN pg_class c ON c.relname = m.matviewname
+			JOIN pg_namespace n ON c.relnamespace = n.oid AND n.nspname = m.schemaname
+			WHERE m.schemaname NOT IN ('pg_catalog', 'information_schema')
+			ORDER BY pg_relation_size(c.oid) DESC
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var mv = new com.bovinemagnet.pgconsole.model.MaterialisedView();
+				mv.setSchemaName(rs.getString("schemaname"));
+				mv.setMatviewName(rs.getString("matviewname"));
+				mv.setMatviewOwner(rs.getString("matviewowner"));
+				mv.setTablespace(rs.getString("tablespace"));
+				mv.setHasIndexes(rs.getBoolean("hasindexes"));
+				mv.setIspopulated(rs.getBoolean("ispopulated"));
+				mv.setDefinition(rs.getString("definition"));
+				mv.setSizeBytes(rs.getLong("size_bytes"));
+				mv.setSizeFormatted(rs.getString("size_formatted"));
+				results.add(mv);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query materialised views on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Sequences ==========
+
+	/**
+	 * Retrieves sequences with usage information for the specified instance (PostgreSQL 10+).
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of sequence information
+	 */
+	public List<com.bovinemagnet.pgconsole.model.SequenceInfo> getSequences(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.SequenceInfo> results = new ArrayList<>();
+		if (getPostgresVersionNum(instanceName) < 100000) {
+			return results;
+		}
+
+		String sql = """
+			SELECT
+			    schemaname,
+			    sequencename,
+			    sequenceowner,
+			    data_type,
+			    start_value,
+			    min_value,
+			    max_value,
+			    increment_by,
+			    cycle,
+			    cache_size,
+			    last_value
+			FROM pg_sequences
+			WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+			ORDER BY schemaname, sequencename
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var seq = new com.bovinemagnet.pgconsole.model.SequenceInfo();
+				seq.setSchemaName(rs.getString("schemaname"));
+				seq.setSequenceName(rs.getString("sequencename"));
+				seq.setSequenceOwner(rs.getString("sequenceowner"));
+				seq.setDataType(rs.getString("data_type"));
+				seq.setStartValue(rs.getBigDecimal("start_value") != null ? rs.getBigDecimal("start_value").toBigInteger() : null);
+				seq.setMinValue(rs.getBigDecimal("min_value") != null ? rs.getBigDecimal("min_value").toBigInteger() : null);
+				seq.setMaxValue(rs.getBigDecimal("max_value") != null ? rs.getBigDecimal("max_value").toBigInteger() : null);
+				seq.setIncrementBy(rs.getBigDecimal("increment_by") != null ? rs.getBigDecimal("increment_by").toBigInteger() : null);
+				seq.setCycle(rs.getBoolean("cycle"));
+				seq.setCacheSize(rs.getLong("cache_size"));
+				seq.setLastValue(rs.getBigDecimal("last_value") != null ? rs.getBigDecimal("last_value").toBigInteger() : null);
+				seq.calculateUsagePercent();
+				results.add(seq);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query sequences on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Extensions ==========
+
+	/**
+	 * Retrieves installed and available extensions for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return list of extension information
+	 */
+	public List<com.bovinemagnet.pgconsole.model.ExtensionInfo> getExtensions(String instanceName) {
+		List<com.bovinemagnet.pgconsole.model.ExtensionInfo> results = new ArrayList<>();
+
+		String sql = """
+			SELECT
+			    a.name,
+			    a.default_version,
+			    e.extversion as installed_version,
+			    a.comment,
+			    n.nspname as schema,
+			    e.extrelocatable as relocatable,
+			    (e.extversion IS NOT NULL) as installed
+			FROM pg_available_extensions a
+			LEFT JOIN pg_extension e ON a.name = e.extname
+			LEFT JOIN pg_namespace n ON e.extnamespace = n.oid
+			ORDER BY (e.extversion IS NOT NULL) DESC, a.name
+			""";
+
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			while (rs.next()) {
+				var ext = new com.bovinemagnet.pgconsole.model.ExtensionInfo();
+				ext.setName(rs.getString("name"));
+				ext.setDefaultVersion(rs.getString("default_version"));
+				ext.setInstalledVersion(rs.getString("installed_version"));
+				ext.setComment(rs.getString("comment"));
+				ext.setSchema(rs.getString("schema"));
+				ext.setRelocatable(rs.getBoolean("relocatable"));
+				ext.setInstalled(rs.getBoolean("installed"));
+				ext.checkUpgradeAvailable();
+				results.add(ext);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not query extensions on %s: %s", instanceName, e.getMessage());
+		}
+		return results;
+	}
+
+	// ========== Version Checking ==========
+
+	/**
+	 * Retrieves the PostgreSQL server version number for the specified instance.
+	 *
+	 * @param instanceName the name of the PostgreSQL instance to query
+	 * @return version number as integer (e.g., 140000 for 14.0, 160000 for 16.0)
+	 */
+	public int getPostgresVersionNum(String instanceName) {
+		String sql = "SHOW server_version_num";
+		try (Connection conn = getDataSource(instanceName).getConnection();
+		     Statement stmt = conn.createStatement();
+		     ResultSet rs = stmt.executeQuery(sql)) {
+			if (rs.next()) {
+				return rs.getInt(1);
+			}
+		} catch (SQLException e) {
+			LOG.warnf("Could not get PostgreSQL version on %s: %s", instanceName, e.getMessage());
+		}
+		return 0;
+	}
 }
