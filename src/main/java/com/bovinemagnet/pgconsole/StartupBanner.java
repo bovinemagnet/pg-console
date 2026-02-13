@@ -34,6 +34,12 @@ public class StartupBanner {
 	@ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0")
 	String appVersion;
 
+	@ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "unknown")
+	String jdbcUrl;
+
+	@ConfigProperty(name = "quarkus.datasource.username", defaultValue = "unknown")
+	String dbUser;
+
 	@Inject
 	FeatureToggleService featureToggleService;
 
@@ -57,6 +63,13 @@ public class StartupBanner {
 		banner.append("╠══════════════════════════════════════════════════════════════════════════════╣\n");
 		banner.append("║                                                                              ║\n");
 		banner.append(String.format("║   %-72s   ║%n", "Application running at: " + baseUrl));
+		banner.append("║                                                                              ║\n");
+		banner.append("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+		banner.append("║                                                                              ║\n");
+		banner.append("║   DATABASE                                                                   ║\n");
+		banner.append("║   ────────                                                                   ║\n");
+		banner.append(String.format("║     JDBC URL:  %-59s   ║%n", jdbcUrl));
+		banner.append(String.format("║     User:      %-59s   ║%n", dbUser));
 		banner.append("║                                                                              ║\n");
 		banner.append("╠══════════════════════════════════════════════════════════════════════════════╣\n");
 
