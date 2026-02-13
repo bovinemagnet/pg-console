@@ -1,0 +1,253 @@
+{#include base}
+{#title}Live Sparklines - PostgreSQL Console{/title}
+
+<div id="refreshable-content" hx-get="/diagnostics/live-sparklines?instance={currentInstance ?: 'default'}&database={selectedDatabase ?: 'all'}&hours={selectedHours ?: 1}" hx-trigger="refresh" hx-swap="innerHTML" hx-select="#refreshable-content > *">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-activity me-2"></i>Live Sparklines</h1>
+        <p class="text-muted">Server-side SVG sparklines for key PostgreSQL metrics with historical trends</p>
+    </div>
+    <div class="col-auto d-flex align-items-start gap-2">
+        <!-- Database Selector -->
+        <select class="form-select form-select-sm" style="width: auto;"
+                hx-get="/diagnostics/live-sparklines"
+                hx-target="#refreshable-content"
+                hx-swap="innerHTML"
+                hx-select="#refreshable-content > *"
+                hx-include="[name='instance'], [name='hours']"
+                name="database">
+            <option value="all" {#if selectedDatabase == 'all'}selected{/if}>All Databases (System)</option>
+            {#for db in databaseList}
+            <option value="{db}" {#if selectedDatabase == db}selected{/if}>{db}</option>
+            {/for}
+        </select>
+        <input type="hidden" name="instance" value="{currentInstance ?: 'default'}" />
+
+        <!-- Time Window Selector -->
+        <select class="form-select form-select-sm" style="width: auto;"
+                hx-get="/diagnostics/live-sparklines"
+                hx-target="#refreshable-content"
+                hx-swap="innerHTML"
+                hx-select="#refreshable-content > *"
+                hx-include="[name='instance'], [name='database']"
+                name="hours">
+            <option value="1" {#if selectedHours == 1}selected{/if}>1 hour</option>
+            <option value="3" {#if selectedHours == 3}selected{/if}>3 hours</option>
+            <option value="6" {#if selectedHours == 6}selected{/if}>6 hours</option>
+            <option value="24" {#if selectedHours == 24}selected{/if}>24 hours</option>
+        </select>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- System-Level: Connections                  -->
+<!-- ========================================== -->
+<h5 class="mb-3"><i class="bi bi-plug me-1"></i>Connections</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Total Connections</h6>
+                {connectionsSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Active Queries</h6>
+                {activeQueriesSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Blocked Queries</h6>
+                {blockedQueriesSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Idle Connections</h6>
+                {idleConnectionsSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cache Hit Ratio (system-level) -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Cache Hit Ratio %</h6>
+                {cacheHitRatioSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- WAL Activity                               -->
+<!-- ========================================== -->
+<h5 class="mb-3"><i class="bi bi-journal-arrow-up me-1"></i>WAL Activity</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">WAL Bytes/sec</h6>
+                {walBytesSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">WAL Records/sec</h6>
+                {walRecordsSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- Checkpoints & Buffers                      -->
+<!-- ========================================== -->
+<h5 class="mb-3"><i class="bi bi-save me-1"></i>Checkpoints &amp; Buffers</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Timed Checkpoints</h6>
+                {checkpointsTimedSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Requested Checkpoints</h6>
+                {checkpointsReqSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Buffers Allocated/sec</h6>
+                {buffersAllocSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- Per-Database Metrics (when selected)       -->
+<!-- ========================================== -->
+{#if showDatabase}
+<hr>
+<h4 class="mb-3"><i class="bi bi-database me-1"></i>Database: {selectedDatabase}</h4>
+
+<!-- Transactions -->
+<h5 class="mb-3"><i class="bi bi-arrow-left-right me-1"></i>Transactions</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Commits/sec</h6>
+                {dbCommitRateSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Rollbacks/sec</h6>
+                {dbRollbackRateSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Connections</h6>
+                {dbConnectionsSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tuple Operations -->
+<h5 class="mb-3"><i class="bi bi-list-ol me-1"></i>Tuple Operations</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Inserts/sec</h6>
+                {dbTupleInsertSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Updates/sec</h6>
+                {dbTupleUpdateSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Deletes/sec</h6>
+                {dbTupleDeleteSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Fetched/sec</h6>
+                {dbTupleFetchSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cache & Buffers -->
+<h5 class="mb-3"><i class="bi bi-speedometer me-1"></i>Cache &amp; Buffers</h5>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Cache Hits/sec</h6>
+                {dbCacheHitsSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Disk Reads/sec</h6>
+                {dbDiskReadsSparkline.raw}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">Cache Hit Ratio %</h6>
+                {dbCacheHitRatioSparkline.raw}
+            </div>
+        </div>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

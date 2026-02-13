@@ -2,6 +2,7 @@ package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
+import com.bovinemagnet.pgconsole.model.InfrastructureMetricsHistory;
 import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
 import com.bovinemagnet.pgconsole.repository.HistoryRepository;
@@ -67,6 +68,7 @@ public class MetricsSamplerService {
                 sampleSystemMetrics(instanceId);
                 sampleQueryMetrics(instanceId);
                 sampleDatabaseMetrics(instanceId);
+                sampleInfrastructureMetrics(instanceId);
 
                 // Check alerting thresholds
                 if (config.alerting().enabled()) {
@@ -291,6 +293,109 @@ public class MetricsSamplerService {
             }
         } catch (SQLException e) {
             LOG.warnf("Failed to sample database metrics for %s: %s", instanceId, e.getMessage());
+        }
+    }
+
+    /**
+     * Samples infrastructure-level metrics (WAL, checkpoints, buffers) for a single instance.
+     * <p>
+     * Detects PostgreSQL version and queries the appropriate system views:
+     * {@code pg_stat_wal} (PG14+), {@code pg_stat_bgwriter} (PG12-16),
+     * and {@code pg_stat_checkpointer} (PG17+).
+     *
+     * @param instanceId the database instance identifier
+     */
+    private void sampleInfrastructureMetrics(String instanceId) {
+        InfrastructureMetricsHistory metrics = new InfrastructureMetricsHistory();
+        metrics.setSampledAt(Instant.now());
+
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection()) {
+            // Detect PG version
+            int pgVersionNum = 0;
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT current_setting('server_version_num')::int as version_num")) {
+                if (rs.next()) {
+                    pgVersionNum = rs.getInt("version_num");
+                }
+            }
+
+            // WAL stats (PG14+)
+            if (pgVersionNum >= 140000) {
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT wal_records, wal_fpi, wal_bytes, wal_buffers_full, " +
+                             "wal_write, wal_sync, wal_write_time, wal_sync_time FROM pg_stat_wal")) {
+                    if (rs.next()) {
+                        metrics.setWalRecords(getLongOrNull(rs, "wal_records"));
+                        metrics.setWalFpi(getLongOrNull(rs, "wal_fpi"));
+                        metrics.setWalBytes(getLongOrNull(rs, "wal_bytes"));
+                        metrics.setWalBuffersFull(getLongOrNull(rs, "wal_buffers_full"));
+                        metrics.setWalWrite(getLongOrNull(rs, "wal_write"));
+                        metrics.setWalSync(getLongOrNull(rs, "wal_sync"));
+                        metrics.setWalWriteTime(getDoubleOrNull(rs, "wal_write_time"));
+                        metrics.setWalSyncTime(getDoubleOrNull(rs, "wal_sync_time"));
+                    }
+                }
+            }
+
+            // Checkpoint and buffer stats
+            if (pgVersionNum >= 170000) {
+                // PG17+: checkpoint stats in pg_stat_checkpointer
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT num_timed as checkpoints_timed, num_requested as checkpoints_req, " +
+                             "write_time as checkpoint_write_time, sync_time as checkpoint_sync_time, " +
+                             "buffers_written as buffers_checkpoint FROM pg_stat_checkpointer")) {
+                    if (rs.next()) {
+                        metrics.setCheckpointsTimed(getLongOrNull(rs, "checkpoints_timed"));
+                        metrics.setCheckpointsReq(getLongOrNull(rs, "checkpoints_req"));
+                        metrics.setCheckpointWriteTime(getDoubleOrNull(rs, "checkpoint_write_time"));
+                        metrics.setCheckpointSyncTime(getDoubleOrNull(rs, "checkpoint_sync_time"));
+                        metrics.setBuffersCheckpoint(getLongOrNull(rs, "buffers_checkpoint"));
+                    }
+                }
+                // Buffer stats from pg_stat_bgwriter
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT buffers_clean, buffers_alloc FROM pg_stat_bgwriter")) {
+                    if (rs.next()) {
+                        metrics.setBuffersClean(getLongOrNull(rs, "buffers_clean"));
+                        metrics.setBuffersAlloc(getLongOrNull(rs, "buffers_alloc"));
+                    }
+                }
+                // Backend buffers from pg_stat_io
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT COALESCE(SUM(writes), 0) as buffers_backend " +
+                             "FROM pg_stat_io WHERE backend_type = 'client backend'")) {
+                    if (rs.next()) {
+                        metrics.setBuffersBackend(getLongOrNull(rs, "buffers_backend"));
+                    }
+                }
+            } else {
+                // PG12-16: all stats in pg_stat_bgwriter
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT checkpoints_timed, checkpoints_req, " +
+                             "checkpoint_write_time, checkpoint_sync_time, " +
+                             "buffers_checkpoint, buffers_clean, buffers_alloc, " +
+                             "buffers_backend FROM pg_stat_bgwriter")) {
+                    if (rs.next()) {
+                        metrics.setCheckpointsTimed(getLongOrNull(rs, "checkpoints_timed"));
+                        metrics.setCheckpointsReq(getLongOrNull(rs, "checkpoints_req"));
+                        metrics.setCheckpointWriteTime(getDoubleOrNull(rs, "checkpoint_write_time"));
+                        metrics.setCheckpointSyncTime(getDoubleOrNull(rs, "checkpoint_sync_time"));
+                        metrics.setBuffersCheckpoint(getLongOrNull(rs, "buffers_checkpoint"));
+                        metrics.setBuffersClean(getLongOrNull(rs, "buffers_clean"));
+                        metrics.setBuffersAlloc(getLongOrNull(rs, "buffers_alloc"));
+                        metrics.setBuffersBackend(getLongOrNull(rs, "buffers_backend"));
+                    }
+                }
+            }
+
+            historyRepository.saveInfrastructureMetrics(instanceId, metrics);
+        } catch (SQLException e) {
+            LOG.warnf("Failed to sample infrastructure metrics for %s: %s", instanceId, e.getMessage());
         }
     }
 

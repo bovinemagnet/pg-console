@@ -1344,6 +1344,12 @@
                         <span class="nav-link-text">Live Charts</span>
                     </a>
                     {/if}
+                    {#if toggles.liveSparklines}
+                    <a class="nav-link" href="/diagnostics/live-sparklines?instance={currentInstance ?: 'default'}" data-title="Live Sparklines">
+                        <i class="bi bi-activity" aria-hidden="true"></i>
+                        <span class="nav-link-text">Live Sparklines</span>
+                    </a>
+                    {/if}
                     {#if toggles.xidWraparound}
                     <a class="nav-link" href="/diagnostics/xid-wraparound?instance={currentInstance ?: 'default'}" data-title="XID Wraparound">
                         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>

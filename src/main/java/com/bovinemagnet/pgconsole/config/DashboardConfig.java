@@ -732,5 +732,14 @@ public interface DashboardConfig {
 		@WithName("xid-wraparound")
 		@WithDefault("true")
 		boolean xidWraparoundEnabled();
+
+		/**
+		 * Enable or disable the Live Sparklines page (/diagnostics/live-sparklines).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("live-sparklines")
+		@WithDefault("true")
+		boolean liveSparklinesEnabled();
 	}
 }

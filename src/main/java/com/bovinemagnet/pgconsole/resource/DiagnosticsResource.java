@@ -13,6 +13,7 @@ import com.bovinemagnet.pgconsole.model.XidWraparound;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
+import com.bovinemagnet.pgconsole.service.SparklineService;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -104,7 +105,13 @@ public class DiagnosticsResource {
     Template xidWraparound;
 
     @Inject
+    Template liveSparklines;
+
+    @Inject
     PostgresService postgresService;
+
+    @Inject
+    SparklineService sparklineService;
 
     @Inject
     DataSourceManager dataSourceManager;
@@ -523,5 +530,103 @@ public class DiagnosticsResource {
                 .data("criticalPercent", xidCriticalPercent)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
+    }
+
+    // ========================================
+    // Live Sparklines Dashboard
+    // ========================================
+
+    /**
+     * Displays the Live Sparklines dashboard with server-side SVG sparklines
+     * for connections, transactions, tuple operations, cache/buffers, WAL activity,
+     * and checkpoints.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param database the database name filter ("all" for system-level only)
+     * @param hours    the time window in hours
+     * @return rendered template
+     */
+    @GET
+    @Path("/live-sparklines")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance liveSparklines(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") @DefaultValue("all") String database,
+            @QueryParam("hours") @DefaultValue("1") int hours) {
+        featureToggleService.requirePageEnabled("live-sparklines");
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+
+        // Clamp hours to valid range
+        if (hours < 1) hours = 1;
+        if (hours > 24) hours = 24;
+
+        int sparkWidth = 200;
+        int sparkHeight = 40;
+
+        // System-level sparklines (always shown)
+        String connectionsSparkline = sparklineService.getConnectionsSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String activeQueriesSparkline = sparklineService.getActiveQueriesSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String blockedQueriesSparkline = sparklineService.getBlockedQueriesSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String idleConnectionsSparkline = sparklineService.getIdleConnectionsSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String cacheHitRatioSparkline = sparklineService.getCacheHitRatioSparkline(instanceName, hours, sparkWidth, sparkHeight);
+
+        // WAL sparklines (always shown)
+        String walBytesSparkline = sparklineService.getWalBytesRateSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String walRecordsSparkline = sparklineService.getWalRecordsRateSparkline(instanceName, hours, sparkWidth, sparkHeight);
+
+        // Checkpoint sparklines (always shown)
+        String checkpointsTimedSparkline = sparklineService.getCheckpointsTimedSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String checkpointsReqSparkline = sparklineService.getCheckpointsReqSparkline(instanceName, hours, sparkWidth, sparkHeight);
+        String buffersAllocSparkline = sparklineService.getBuffersAllocRateSparkline(instanceName, hours, sparkWidth, sparkHeight);
+
+        // Database list for selector
+        List<String> databaseList = postgresService.getDatabaseList(instanceName);
+
+        // Per-database sparklines (when a specific database is selected)
+        boolean showDatabase = !"all".equals(database) && databaseList.contains(database);
+
+        var templateInstance = liveSparklines.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "live-sparklines")
+                .data("pageTitle", "Live Sparklines")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("databaseList", databaseList)
+                .data("selectedDatabase", database)
+                .data("selectedHours", hours)
+                .data("showDatabase", showDatabase)
+                // System-level sparklines
+                .data("connectionsSparkline", connectionsSparkline)
+                .data("activeQueriesSparkline", activeQueriesSparkline)
+                .data("blockedQueriesSparkline", blockedQueriesSparkline)
+                .data("idleConnectionsSparkline", idleConnectionsSparkline)
+                .data("cacheHitRatioSparkline", cacheHitRatioSparkline)
+                // WAL sparklines
+                .data("walBytesSparkline", walBytesSparkline)
+                .data("walRecordsSparkline", walRecordsSparkline)
+                // Checkpoint sparklines
+                .data("checkpointsTimedSparkline", checkpointsTimedSparkline)
+                .data("checkpointsReqSparkline", checkpointsReqSparkline)
+                .data("buffersAllocSparkline", buffersAllocSparkline)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
+
+        if (showDatabase) {
+            templateInstance
+                .data("dbCommitRateSparkline", sparklineService.getDatabaseCommitRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbRollbackRateSparkline", sparklineService.getDatabaseRollbackRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbConnectionsSparkline", sparklineService.getDatabaseConnectionsSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbTupleInsertSparkline", sparklineService.getDatabaseTupleInsertRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbTupleUpdateSparkline", sparklineService.getDatabaseTupleUpdateRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbTupleDeleteSparkline", sparklineService.getDatabaseTupleDeleteRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbTupleFetchSparkline", sparklineService.getDatabaseTupleFetchRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbCacheHitsSparkline", sparklineService.getDatabaseBlocksHitRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbDiskReadsSparkline", sparklineService.getDatabaseBlocksReadRateSparkline(instanceName, database, hours, sparkWidth, sparkHeight))
+                .data("dbCacheHitRatioSparkline", sparklineService.getDatabaseCacheHitRatioSparkline(instanceName, database, hours, sparkWidth, sparkHeight));
+        }
+
+        return templateInstance;
     }
 }

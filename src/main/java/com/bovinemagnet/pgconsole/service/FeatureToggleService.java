@@ -654,6 +654,15 @@ public class FeatureToggleService {
         return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().xidWraparoundEnabled();
     }
 
+    /**
+     * Checks if the Live Sparklines page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isLiveSparklinesEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().liveSparklinesEnabled();
+    }
+
     // ========================================
     // Guard methods
     // ========================================
@@ -741,6 +750,7 @@ public class FeatureToggleService {
             case "correlation" -> isCorrelationEnabled();
             case "live-charts" -> isLiveChartsEnabled();
             case "xid-wraparound" -> isXidWraparoundEnabled();
+            case "live-sparklines" -> isLiveSparklinesEnabled();
             // System (always enabled)
             case "about" -> true;
             default -> true;
@@ -839,6 +849,7 @@ public class FeatureToggleService {
         toggles.put("correlation", isCorrelationEnabled());
         toggles.put("liveCharts", isLiveChartsEnabled());
         toggles.put("xidWraparound", isXidWraparoundEnabled());
+        toggles.put("liveSparklines", isLiveSparklinesEnabled());
 
         return toggles;
     }

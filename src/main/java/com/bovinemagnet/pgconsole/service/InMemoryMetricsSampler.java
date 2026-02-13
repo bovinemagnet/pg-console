@@ -1,6 +1,8 @@
 package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
+import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
+import com.bovinemagnet.pgconsole.model.InfrastructureMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -88,6 +90,8 @@ public class InMemoryMetricsSampler {
         for (String instanceId : instances) {
             try {
                 sampleSystemMetrics(instanceId);
+                sampleDatabaseMetrics(instanceId);
+                sampleInfrastructureMetrics(instanceId);
 
                 // Also check alerting thresholds even in schema-free mode
                 if (config.alerting().enabled()) {
@@ -134,6 +138,165 @@ public class InMemoryMetricsSampler {
             }
         } catch (SQLException e) {
             LOG.warnf("Failed to sample system metrics for %s: %s", instanceId, e.getMessage());
+        }
+    }
+
+    /**
+     * Samples database-level metrics for a single instance and stores in memory.
+     *
+     * @param instanceId the database instance identifier
+     */
+    private void sampleDatabaseMetrics(String instanceId) {
+        String sql = """
+            SELECT
+                d.datname,
+                d.numbackends,
+                d.xact_commit,
+                d.xact_rollback,
+                d.blks_hit,
+                d.blks_read,
+                CASE WHEN d.blks_hit + d.blks_read > 0
+                    THEN (d.blks_hit * 100.0) / (d.blks_hit + d.blks_read)
+                    ELSE 100.0 END as cache_hit_ratio,
+                d.tup_returned,
+                d.tup_fetched,
+                d.tup_inserted,
+                d.tup_updated,
+                d.tup_deleted,
+                d.deadlocks,
+                d.conflicts,
+                d.temp_files,
+                d.temp_bytes,
+                pg_database_size(d.datname) as database_size_bytes
+            FROM pg_stat_database d
+            JOIN pg_database db ON d.datid = db.oid
+            WHERE db.datistemplate = false
+            """;
+
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                DatabaseMetricsHistory metrics = new DatabaseMetricsHistory();
+                metrics.setSampledAt(Instant.now());
+                metrics.setDatabaseName(rs.getString("datname"));
+                metrics.setNumBackends(rs.getInt("numbackends"));
+                metrics.setXactCommit(rs.getLong("xact_commit"));
+                metrics.setXactRollback(rs.getLong("xact_rollback"));
+                metrics.setBlksHit(rs.getLong("blks_hit"));
+                metrics.setBlksRead(rs.getLong("blks_read"));
+                metrics.setCacheHitRatio(getDoubleOrNull(rs, "cache_hit_ratio"));
+                metrics.setTupReturned(getLongOrNull(rs, "tup_returned"));
+                metrics.setTupFetched(getLongOrNull(rs, "tup_fetched"));
+                metrics.setTupInserted(getLongOrNull(rs, "tup_inserted"));
+                metrics.setTupUpdated(getLongOrNull(rs, "tup_updated"));
+                metrics.setTupDeleted(getLongOrNull(rs, "tup_deleted"));
+                metrics.setDeadlocks(getLongOrNull(rs, "deadlocks"));
+                metrics.setConflicts(getLongOrNull(rs, "conflicts"));
+                metrics.setTempFiles(getLongOrNull(rs, "temp_files"));
+                metrics.setTempBytes(getLongOrNull(rs, "temp_bytes"));
+                metrics.setDatabaseSizeBytes(getLongOrNull(rs, "database_size_bytes"));
+
+                metricsStore.addDatabaseMetrics(instanceId, metrics.getDatabaseName(), metrics);
+            }
+        } catch (SQLException e) {
+            LOG.warnf("Failed to sample database metrics for %s: %s", instanceId, e.getMessage());
+        }
+    }
+
+    /**
+     * Samples infrastructure-level metrics for a single instance and stores in memory.
+     *
+     * @param instanceId the database instance identifier
+     */
+    private void sampleInfrastructureMetrics(String instanceId) {
+        InfrastructureMetricsHistory metrics = new InfrastructureMetricsHistory();
+        metrics.setSampledAt(Instant.now());
+
+        try (Connection conn = dataSourceManager.getDataSource(instanceId).getConnection()) {
+            // Detect PG version
+            int pgVersionNum = 0;
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT current_setting('server_version_num')::int as version_num")) {
+                if (rs.next()) {
+                    pgVersionNum = rs.getInt("version_num");
+                }
+            }
+
+            // WAL stats (PG14+)
+            if (pgVersionNum >= 140000) {
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT wal_records, wal_fpi, wal_bytes, wal_buffers_full, " +
+                             "wal_write, wal_sync, wal_write_time, wal_sync_time FROM pg_stat_wal")) {
+                    if (rs.next()) {
+                        metrics.setWalRecords(getLongOrNull(rs, "wal_records"));
+                        metrics.setWalFpi(getLongOrNull(rs, "wal_fpi"));
+                        metrics.setWalBytes(getLongOrNull(rs, "wal_bytes"));
+                        metrics.setWalBuffersFull(getLongOrNull(rs, "wal_buffers_full"));
+                        metrics.setWalWrite(getLongOrNull(rs, "wal_write"));
+                        metrics.setWalSync(getLongOrNull(rs, "wal_sync"));
+                        metrics.setWalWriteTime(getDoubleOrNull(rs, "wal_write_time"));
+                        metrics.setWalSyncTime(getDoubleOrNull(rs, "wal_sync_time"));
+                    }
+                }
+            }
+
+            // Checkpoint and buffer stats
+            if (pgVersionNum >= 170000) {
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT num_timed as checkpoints_timed, num_requested as checkpoints_req, " +
+                             "write_time as checkpoint_write_time, sync_time as checkpoint_sync_time, " +
+                             "buffers_written as buffers_checkpoint FROM pg_stat_checkpointer")) {
+                    if (rs.next()) {
+                        metrics.setCheckpointsTimed(getLongOrNull(rs, "checkpoints_timed"));
+                        metrics.setCheckpointsReq(getLongOrNull(rs, "checkpoints_req"));
+                        metrics.setCheckpointWriteTime(getDoubleOrNull(rs, "checkpoint_write_time"));
+                        metrics.setCheckpointSyncTime(getDoubleOrNull(rs, "checkpoint_sync_time"));
+                        metrics.setBuffersCheckpoint(getLongOrNull(rs, "buffers_checkpoint"));
+                    }
+                }
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT buffers_clean, buffers_alloc FROM pg_stat_bgwriter")) {
+                    if (rs.next()) {
+                        metrics.setBuffersClean(getLongOrNull(rs, "buffers_clean"));
+                        metrics.setBuffersAlloc(getLongOrNull(rs, "buffers_alloc"));
+                    }
+                }
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT COALESCE(SUM(writes), 0) as buffers_backend " +
+                             "FROM pg_stat_io WHERE backend_type = 'client backend'")) {
+                    if (rs.next()) {
+                        metrics.setBuffersBackend(getLongOrNull(rs, "buffers_backend"));
+                    }
+                }
+            } else {
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(
+                             "SELECT checkpoints_timed, checkpoints_req, " +
+                             "checkpoint_write_time, checkpoint_sync_time, " +
+                             "buffers_checkpoint, buffers_clean, buffers_alloc, " +
+                             "buffers_backend FROM pg_stat_bgwriter")) {
+                    if (rs.next()) {
+                        metrics.setCheckpointsTimed(getLongOrNull(rs, "checkpoints_timed"));
+                        metrics.setCheckpointsReq(getLongOrNull(rs, "checkpoints_req"));
+                        metrics.setCheckpointWriteTime(getDoubleOrNull(rs, "checkpoint_write_time"));
+                        metrics.setCheckpointSyncTime(getDoubleOrNull(rs, "checkpoint_sync_time"));
+                        metrics.setBuffersCheckpoint(getLongOrNull(rs, "buffers_checkpoint"));
+                        metrics.setBuffersClean(getLongOrNull(rs, "buffers_clean"));
+                        metrics.setBuffersAlloc(getLongOrNull(rs, "buffers_alloc"));
+                        metrics.setBuffersBackend(getLongOrNull(rs, "buffers_backend"));
+                    }
+                }
+            }
+
+            metricsStore.addInfrastructureMetrics(instanceId, metrics);
+        } catch (SQLException e) {
+            LOG.warnf("Failed to sample infrastructure metrics for %s: %s", instanceId, e.getMessage());
         }
     }
 

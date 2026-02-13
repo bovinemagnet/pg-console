@@ -2,6 +2,7 @@ package com.bovinemagnet.pgconsole.repository;
 
 import com.bovinemagnet.pgconsole.config.MetadataDataSource;
 import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
+import com.bovinemagnet.pgconsole.model.InfrastructureMetricsHistory;
 import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.SystemMetricsHistory;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -426,6 +427,116 @@ public class HistoryRepository {
     }
 
     /**
+     * Saves an infrastructure metrics snapshot for an instance to the history database.
+     * <p>
+     * Stores WAL, checkpoint, and buffer statistics for historical trend analysis.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param metrics the infrastructure metrics snapshot to save
+     * @throws RuntimeException if database insert fails
+     */
+    public void saveInfrastructureMetrics(String instanceId, InfrastructureMetricsHistory metrics) {
+        String sql = """
+            INSERT INTO pgconsole.infrastructure_metrics_history (
+                instance_id, sampled_at,
+                wal_records, wal_fpi, wal_bytes, wal_buffers_full,
+                wal_write, wal_sync, wal_write_time, wal_sync_time,
+                checkpoints_timed, checkpoints_req,
+                checkpoint_write_time, checkpoint_sync_time,
+                buffers_checkpoint, buffers_clean, buffers_alloc, buffers_backend
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setObject(3, metrics.getWalRecords());
+            stmt.setObject(4, metrics.getWalFpi());
+            stmt.setObject(5, metrics.getWalBytes());
+            stmt.setObject(6, metrics.getWalBuffersFull());
+            stmt.setObject(7, metrics.getWalWrite());
+            stmt.setObject(8, metrics.getWalSync());
+            stmt.setObject(9, metrics.getWalWriteTime());
+            stmt.setObject(10, metrics.getWalSyncTime());
+            stmt.setObject(11, metrics.getCheckpointsTimed());
+            stmt.setObject(12, metrics.getCheckpointsReq());
+            stmt.setObject(13, metrics.getCheckpointWriteTime());
+            stmt.setObject(14, metrics.getCheckpointSyncTime());
+            stmt.setObject(15, metrics.getBuffersCheckpoint());
+            stmt.setObject(16, metrics.getBuffersClean());
+            stmt.setObject(17, metrics.getBuffersAlloc());
+            stmt.setObject(18, metrics.getBuffersBackend());
+
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save infrastructure metrics for " + instanceId, e);
+        }
+    }
+
+    /**
+     * Retrieves infrastructure metrics history for an instance over a specified time period.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param hours number of hours of history to retrieve
+     * @return list of infrastructure metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
+    public List<InfrastructureMetricsHistory> getInfrastructureMetricsHistory(String instanceId, int hours) {
+        List<InfrastructureMetricsHistory> history = new ArrayList<>();
+        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
+
+        String sql = """
+            SELECT id, sampled_at,
+                   wal_records, wal_fpi, wal_bytes, wal_buffers_full,
+                   wal_write, wal_sync, wal_write_time, wal_sync_time,
+                   checkpoints_timed, checkpoints_req,
+                   checkpoint_write_time, checkpoint_sync_time,
+                   buffers_checkpoint, buffers_clean, buffers_alloc, buffers_backend
+            FROM pgconsole.infrastructure_metrics_history
+            WHERE instance_id = ? AND sampled_at >= ?
+            ORDER BY sampled_at ASC
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(since));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    InfrastructureMetricsHistory m = new InfrastructureMetricsHistory();
+                    m.setId(rs.getLong("id"));
+                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setWalRecords(getLongOrNull(rs, "wal_records"));
+                    m.setWalFpi(getLongOrNull(rs, "wal_fpi"));
+                    m.setWalBytes(getLongOrNull(rs, "wal_bytes"));
+                    m.setWalBuffersFull(getLongOrNull(rs, "wal_buffers_full"));
+                    m.setWalWrite(getLongOrNull(rs, "wal_write"));
+                    m.setWalSync(getLongOrNull(rs, "wal_sync"));
+                    m.setWalWriteTime(getDoubleOrNull(rs, "wal_write_time"));
+                    m.setWalSyncTime(getDoubleOrNull(rs, "wal_sync_time"));
+                    m.setCheckpointsTimed(getLongOrNull(rs, "checkpoints_timed"));
+                    m.setCheckpointsReq(getLongOrNull(rs, "checkpoints_req"));
+                    m.setCheckpointWriteTime(getDoubleOrNull(rs, "checkpoint_write_time"));
+                    m.setCheckpointSyncTime(getDoubleOrNull(rs, "checkpoint_sync_time"));
+                    m.setBuffersCheckpoint(getLongOrNull(rs, "buffers_checkpoint"));
+                    m.setBuffersClean(getLongOrNull(rs, "buffers_clean"));
+                    m.setBuffersAlloc(getLongOrNull(rs, "buffers_alloc"));
+                    m.setBuffersBackend(getLongOrNull(rs, "buffers_backend"));
+                    history.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get infrastructure metrics history for " + instanceId, e);
+        }
+
+        return history;
+    }
+
+    /**
      * Deletes history data older than the specified retention period.
      * <p>
      * Removes old metrics from all history tables (system, query, and database)
@@ -442,7 +553,8 @@ public class HistoryRepository {
         String[] tables = {
             "pgconsole.system_metrics_history",
             "pgconsole.query_metrics_history",
-            "pgconsole.database_metrics_history"
+            "pgconsole.database_metrics_history",
+            "pgconsole.infrastructure_metrics_history"
         };
 
         try (Connection conn = dataSource.getConnection()) {
