@@ -1,0 +1,76 @@
+%% Metrics History Data Flow in pg-console
+%% Shows the flow from scheduled sampling to browser visualisation
+
+flowchart TD
+    %% Scheduled Sampler
+    Scheduler["Scheduled Sampler<br/>(every 5 seconds)"]
+
+    %% PostgreSQL System Views
+    subgraph PostgreSQL["PostgreSQL System Views"]
+        PgStatActivity["pg_stat_activity<br/>(active, idle, idle in transaction)"]
+        PgStatDatabase["pg_stat_database<br/>(commits, rollbacks, tuples, cache hits)"]
+    end
+
+    %% Application Layer
+    subgraph Application["Application Layer"]
+        PostgresService["PostgresService<br/>(queries system views)"]
+        HistoryPoint["LiveChartHistoryPoint<br/>(timestamped metrics)"]
+        HistoryStore["LiveChartHistoryStore<br/>(in-memory ConcurrentHashMap)"]
+        EvictionJob["Eviction Job<br/>(every 60 seconds)"]
+
+        subgraph APIEndpoints["API Endpoints"]
+            ConnAPI["/api/diagnostics/metrics-history/connections"]
+            TxnAPI["/api/diagnostics/metrics-history/transactions"]
+            TuplesAPI["/api/diagnostics/metrics-history/tuples"]
+            CacheAPI["/api/diagnostics/metrics-history/cache"]
+            ExportAPI["/api/diagnostics/metrics-history/export"]
+        end
+    end
+
+    %% Browser Layer
+    subgraph Browser["Browser (Chart.js)"]
+        ChartJS["Chart.js Rendering<br/>(4 charts with auto-refresh)"]
+        Refresh["Auto-refresh<br/>(every 10 seconds)"]
+    end
+
+    %% Data Flow
+    Scheduler -->|triggers| PostgresService
+    PostgresService -->|queries| PgStatActivity
+    PostgresService -->|queries| PgStatDatabase
+    PostgresService -->|creates| HistoryPoint
+    HistoryPoint -->|stored in| HistoryStore
+
+    %% Eviction
+    EvictionJob -->|removes entries<br/>older than 24h| HistoryStore
+
+    %% API serving
+    HistoryStore -->|time-window filter| ConnAPI
+    HistoryStore -->|time-window filter| TxnAPI
+    HistoryStore -->|time-window filter| TuplesAPI
+    HistoryStore -->|time-window filter| CacheAPI
+    HistoryStore -->|time-window filter| ExportAPI
+
+    %% Browser consumption
+    ConnAPI -->|HTTP GET| ChartJS
+    TxnAPI -->|HTTP GET| ChartJS
+    TuplesAPI -->|HTTP GET| ChartJS
+    CacheAPI -->|HTTP GET| ChartJS
+    ExportAPI -->|HTTP GET| ChartJS
+
+    ChartJS -->|triggers| Refresh
+    Refresh -.->|polls| ConnAPI
+
+    %% Styling
+    classDef scheduleClass fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef dbClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef serviceClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef storeClass fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef apiClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef browserClass fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+
+    class Scheduler scheduleClass
+    class PgStatActivity,PgStatDatabase dbClass
+    class PostgresService,HistoryPoint serviceClass
+    class HistoryStore,EvictionJob storeClass
+    class ConnAPI,TxnAPI,TuplesAPI,CacheAPI,ExportAPI apiClass
+    class ChartJS,Refresh browserClass

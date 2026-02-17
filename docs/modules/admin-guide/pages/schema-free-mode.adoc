@@ -90,7 +90,7 @@ Table statistics, bloat indicators, sequential vs. index scans, vacuum status.
 Per-database metrics, connection counts, transaction rates, cache statistics.
 
 **Diagnostics**::
-All diagnostic tools including pipeline risk, TOAST bloat, index redundancy, XID wraparound monitoring.
+All diagnostic tools including pipeline risk, TOAST bloat, index redundancy, XID wraparound monitoring, and metrics history (which stores all data in-memory by design).
 
 **Security**::
 Role permissions, connection security analysis, compliance checks.

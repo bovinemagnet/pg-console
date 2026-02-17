@@ -741,5 +741,14 @@ public interface DashboardConfig {
 		@WithName("live-sparklines")
 		@WithDefault("true")
 		boolean liveSparklinesEnabled();
+
+		/**
+		 * Enable or disable the Metrics History page (/diagnostics/metrics-history).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("metrics-history")
+		@WithDefault("true")
+		boolean metricsHistoryEnabled();
 	}
 }

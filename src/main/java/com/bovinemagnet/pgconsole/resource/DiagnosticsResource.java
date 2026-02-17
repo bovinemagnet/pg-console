@@ -12,6 +12,7 @@ import com.bovinemagnet.pgconsole.model.WriteReadRatio;
 import com.bovinemagnet.pgconsole.model.XidWraparound;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
+import com.bovinemagnet.pgconsole.service.LiveChartHistoryStore;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import io.quarkus.qute.Template;
@@ -108,6 +109,9 @@ public class DiagnosticsResource {
     Template liveSparklines;
 
     @Inject
+    Template metricsHistory;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -118,6 +122,9 @@ public class DiagnosticsResource {
 
     @Inject
     FeatureToggleService featureToggleService;
+
+    @Inject
+    LiveChartHistoryStore liveChartHistoryStore;
 
     /**
      * Returns the default instance name from configuration.
@@ -628,5 +635,48 @@ public class DiagnosticsResource {
         }
 
         return templateInstance;
+    }
+
+    // ========================================
+    // Metrics History Dashboard
+    // ========================================
+
+    /**
+     * Displays the Metrics History dashboard with Chart.js charts showing
+     * historical database metrics over a configurable time window.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes (5, 10, 30, 60, or 1440)
+     * @return rendered template
+     */
+    @GET
+    @Path("/metrics-history")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance metricsHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+
+        // Validate minutes against allowed values
+        int validMinutes = switch (minutes) {
+            case 5, 10, 30, 60, 1440 -> minutes;
+            default -> 30;
+        };
+
+        int dataPoints = liveChartHistoryStore.getPointCount(instanceName);
+
+        return metricsHistory.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "metrics-history")
+                .data("pageTitle", "Metrics History")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("minutes", validMinutes)
+                .data("dataPoints", dataPoints)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
     }
 }

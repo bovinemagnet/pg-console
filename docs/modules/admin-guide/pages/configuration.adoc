@@ -625,6 +625,7 @@ export PG_CONSOLE_DASH_HOT_EFFICIENCY=true       # HOT update efficiency monitor
 export PG_CONSOLE_DASH_CORRELATION=true          # Column correlation analysis
 export PG_CONSOLE_DASH_LIVE_CHARTS=true          # Real-time interactive charts
 export PG_CONSOLE_DASH_XID_WRAPAROUND=true       # Transaction ID wraparound monitoring
+export PG_CONSOLE_DASH_METRICS_HISTORY=true       # Historical metrics with Chart.js charts
 ----
 
 [source,properties]
@@ -638,6 +639,7 @@ pg-console.dashboards.diagnostics.hot-efficiency=${PG_CONSOLE_DASH_HOT_EFFICIENC
 pg-console.dashboards.diagnostics.correlation=${PG_CONSOLE_DASH_CORRELATION:true}
 pg-console.dashboards.diagnostics.live-charts=${PG_CONSOLE_DASH_LIVE_CHARTS:true}
 pg-console.dashboards.diagnostics.xid-wraparound=${PG_CONSOLE_DASH_XID_WRAPAROUND:true}
+pg-console.dashboards.diagnostics.metrics-history=${PG_CONSOLE_DASH_METRICS_HISTORY:true}
 ----
 
 ==== Diagnostic Thresholds and Configuration

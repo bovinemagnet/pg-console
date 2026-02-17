@@ -1555,6 +1555,252 @@ curl http://localhost:8080/api/diagnostics/live-charts/cache
 
 '''
 
+[#metrics-history-api]
+=== GET /api/diagnostics/metrics-history/connections
+
+Returns historical database connection metrics for the specified time window.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`minutes`
+|Query (optional)
+|Time window in minutes (default: `30`, max: `1440` for 24 hours)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamps": [1771283819008, 1771283824000, 1771283829000],
+  "active": [0.0, 1.0, 0.0],
+  "idle": [12.0, 12.0, 12.0],
+  "idleInTransaction": [0.0, 0.0, 0.0],
+  "dataPoints": 3
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/connections?minutes=30
+----
+
+'''
+
+=== GET /api/diagnostics/metrics-history/transactions
+
+Returns historical transaction rate metrics (commits and rollbacks per second).
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`minutes`
+|Query (optional)
+|Time window in minutes (default: `30`, max: `1440`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamps": [1771283824000, 1771283829000],
+  "commitsRate": [11.6, 1.4],
+  "rollbacksRate": [0.4, 0.0],
+  "dataPoints": 2
+}
+----
+
+*Note:* Rates are calculated server-side using delta/seconds from cumulative counters. First data point is omitted (requires previous value for rate calculation).
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/transactions?minutes=60
+----
+
+'''
+
+=== GET /api/diagnostics/metrics-history/tuples
+
+Returns historical tuple operation rates (inserts, updates, deletes per second).
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`minutes`
+|Query (optional)
+|Time window in minutes (default: `30`, max: `1440`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamps": [1771283824000, 1771283829000],
+  "insertsRate": [3.8, 0.0],
+  "updatesRate": [0.0, 0.0],
+  "deletesRate": [0.0, 0.0],
+  "dataPoints": 2
+}
+----
+
+*Note:* Rates are calculated server-side. First data point is omitted.
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/tuples?minutes=30
+----
+
+'''
+
+=== GET /api/diagnostics/metrics-history/cache
+
+Returns historical cache hit ratio metrics as percentages (0-100).
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`minutes`
+|Query (optional)
+|Time window in minutes (default: `30`, max: `1440`)
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "timestamps": [1771283819008, 1771283824000],
+  "bufferHitRatio": [99.13, 99.13],
+  "indexHitRatio": [100.0, 100.0],
+  "dataPoints": 2
+}
+----
+
+==== Example
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/cache?minutes=10
+----
+
+'''
+
+=== GET /api/diagnostics/metrics-history/export
+
+Exports all historical metrics for the specified time window in JSON or CSV format.
+
+==== Parameters
+
+[cols="1,1,3"]
+|===
+|Parameter |Type |Description
+
+|`instance`
+|Query (optional)
+|PostgreSQL instance identifier (default: `default`)
+
+|`minutes`
+|Query (optional)
+|Time window in minutes (default: `30`, max: `1440`)
+
+|`format`
+|Query (required)
+|Export format: `json` or `csv`
+|===
+
+==== JSON Response
+
+[source,json]
+----
+{
+  "instance": "default",
+  "exportedAt": "2026-02-16T23:17:00Z",
+  "minutes": 30,
+  "data": [
+    {
+      "sampledAt": "2026-02-16T23:16:59Z",
+      "active": 0.0,
+      "idle": 12.0,
+      "idleInTransaction": 0.0,
+      "commits": 2666169.0,
+      "rollbacks": 617953.0,
+      "inserted": 12371.0,
+      "updated": 2607.0,
+      "deleted": 8458.0,
+      "bufferCacheHitRatio": 99.13,
+      "indexCacheHitRatio": 100.0
+    }
+  ]
+}
+----
+
+==== CSV Response
+
+Returns data in comma-separated format with header row:
+
+[source,csv]
+----
+sampledAt,active,idle,idleInTransaction,commits,rollbacks,inserted,updated,deleted,bufferCacheHitRatio,indexCacheHitRatio
+2026-02-16T23:16:59Z,0.0,12.0,0.0,2666169.0,617953.0,12371.0,2607.0,8458.0,99.13,100.0
+----
+
+*Note:* CSV export includes cumulative counter values (not rates). Calculate rates in post-processing if needed.
+
+==== Examples
+
+Export as JSON:
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/export?format=json&minutes=60
+----
+
+Export as CSV:
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/export?format=csv&minutes=30 > metrics.csv
+----
+
+'''
+
 [#custom-dashboards]
 == Custom Dashboards
 

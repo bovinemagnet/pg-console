@@ -4,12 +4,14 @@ import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.ColumnCorrelation;
 import com.bovinemagnet.pgconsole.model.HotUpdateEfficiency;
 import com.bovinemagnet.pgconsole.model.IndexRedundancy;
+import com.bovinemagnet.pgconsole.model.LiveChartHistoryPoint;
 import com.bovinemagnet.pgconsole.model.PipelineRisk;
 import com.bovinemagnet.pgconsole.model.StatisticalFreshness;
 import com.bovinemagnet.pgconsole.model.ToastBloat;
 import com.bovinemagnet.pgconsole.model.WriteReadRatio;
 import com.bovinemagnet.pgconsole.model.XidWraparound;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
+import com.bovinemagnet.pgconsole.service.LiveChartHistoryStore;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
@@ -18,12 +20,14 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +59,9 @@ public class DiagnosticsApiResource {
 
     @Inject
     FeatureToggleService featureToggleService;
+
+    @Inject
+    LiveChartHistoryStore liveChartHistoryStore;
 
     /**
      * Returns the default instance name from configuration.
@@ -301,5 +308,283 @@ public class DiagnosticsApiResource {
             @QueryParam("instance") @DefaultValue("default") String instance) {
         featureToggleService.requirePageEnabled("xid-wraparound");
         return postgresService.getXidWraparound(resolveInstance(instance));
+    }
+
+    // ========================================
+    // Metrics History Endpoints
+    // ========================================
+
+    /**
+     * Returns historical connection counts as time-series arrays.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes
+     * @return map with timestamps, active, idle, idleInTransaction arrays
+     */
+    @GET
+    @Path("/metrics-history/connections")
+    public Map<String, Object> getConnectionsHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = resolveInstance(instance);
+        int clampedMinutes = clampMinutes(minutes);
+        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
+
+        List<Long> timestamps = new ArrayList<>(points.size());
+        List<Double> active = new ArrayList<>(points.size());
+        List<Double> idle = new ArrayList<>(points.size());
+        List<Double> idleInTxn = new ArrayList<>(points.size());
+
+        for (LiveChartHistoryPoint p : points) {
+            timestamps.add(p.getSampledAt().toEpochMilli());
+            active.add(p.getActive());
+            idle.add(p.getIdle());
+            idleInTxn.add(p.getIdleInTransaction());
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("timestamps", timestamps);
+        result.put("active", active);
+        result.put("idle", idle);
+        result.put("idleInTransaction", idleInTxn);
+        result.put("dataPoints", points.size());
+        return result;
+    }
+
+    /**
+     * Returns historical transaction rates as time-series arrays.
+     * <p>
+     * Rate calculation is done server-side: iterates adjacent points and
+     * computes delta / seconds_elapsed.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes
+     * @return map with timestamps, commitsRate, rollbacksRate arrays
+     */
+    @GET
+    @Path("/metrics-history/transactions")
+    public Map<String, Object> getTransactionsHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = resolveInstance(instance);
+        int clampedMinutes = clampMinutes(minutes);
+        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
+
+        List<Long> timestamps = new ArrayList<>();
+        List<Double> commitsRate = new ArrayList<>();
+        List<Double> rollbacksRate = new ArrayList<>();
+
+        for (int i = 1; i < points.size(); i++) {
+            LiveChartHistoryPoint prev = points.get(i - 1);
+            LiveChartHistoryPoint curr = points.get(i);
+            double seconds = Duration.between(prev.getSampledAt(), curr.getSampledAt()).toMillis() / 1000.0;
+            if (seconds <= 0) continue;
+
+            double cRate = Math.max(0, (curr.getCommits() - prev.getCommits()) / seconds);
+            double rRate = Math.max(0, (curr.getRollbacks() - prev.getRollbacks()) / seconds);
+
+            timestamps.add(curr.getSampledAt().toEpochMilli());
+            commitsRate.add(Math.round(cRate * 10.0) / 10.0);
+            rollbacksRate.add(Math.round(rRate * 10.0) / 10.0);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("timestamps", timestamps);
+        result.put("commitsRate", commitsRate);
+        result.put("rollbacksRate", rollbacksRate);
+        result.put("dataPoints", timestamps.size());
+        return result;
+    }
+
+    /**
+     * Returns historical tuple operation rates as time-series arrays.
+     * <p>
+     * Rate calculation is done server-side: iterates adjacent points and
+     * computes delta / seconds_elapsed.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes
+     * @return map with timestamps, insertsRate, updatesRate, deletesRate arrays
+     */
+    @GET
+    @Path("/metrics-history/tuples")
+    public Map<String, Object> getTuplesHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = resolveInstance(instance);
+        int clampedMinutes = clampMinutes(minutes);
+        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
+
+        List<Long> timestamps = new ArrayList<>();
+        List<Double> insertsRate = new ArrayList<>();
+        List<Double> updatesRate = new ArrayList<>();
+        List<Double> deletesRate = new ArrayList<>();
+
+        for (int i = 1; i < points.size(); i++) {
+            LiveChartHistoryPoint prev = points.get(i - 1);
+            LiveChartHistoryPoint curr = points.get(i);
+            double seconds = Duration.between(prev.getSampledAt(), curr.getSampledAt()).toMillis() / 1000.0;
+            if (seconds <= 0) continue;
+
+            double iRate = Math.max(0, (curr.getInserted() - prev.getInserted()) / seconds);
+            double uRate = Math.max(0, (curr.getUpdated() - prev.getUpdated()) / seconds);
+            double dRate = Math.max(0, (curr.getDeleted() - prev.getDeleted()) / seconds);
+
+            timestamps.add(curr.getSampledAt().toEpochMilli());
+            insertsRate.add(Math.round(iRate * 10.0) / 10.0);
+            updatesRate.add(Math.round(uRate * 10.0) / 10.0);
+            deletesRate.add(Math.round(dRate * 10.0) / 10.0);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("timestamps", timestamps);
+        result.put("insertsRate", insertsRate);
+        result.put("updatesRate", updatesRate);
+        result.put("deletesRate", deletesRate);
+        result.put("dataPoints", timestamps.size());
+        return result;
+    }
+
+    /**
+     * Returns historical cache hit ratios as time-series arrays.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes
+     * @return map with timestamps, bufferHitRatio, indexHitRatio arrays
+     */
+    @GET
+    @Path("/metrics-history/cache")
+    public Map<String, Object> getCacheHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = resolveInstance(instance);
+        int clampedMinutes = clampMinutes(minutes);
+        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
+
+        List<Long> timestamps = new ArrayList<>(points.size());
+        List<Double> bufferHit = new ArrayList<>(points.size());
+        List<Double> indexHit = new ArrayList<>(points.size());
+
+        for (LiveChartHistoryPoint p : points) {
+            timestamps.add(p.getSampledAt().toEpochMilli());
+            bufferHit.add(Math.round(p.getBufferCacheHitRatio() * 100.0) / 100.0);
+            indexHit.add(Math.round(p.getIndexCacheHitRatio() * 100.0) / 100.0);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("timestamps", timestamps);
+        result.put("bufferHitRatio", bufferHit);
+        result.put("indexHitRatio", indexHit);
+        result.put("dataPoints", points.size());
+        return result;
+    }
+
+    /**
+     * Exports all metrics history as JSON or CSV.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param minutes  the time window in minutes
+     * @param format   export format: "json" or "csv"
+     * @return downloadable response
+     */
+    @GET
+    @Path("/metrics-history/export")
+    public Response exportHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("minutes") @DefaultValue("30") int minutes,
+            @QueryParam("format") @DefaultValue("json") String format) {
+        featureToggleService.requirePageEnabled("metrics-history");
+
+        String instanceName = resolveInstance(instance);
+        int clampedMinutes = clampMinutes(minutes);
+        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
+
+        if ("csv".equalsIgnoreCase(format)) {
+            return exportCsv(points, instanceName);
+        }
+        return exportJson(points, instanceName);
+    }
+
+    private Response exportJson(List<LiveChartHistoryPoint> points, String instanceName) {
+        List<Map<String, Object>> rows = new ArrayList<>(points.size());
+        for (LiveChartHistoryPoint p : points) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("sampledAt", p.getSampledAt().toString());
+            row.put("active", p.getActive());
+            row.put("idle", p.getIdle());
+            row.put("idleInTransaction", p.getIdleInTransaction());
+            row.put("commits", p.getCommits());
+            row.put("rollbacks", p.getRollbacks());
+            row.put("inserted", p.getInserted());
+            row.put("updated", p.getUpdated());
+            row.put("deleted", p.getDeleted());
+            row.put("bufferCacheHitRatio", p.getBufferCacheHitRatio());
+            row.put("indexCacheHitRatio", p.getIndexCacheHitRatio());
+            rows.add(row);
+        }
+
+        Map<String, Object> export = new HashMap<>();
+        export.put("instance", instanceName);
+        export.put("exportedAt", Instant.now().toString());
+        export.put("dataPoints", points.size());
+        export.put("data", rows);
+
+        String filename = "metrics-history-" + instanceName + "-"
+                + DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+                        .withZone(ZoneOffset.UTC).format(Instant.now())
+                + ".json";
+
+        return Response.ok(export, MediaType.APPLICATION_JSON)
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .build();
+    }
+
+    private Response exportCsv(List<LiveChartHistoryPoint> points, String instanceName) {
+        StringBuilder csv = new StringBuilder();
+        csv.append("sampledAt,active,idle,idleInTransaction,commits,rollbacks,")
+           .append("inserted,updated,deleted,bufferCacheHitRatio,indexCacheHitRatio\n");
+
+        for (LiveChartHistoryPoint p : points) {
+            csv.append(p.getSampledAt().toString()).append(',')
+               .append(p.getActive()).append(',')
+               .append(p.getIdle()).append(',')
+               .append(p.getIdleInTransaction()).append(',')
+               .append(p.getCommits()).append(',')
+               .append(p.getRollbacks()).append(',')
+               .append(p.getInserted()).append(',')
+               .append(p.getUpdated()).append(',')
+               .append(p.getDeleted()).append(',')
+               .append(p.getBufferCacheHitRatio()).append(',')
+               .append(p.getIndexCacheHitRatio()).append('\n');
+        }
+
+        String filename = "metrics-history-" + instanceName + "-"
+                + DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+                        .withZone(ZoneOffset.UTC).format(Instant.now())
+                + ".csv";
+
+        return Response.ok(csv.toString(), "text/csv")
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .build();
+    }
+
+    /**
+     * Clamps the minutes parameter to allowed values.
+     *
+     * @param minutes the requested minutes
+     * @return clamped value (minimum 1, maximum 1440)
+     */
+    private int clampMinutes(int minutes) {
+        if (minutes < 1) return 5;
+        if (minutes > 1440) return 1440;
+        return minutes;
     }
 }

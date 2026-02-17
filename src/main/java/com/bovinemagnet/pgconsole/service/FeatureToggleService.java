@@ -663,6 +663,15 @@ public class FeatureToggleService {
         return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().liveSparklinesEnabled();
     }
 
+    /**
+     * Checks if the Metrics History page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isMetricsHistoryEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().metricsHistoryEnabled();
+    }
+
     // ========================================
     // Guard methods
     // ========================================
@@ -751,6 +760,7 @@ public class FeatureToggleService {
             case "live-charts" -> isLiveChartsEnabled();
             case "xid-wraparound" -> isXidWraparoundEnabled();
             case "live-sparklines" -> isLiveSparklinesEnabled();
+            case "metrics-history" -> isMetricsHistoryEnabled();
             // System (always enabled)
             case "about" -> true;
             default -> true;
@@ -850,6 +860,7 @@ public class FeatureToggleService {
         toggles.put("liveCharts", isLiveChartsEnabled());
         toggles.put("xidWraparound", isXidWraparoundEnabled());
         toggles.put("liveSparklines", isLiveSparklinesEnabled());
+        toggles.put("metricsHistory", isMetricsHistoryEnabled());
 
         return toggles;
     }

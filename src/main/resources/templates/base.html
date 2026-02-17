@@ -1350,6 +1350,12 @@
                         <span class="nav-link-text">Live Sparklines</span>
                     </a>
                     {/if}
+                    {#if toggles.metricsHistory}
+                    <a class="nav-link" href="/diagnostics/metrics-history?instance={currentInstance ?: 'default'}" data-title="Metrics History">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <span class="nav-link-text">Metrics History</span>
+                    </a>
+                    {/if}
                     {#if toggles.xidWraparound}
                     <a class="nav-link" href="/diagnostics/xid-wraparound?instance={currentInstance ?: 'default'}" data-title="XID Wraparound">
                         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>

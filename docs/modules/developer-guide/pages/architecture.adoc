@@ -95,6 +95,9 @@ Generates SVG sparkline charts from historical time-series data. Produces compac
 `MetricsSamplerService`::
 Scheduled background service that periodically samples metrics and stores them in the `pgconsole` schema. Includes retention cleanup to automatically purge old data.
 
+`LiveChartHistoryStore`::
+Application-scoped in-memory store that samples database metrics (connections, transactions, tuples, cache) every 5 seconds via `PostgresService` and retains up to 24 hours of data points. Provides time-window-filtered history for the Metrics History dashboard. Server-side rate calculation transforms cumulative counters into per-second rates.
+
 === Resource Layer (`resource/`)
 
 JAX-RS REST endpoints that serve HTML pages and API responses:

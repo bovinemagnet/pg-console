@@ -5,7 +5,7 @@ Paul Snow
 :keywords: diagnostics, toast bloat, index redundancy, pipeline risk, statistics, xid wraparound, hot updates
 
 [abstract]
-This guide covers the advanced diagnostics features in pg-console, including pipeline risk monitoring, TOAST bloat analysis, index redundancy detection, statistical freshness tracking, write/read ratio analysis, HOT update efficiency, column correlation, live charts, and transaction ID wraparound monitoring.
+This guide covers the advanced diagnostics features in pg-console, including pipeline risk monitoring, TOAST bloat analysis, index redundancy detection, statistical freshness tracking, write/read ratio analysis, HOT update efficiency, column correlation, live charts, metrics history, and transaction ID wraparound monitoring.
 
 == Overview
 
@@ -17,6 +17,7 @@ The diagnostics section provides specialised monitoring capabilities beyond basi
 * Update efficiency (HOT updates, write/read patterns)
 * Critical maintenance requirements (XID wraparound)
 * Real-time system trends (live charts)
+* Historical metric analysis (metrics history)
 
 All diagnostics dashboards are accessible from the main navigation under the *Diagnostics* dropdown menu.
 
@@ -50,6 +51,7 @@ The index page displays cards for each diagnostic tool, organised into three cat
 
 * *XID Wraparound* - Count of databases at risk of transaction ID wraparound
 * *Live Charts* - Link to real-time metric visualisation
+* *Metrics History* - Historical metric trends with configurable time windows
 
 === Issue Indicators
 
@@ -890,6 +892,98 @@ Charts use Chart.js for rendering and update via htmx-triggered API calls:
 ====
 Live charts continuously poll the database at the configured refresh interval. Avoid very short intervals (< 5s) on production systems with high query volume.
 ====
+
+[[metrics-history]]
+== Metrics History
+
+The Metrics History dashboard (`/diagnostics/metrics-history`) provides historical visualisation of database metrics with configurable time windows and export capabilities.
+
+=== What It Does
+
+Unlike Live Charts which show only real-time data that is lost on page navigation, Metrics History:
+
+* Retains up to 24 hours of metrics in-memory
+* Captures data every 5 seconds since application start
+* Displays 4 Chart.js charts in a 2×2 grid
+* Supports flexible time windows (5 min to 24 hours)
+* Auto-refreshes every 10 seconds
+* Exports data to JSON and CSV formats
+
+=== Available Charts
+
+[cols="1,3"]
+|===
+|Chart |Description
+
+|Database Connections
+|Active, Idle, and Idle in Transaction connection counts from `pg_stat_activity`
+
+|Transaction Rate
+|Commits per second and rollbacks per second (server-side rate calculation)
+
+|Tuple Operations Rate
+|Inserts, updates, and deletes per second
+
+|Cache Hit Ratio
+|Buffer cache % and index cache % (0-100 scale)
+|===
+
+=== Time Windows
+
+Select preset time ranges using dashboard controls:
+
+* *5 minutes* - Recent activity
+* *10 minutes* - Short-term trends
+* *30 minutes* - Default view
+* *1 hour* - Medium-term analysis
+* *24 hours* - Full retention period
+
+Time windows are URL-based: `/diagnostics/metrics-history?minutes=30`
+
+=== Data Export
+
+Export metrics for offline analysis:
+
+* *JSON export* - Structured data with full metadata
+* *CSV export* - Spreadsheet-compatible format
+
+Exports include all data points within the selected time window.
+
+=== Configuration
+
+Enable or disable the feature:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_METRICS_HISTORY=true
+----
+
+*Default:* `true`
+
+=== How It Differs from Live Charts
+
+[cols="1,2,2"]
+|===
+|Aspect |Metrics History |Live Charts
+
+|Retention
+|24 hours in-memory
+|Lost on navigation
+
+|Time windows
+|5 min to 24 hours
+|Last 50 points only
+
+|Export
+|JSON and CSV
+|None
+
+|Use case
+|Historical analysis
+|Real-time observation
+|===
+
+For complete documentation, see xref:metrics-history.adoc[Metrics History].
 
 [[xid-wraparound]]
 == Transaction ID Wraparound Monitoring

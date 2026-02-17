@@ -1,0 +1,341 @@
+{#include base}
+{#title}Metrics History - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Metrics History</h1>
+        <p class="text-muted">Historical database metrics with configurable time windows</p>
+    </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <!-- Time Window Selector -->
+        <div class="btn-group" role="group" aria-label="Time window">
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 5}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=5">5 min</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 10}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=10">10 min</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 30}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=30">30 min</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 60}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=60">1 hour</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 1440}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=1440">24 hours</a>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="btn-group" role="group" aria-label="Export">
+            <a class="btn btn-outline-primary btn-sm"
+               href="/api/diagnostics/metrics-history/export?instance={instance}&minutes={minutes}&format=json"
+               title="Export as JSON">
+                <i class="bi bi-filetype-json"></i> JSON
+            </a>
+            <a class="btn btn-outline-primary btn-sm"
+               href="/api/diagnostics/metrics-history/export?instance={instance}&minutes={minutes}&format=csv"
+               title="Export as CSV">
+                <i class="bi bi-filetype-csv"></i> CSV
+            </a>
+        </div>
+
+        <!-- Data Points Badge -->
+        <span class="badge bg-info" id="dataPointsBadge" title="Number of data points">
+            <i class="bi bi-database"></i> <span id="dataPointsCount">{dataPoints}</span> points
+        </span>
+
+        <!-- Auto-refresh status -->
+        <span class="badge bg-success" id="statusBadge">Auto-refresh: 10s</span>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Connections Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-people"></i> Database Connections
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="connectionsChart"></canvas>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Active: <span id="latestActive">-</span></span>
+                    <span class="badge" style="background-color: #6c757d">Idle: <span id="latestIdle">-</span></span>
+                    <span class="badge" style="background-color: #ffc107; color: #000">Idle in Txn: <span id="latestIdleTxn">-</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-arrow-left-right"></i> Transaction Rate
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="transactionsChart"></canvas>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Commits/s: <span id="latestCommits">-</span></span>
+                    <span class="badge" style="background-color: #dc3545">Rollbacks/s: <span id="latestRollbacks">-</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Tuple Operations Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-hdd-stack"></i> Tuple Operations Rate
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="tuplesChart"></canvas>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Inserts/s: <span id="latestInserts">-</span></span>
+                    <span class="badge" style="background-color: #007bff">Updates/s: <span id="latestUpdates">-</span></span>
+                    <span class="badge" style="background-color: #dc3545">Deletes/s: <span id="latestDeletes">-</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cache Hit Ratio Chart -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-speedometer2"></i> Cache Hit Ratio
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="cacheChart"></canvas>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <span class="badge" style="background-color: #28a745">Buffer: <span id="latestBuffer">-</span>%</span>
+                    <span class="badge" style="background-color: #007bff">Index: <span id="latestIndex">-</span>%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+    const instance = '{instance ?: "default"}';
+    const minutes = {minutes};
+    let refreshIntervalId = null;
+
+    // Common chart options with time-scale X-axis
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+        scales: {
+            x: {
+                type: 'time',
+                time: {
+                    tooltipFormat: 'HH:mm:ss',
+                    displayFormats: {
+                        second: 'HH:mm:ss',
+                        minute: 'HH:mm',
+                        hour: 'HH:mm'
+                    }
+                },
+                title: { display: false }
+            },
+            y: {
+                beginAtZero: true,
+                title: { display: false }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: { usePointStyle: true, boxWidth: 8 }
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false
+            }
+        }
+    };
+
+    // Initialise charts
+    const connectionsChart = new Chart(document.getElementById('connectionsChart'), {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Active', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Idle', data: [], borderColor: '#6c757d', backgroundColor: 'rgba(108,117,125,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Idle in Txn', data: [], borderColor: '#ffc107', backgroundColor: 'rgba(255,193,7,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, suggestedMax: 10 }
+            }
+        }
+    });
+
+    const transactionsChart = new Chart(document.getElementById('transactionsChart'), {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Commits/s', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Rollbacks/s', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, suggestedMax: 10 }
+            }
+        }
+    });
+
+    const tuplesChart = new Chart(document.getElementById('tuplesChart'), {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Inserts/s', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Updates/s', data: [], borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Deletes/s', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, suggestedMax: 10 }
+            }
+        }
+    });
+
+    const cacheChart = new Chart(document.getElementById('cacheChart'), {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Buffer Cache', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+                { label: 'Index Cache', data: [], borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, min: 0, max: 100 }
+            }
+        }
+    });
+
+    // Helper to zip timestamps with a values array into Chart.js point objects
+    function makePoint(x, y) { var p = new Object(); p.x = x; p.y = y; return p; }
+    function zipTimeSeries(timestamps, values) {
+        return timestamps.map(function(t, idx) { return makePoint(t, values.at(idx)); });
+    }
+
+    // Helper to get the last element of an array
+    function lastOf(arr) {
+        return arr.at(-1);
+    }
+
+    function loadData() {
+        const params = 'instance=' + encodeURIComponent(instance) + '&minutes=' + minutes;
+
+        // Fetch connections history
+        fetch('/api/diagnostics/metrics-history/connections?' + params)
+            .then(r => r.json())
+            .then(data => {
+                connectionsChart.data.datasets.at(0).data = zipTimeSeries(data.timestamps, data.active);
+                connectionsChart.data.datasets.at(1).data = zipTimeSeries(data.timestamps, data.idle);
+                connectionsChart.data.datasets.at(2).data = zipTimeSeries(data.timestamps, data.idleInTransaction);
+                connectionsChart.update();
+
+                if (data.active.length > 0) {
+                    document.getElementById('latestActive').textContent = lastOf(data.active);
+                    document.getElementById('latestIdle').textContent = lastOf(data.idle);
+                    document.getElementById('latestIdleTxn').textContent = lastOf(data.idleInTransaction);
+                }
+                document.getElementById('dataPointsCount').textContent = data.dataPoints;
+            })
+            .catch(err => console.warn('Failed to load connections history:', err));
+
+        // Fetch transactions history
+        fetch('/api/diagnostics/metrics-history/transactions?' + params)
+            .then(r => r.json())
+            .then(data => {
+                transactionsChart.data.datasets.at(0).data = zipTimeSeries(data.timestamps, data.commitsRate);
+                transactionsChart.data.datasets.at(1).data = zipTimeSeries(data.timestamps, data.rollbacksRate);
+                transactionsChart.update();
+
+                if (data.commitsRate.length > 0) {
+                    document.getElementById('latestCommits').textContent = lastOf(data.commitsRate);
+                    document.getElementById('latestRollbacks').textContent = lastOf(data.rollbacksRate);
+                }
+            })
+            .catch(err => console.warn('Failed to load transactions history:', err));
+
+        // Fetch tuples history
+        fetch('/api/diagnostics/metrics-history/tuples?' + params)
+            .then(r => r.json())
+            .then(data => {
+                tuplesChart.data.datasets.at(0).data = zipTimeSeries(data.timestamps, data.insertsRate);
+                tuplesChart.data.datasets.at(1).data = zipTimeSeries(data.timestamps, data.updatesRate);
+                tuplesChart.data.datasets.at(2).data = zipTimeSeries(data.timestamps, data.deletesRate);
+                tuplesChart.update();
+
+                if (data.insertsRate.length > 0) {
+                    document.getElementById('latestInserts').textContent = lastOf(data.insertsRate);
+                    document.getElementById('latestUpdates').textContent = lastOf(data.updatesRate);
+                    document.getElementById('latestDeletes').textContent = lastOf(data.deletesRate);
+                }
+            })
+            .catch(err => console.warn('Failed to load tuples history:', err));
+
+        // Fetch cache history
+        fetch('/api/diagnostics/metrics-history/cache?' + params)
+            .then(r => r.json())
+            .then(data => {
+                cacheChart.data.datasets.at(0).data = zipTimeSeries(data.timestamps, data.bufferHitRatio);
+                cacheChart.data.datasets.at(1).data = zipTimeSeries(data.timestamps, data.indexHitRatio);
+                cacheChart.update();
+
+                if (data.bufferHitRatio.length > 0) {
+                    document.getElementById('latestBuffer').textContent = lastOf(data.bufferHitRatio);
+                    document.getElementById('latestIndex').textContent = lastOf(data.indexHitRatio);
+                }
+            })
+            .catch(err => console.warn('Failed to load cache history:', err));
+    }
+
+    // Load data on page load, then auto-refresh every 10 seconds
+    loadData();
+    refreshIntervalId = setInterval(loadData, 10000);
+</script>
+
+{/include}

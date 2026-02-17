@@ -1,0 +1,452 @@
+= Metrics History
+Paul Snow
+0.0.0
+:description: Guide to using pg-console's Metrics History feature for visualising historical database metrics with Chart.js charts
+:keywords: metrics history, historical monitoring, chart.js, database metrics, connections, transactions, cache hit ratio, export
+
+[abstract]
+This guide explains how to use pg-console's Metrics History feature to visualise and analyse historical database metrics. Unlike Live Charts which only show real-time data, Metrics History retains up to 24 hours of in-memory metrics with configurable time windows and data export capabilities.
+
+== What Is Metrics History?
+
+Metrics History is a diagnostic dashboard that captures and displays historical database metrics over time. The feature collects metrics every 5 seconds and retains data in-memory for up to 24 hours, allowing you to analyse trends and identify patterns that may not be visible in real-time monitoring.
+
+=== Key Features
+
+* *4 Chart.js visualisations* - Database connections, transaction rates, tuple operations, and cache hit ratios
+* *Flexible time windows* - View data from the last 5 minutes to 24 hours
+* *Auto-refresh* - Charts update automatically every 10 seconds
+* *Data export* - Export metrics to JSON or CSV formats
+* *In-memory storage* - Fast access without database overhead
+* *Feature toggle* - Enable/disable via configuration
+
+== How It Differs from Live Charts
+
+Metrics History and Live Charts both monitor database performance, but serve different purposes:
+
+[cols="1,2,2"]
+|===
+|Feature |Metrics History |Live Charts
+
+|Data retention
+|Up to 24 hours in-memory
+|Lost on page navigation
+
+|Time windows
+|5 min, 10 min, 30 min, 1 hour, 24 hours
+|Last 50 data points only
+
+|Historical analysis
+|Yes - view past metrics
+|No - real-time only
+
+|Export
+|JSON and CSV export
+|No export
+
+|Use case
+|Trend analysis, troubleshooting
+|Real-time observation
+|===
+
+[TIP]
+====
+Use Metrics History for post-incident analysis and trend identification. Use Live Charts when you need to observe the immediate impact of changes.
+====
+
+== Accessing the Dashboard
+
+Navigate to the Metrics History dashboard from the main navigation menu: *Diagnostics* → *Metrics History*.
+
+The dashboard URL is: `/diagnostics/metrics-history`
+
+=== URL Parameters
+
+Control the time window using the `minutes` query parameter:
+
+[source,text]
+----
+/diagnostics/metrics-history?minutes=30  # Last 30 minutes
+/diagnostics/metrics-history?minutes=60  # Last 1 hour
+/diagnostics/metrics-history?minutes=1440  # Last 24 hours
+----
+
+For multi-instance deployments, specify the instance:
+
+[source,text]
+----
+/diagnostics/metrics-history?instance=production&minutes=30
+----
+
+== Available Charts
+
+The dashboard displays four charts in a 2×2 grid, each visualising different aspects of database performance.
+
+=== Database Connections
+
+Displays the count of database connections by state:
+
+[cols="1,3"]
+|===
+|Series |Description
+
+|Active
+|Connections actively executing queries (`state = 'active'`)
+
+|Idle
+|Connections waiting for commands (`state = 'idle'`)
+
+|Idle in Transaction
+|Connections holding transactions open without activity (`state = 'idle in transaction'`)
+|===
+
+*Data source:* `pg_stat_activity`
+
+*Interpretation:*
+
+* High *active* count during peak hours is normal
+* Growing *idle in transaction* indicates connection pooling issues or application bugs
+* Sudden spikes may indicate connection leaks
+
+=== Transaction Rate
+
+Shows the rate of committed and rolled-back transactions per second:
+
+[cols="1,3"]
+|===
+|Series |Description
+
+|Commits/s
+|Successful transactions per second
+
+|Rollbacks/s
+|Failed/aborted transactions per second
+|===
+
+*Data source:* `pg_stat_database` (cumulative counters converted to rates server-side)
+
+*Calculation:* Rate = (current_value - previous_value) / seconds_elapsed
+
+*Interpretation:*
+
+* Steady *commits/s* indicates consistent workload
+* High *rollbacks/s* suggests application errors or deadlocks
+* Zero commits during expected activity may indicate connectivity issues
+
+=== Tuple Operations Rate
+
+Displays the rate of data modifications per second:
+
+[cols="1,3"]
+|===
+|Series |Description
+
+|Inserts/s
+|Rows inserted per second
+
+|Updates/s
+|Rows updated per second
+
+|Deletes/s
+|Rows deleted per second
+|===
+
+*Data source:* `pg_stat_database` (cumulative counters converted to rates server-side)
+
+*Interpretation:*
+
+* Identifies write-heavy periods
+* Sudden spikes may indicate bulk operations or runaway queries
+* Imbalanced insert/delete ratios may indicate cleanup issues
+
+=== Cache Hit Ratio
+
+Shows the effectiveness of PostgreSQL's buffer cache and index cache as percentages:
+
+[cols="1,3"]
+|===
+|Series |Description
+
+|Buffer Cache %
+|Percentage of block reads served from memory (0-100%)
+
+|Index Cache %
+|Percentage of index reads served from memory (0-100%)
+|===
+
+*Data source:* `pg_stat_database`
+
+*Formula:*
+----
+Buffer Cache % = (blks_hit / (blks_hit + blks_read)) × 100
+Index Cache % = (idx_blks_hit / (idx_blks_hit + idx_blks_read)) × 100
+----
+
+*Interpretation:*
+
+* Healthy systems typically show >99% cache hit ratios
+* Drops below 95% may indicate insufficient shared_buffers or large scans
+* Sudden drops coinciding with backup or ETL operations are normal
+
+== Time Window Controls
+
+The dashboard provides preset time windows for quick navigation:
+
+[cols="1,2,3"]
+|===
+|Button |Duration |Use Case
+
+|5 min
+|Last 5 minutes
+|Recent activity, immediate troubleshooting
+
+|10 min
+|Last 10 minutes
+|Short-term trends, deployment verification
+
+|30 min
+|Last 30 minutes (default)
+|Medium-term analysis, incident investigation
+
+|1 hour
+|Last 60 minutes
+|Hourly patterns, load testing
+
+|24 hours
+|Last 24 hours
+|Daily trends, capacity planning
+|===
+
+Clicking a time window button updates the charts and adjusts the URL parameter accordingly.
+
+== Data Export
+
+Export metrics for offline analysis, reporting, or integration with external tools.
+
+=== Export Formats
+
+==== JSON Export
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/export?format=json&minutes=30
+----
+
+Returns structured JSON with full metadata:
+
+[source,json]
+----
+{
+  "instance": "default",
+  "exportedAt": "2026-02-16T23:17:00Z",
+  "minutes": 30,
+  "data": [
+    {
+      "sampledAt": "2026-02-16T23:16:59Z",
+      "active": 0.0,
+      "idle": 12.0,
+      "idleInTransaction": 0.0,
+      "commits": 2666169.0,
+      "rollbacks": 617953.0,
+      "inserted": 12371.0,
+      "updated": 2607.0,
+      "deleted": 8458.0,
+      "bufferCacheHitRatio": 99.13,
+      "indexCacheHitRatio": 100.0
+    }
+  ]
+}
+----
+
+==== CSV Export
+
+[source,bash]
+----
+curl http://localhost:8080/api/diagnostics/metrics-history/export?format=csv&minutes=30
+----
+
+Returns comma-separated values suitable for spreadsheets:
+
+[source,csv]
+----
+sampledAt,active,idle,idleInTransaction,commits,rollbacks,inserted,updated,deleted,bufferCacheHitRatio,indexCacheHitRatio
+2026-02-16T23:16:59Z,0.0,12.0,0.0,2666169.0,617953.0,12371.0,2607.0,8458.0,99.13,100.0
+----
+
+=== Export from UI
+
+Click the *Export JSON* or *Export CSV* button at the top of the dashboard. The export includes data for the currently selected time window.
+
+== Configuration
+
+=== Feature Toggle
+
+Enable or disable Metrics History using the feature toggle:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_METRICS_HISTORY=true
+----
+
+* *Default:* `true` (enabled)
+* *Effect:* When disabled, the dashboard and API endpoints return 404
+
+=== Sampling Interval
+
+The sampling interval is fixed at 5 seconds and cannot be changed via configuration. This balances data granularity with memory usage.
+
+=== Data Retention
+
+Metrics are retained in-memory for up to 24 hours. Older data points are automatically purged to prevent unbounded memory growth.
+
+* *Retention period:* 24 hours
+* *Maximum data points:* 17,280 (24 hours × 3600 seconds / 5 seconds)
+* *Memory impact:* Approximately 2-5 MB depending on instance count
+
+== How Data Is Collected
+
+.Metrics History data flow
+[mermaid]
+----
+include::example$metrics-history-data-flow.mmd[]
+----
+
+=== Background Sampler
+
+A scheduled background service (`MetricsSamplerService`) queries PostgreSQL system views every 5 seconds:
+
+1. *Query execution* - Polls `pg_stat_activity` and `pg_stat_database`
+2. *Data transformation* - Converts counters to rates (commits/s, inserts/s, etc.)
+3. *In-memory storage* - Stores time-series data in concurrent data structures
+4. *Automatic cleanup* - Removes data points older than 24 hours
+
+=== Rate Calculation
+
+Cumulative counters (commits, rollbacks, tuple operations) are converted to per-second rates:
+
+----
+rate = (current_value - previous_value) / time_elapsed_seconds
+----
+
+This server-side calculation ensures accurate rates even when charts are paused or the time window changes.
+
+=== System Impact
+
+* *Query overhead:* Minimal - queries use indexed system views
+* *Memory overhead:* 2-5 MB per instance
+* *CPU overhead:* Negligible - simple arithmetic and list operations
+
+[NOTE]
+====
+Metrics History does not create additional database tables or write to disk. All data is volatile and lost on application restart.
+====
+
+== Use Cases
+
+=== Post-Incident Analysis
+
+After an outage or performance degradation, review Metrics History to identify:
+
+* Connection spikes preceding the incident
+* Transaction rate drops during the problem window
+* Cache hit ratio degradation indicating memory pressure
+
+=== Capacity Planning
+
+Use 24-hour charts to understand:
+
+* Peak connection counts for sizing connection pools
+* Transaction throughput for hardware planning
+* Write patterns for storage capacity estimation
+
+=== Deployment Verification
+
+After deploying application changes:
+
+1. Note the deployment timestamp
+2. View the 30-minute window covering before/after
+3. Compare transaction rates and tuple operations for anomalies
+
+=== Troubleshooting Application Issues
+
+When users report slowness:
+
+* Check for idle-in-transaction connections holding locks
+* Verify transaction rates align with expected activity
+* Look for unusual tuple operation spikes indicating runaway queries
+
+== Troubleshooting
+
+=== No Data Appearing
+
+*Symptom:* Charts are empty or show "No data available"
+
+*Possible causes:*
+
+1. *Application recently started* - Wait 5-10 seconds for initial samples
+2. *Feature toggle disabled* - Verify `PG_CONSOLE_DASH_METRICS_HISTORY=true`
+3. *Time window too narrow* - Try expanding to 30 minutes or 1 hour
+4. *Database unreachable* - Check PostgreSQL connectivity
+
+*Resolution:*
+
+[source,bash]
+----
+# Check logs for sampler errors
+docker logs pg-console | grep MetricsSamplerService
+
+# Verify feature toggle
+curl http://localhost:8080/api/diagnostics/metrics-history/connections
+----
+
+=== Charts Not Updating
+
+*Symptom:* Data points count stays constant, timestamps don't advance
+
+*Possible causes:*
+
+1. *Auto-refresh disabled* - Browser may have paused timers
+2. *Network connectivity* - htmx polling requests failing
+3. *Background sampler stopped* - Application thread pool exhausted
+
+*Resolution:*
+
+* Refresh the page manually
+* Check browser console for htmx errors
+* Restart the application if sampler has stopped
+
+=== Incorrect Rates Displayed
+
+*Symptom:* Transaction or tuple rates show negative values or unrealistic spikes
+
+*Possible causes:*
+
+1. *Database statistics reset* - `pg_stat_reset()` was called
+2. *Insufficient data points* - Less than 2 samples available for rate calculation
+
+*Resolution:*
+
+* Wait for more samples to accumulate
+* Avoid calling `pg_stat_reset()` in production
+* Restart application if counters are permanently incorrect
+
+=== Export Returns Empty Data
+
+*Symptom:* JSON/CSV export contains zero data points
+
+*Possible causes:*
+
+1. *Time window exceeds retention* - Requesting data older than 24 hours
+2. *No samples collected yet* - Application just started
+
+*Resolution:*
+
+* Use shorter time windows (5-30 minutes)
+* Wait for initial samples to be collected
+
+== Related Topics
+
+* xref:diagnostics.adoc#live-charts[Live Charts] - Real-time metric visualisation
+* xref:diagnostics.adoc[Advanced Diagnostics] - Overview of diagnostic features
+* xref:api-reference:endpoints.adoc#metrics-history-api[Metrics History API] - API endpoint reference
+* xref:admin-guide:configuration.adoc#diagnostics-configuration[Diagnostics Configuration] - Feature toggle configuration

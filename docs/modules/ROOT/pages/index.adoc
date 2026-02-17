@@ -43,6 +43,7 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 * *Query Tooltips* - Hover to view full SQL queries
 * *pg_stat_statements Indicator* - Visual badge showing extension availability
 * *SVG Sparklines* - Inline trend charts showing historical metrics (connections, queries, cache hit ratio)
+* *Metrics History* - Interactive Chart.js dashboard with up to 24 hours of in-memory metrics and JSON/CSV export
 
 === Multi-Instance Support
 
