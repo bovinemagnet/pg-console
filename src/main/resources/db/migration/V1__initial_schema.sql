@@ -113,6 +113,37 @@ CREATE INDEX idx_database_metrics_instance_sampled
 CREATE INDEX idx_database_metrics_instance_db
     ON pgconsole.database_metrics_history(instance_id, database_name, sampled_at DESC);
 
+-- Infrastructure metrics history table for WAL, checkpoint, and buffer statistics.
+-- WAL fields are nullable because pg_stat_wal only exists on PostgreSQL 14+.
+-- Checkpoint fields sourced from pg_stat_bgwriter (PG12-16) or pg_stat_checkpointer (PG17+).
+CREATE TABLE pgconsole.infrastructure_metrics_history (
+    id BIGSERIAL PRIMARY KEY,
+    sampled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    instance_id TEXT NOT NULL DEFAULT 'default',
+    -- WAL stats (PG14+, nullable for older versions)
+    wal_records BIGINT,
+    wal_fpi BIGINT,
+    wal_bytes BIGINT,
+    wal_buffers_full BIGINT,
+    wal_write BIGINT,
+    wal_sync BIGINT,
+    wal_write_time DOUBLE PRECISION,
+    wal_sync_time DOUBLE PRECISION,
+    -- Checkpoint stats
+    checkpoints_timed BIGINT,
+    checkpoints_req BIGINT,
+    checkpoint_write_time DOUBLE PRECISION,
+    checkpoint_sync_time DOUBLE PRECISION,
+    -- Buffer stats
+    buffers_checkpoint BIGINT,
+    buffers_clean BIGINT,
+    buffers_alloc BIGINT,
+    buffers_backend BIGINT
+);
+
+CREATE INDEX idx_infra_metrics_instance_sampled
+    ON pgconsole.infrastructure_metrics_history(instance_id, sampled_at DESC);
+
 -- ============================================================================
 -- AUDIT AND BOOKMARKS TABLES
 -- ============================================================================
@@ -1088,6 +1119,79 @@ COMMENT ON COLUMN pgconsole.database_metrics_history.temp_files IS
 COMMENT ON COLUMN pgconsole.database_metrics_history.temp_bytes IS
 'Cumulative bytes written to temporary files. '
 'High values indicate queries requiring more work_mem than configured.';
+
+COMMENT ON TABLE pgconsole.infrastructure_metrics_history IS
+'Stores WAL, checkpoint, and buffer statistics sampled at regular intervals. '
+'WAL fields are nullable because pg_stat_wal only exists on PostgreSQL 14+. '
+'Checkpoint fields sourced from pg_stat_bgwriter (PG12-16) or pg_stat_checkpointer (PG17+). '
+'Sampled by MetricsSamplerService alongside other history tables. '
+'Retention period controlled by PG_CONSOLE_HISTORY_RETENTION environment variable.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.instance_id IS
+'Identifies the PostgreSQL instance being monitored. Default is ''default''. '
+'Allows multi-instance monitoring in future releases.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_records IS
+'Cumulative count of WAL records generated (PG14+). '
+'NULL on PostgreSQL versions prior to 14 where pg_stat_wal does not exist.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_fpi IS
+'Cumulative count of WAL full page images generated (PG14+). '
+'High values relative to wal_records may indicate full_page_writes overhead.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_bytes IS
+'Cumulative bytes of WAL generated (PG14+). '
+'Used for capacity planning and replication bandwidth estimation.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_buffers_full IS
+'Number of times WAL data had to be written to disk because WAL buffers were full (PG14+). '
+'Non-zero values suggest wal_buffers should be increased.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_write IS
+'Cumulative count of WAL write operations (PG14+).';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_sync IS
+'Cumulative count of WAL sync (fsync) operations (PG14+).';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_write_time IS
+'Cumulative time spent writing WAL data in milliseconds (PG14+). '
+'High values may indicate I/O bottlenecks on the WAL volume.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.wal_sync_time IS
+'Cumulative time spent syncing WAL data in milliseconds (PG14+). '
+'High values may indicate slow storage for WAL or fsync configuration issues.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.checkpoints_timed IS
+'Cumulative count of scheduled (timed) checkpoints. '
+'Sourced from pg_stat_bgwriter (PG12-16) or pg_stat_checkpointer (PG17+).';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.checkpoints_req IS
+'Cumulative count of requested checkpoints (triggered by WAL segment fills). '
+'High values relative to checkpoints_timed suggest checkpoint_segments or max_wal_size is too low.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.checkpoint_write_time IS
+'Cumulative time spent writing checkpoint data in milliseconds. '
+'Useful for understanding checkpoint I/O impact on performance.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.checkpoint_sync_time IS
+'Cumulative time spent syncing checkpoint data in milliseconds. '
+'Long sync times may indicate slow storage or too many dirty buffers at checkpoint time.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.buffers_checkpoint IS
+'Cumulative count of buffers written during checkpoints. '
+'High values indicate large amounts of data being flushed at checkpoint boundaries.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.buffers_clean IS
+'Cumulative count of buffers written by the background writer. '
+'Low values relative to buffers_checkpoint suggest bgwriter_lru_maxpages may need tuning.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.buffers_alloc IS
+'Cumulative count of new buffer allocations. '
+'High rates indicate frequent cache misses requiring new buffer allocation.';
+
+COMMENT ON COLUMN pgconsole.infrastructure_metrics_history.buffers_backend IS
+'Cumulative count of buffers written directly by backends (not bgwriter or checkpointer). '
+'High values indicate backends are doing their own I/O, which is less efficient.';
 
 -- ============================================================================
 -- AUDIT AND BOOKMARKS DOCUMENTATION
