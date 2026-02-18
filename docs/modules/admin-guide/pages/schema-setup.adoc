@@ -1,0 +1,325 @@
+= Schema Setup
+Paul Snow
+0.0.0
+:description: Setting up the pgconsole database schema using automatic Flyway migrations or manual SQL
+:keywords: schema, setup, Flyway, migration, database, pgconsole
+
+include::_attributes.adoc[]
+
+pg-console uses a `pgconsole` schema for persistent features including history, bookmarks, audit logging, and alerts. This guide explains how to set up the schema using automatic Flyway migrations or manual SQL tools. For the full schema design reference, see xref:developer-guide:database-schema.adoc[Database Schema].
+
+== Choosing a Setup Method
+
+Select the approach that best suits your environment:
+
+[cols="2,2,2"]
+|===
+|Method |Best For |Requirements
+
+|Automatic (Flyway)
+|Standard deployments
+|`CREATE SCHEMA` privilege
+
+|Manual (SQL Tools)
+|Restricted environments, DBA approval
+|psql or pgAdmin access
+
+|xref:schema-free-mode.adoc[Schema-Free Mode]
+|Read-only monitoring
+|No schema needed
+|===
+
+== Prerequisites
+
+Before setting up the schema, ensure the following are in place:
+
+* PostgreSQL 12+ with superuser or `CREATE SCHEMA` privilege on the target database
+* The `pg_stat_statements` extension enabled on the monitored database
+* Connection details: JDBC URL, database user, and password
+
+[TIP]
+====
+To enable `pg_stat_statements`, add it to `shared_preload_libraries` in `postgresql.conf` and run `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` in the target database.
+====
+
+== Method 1 — Automatic Setup with Flyway
+
+=== On Application Startup
+
+By default, Flyway runs the `V1__initial_schema.sql` migration automatically when `PG_CONSOLE_SCHEMA_ENABLED=true` (the default). Set your connection details and start the application:
+
+[source,bash]
+----
+export POSTGRES_URL=jdbc:postgresql://localhost:5432/postgres
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=postgres
+java -jar build/quarkus-app/quarkus-run.jar
+----
+
+Flyway detects that the `pgconsole` schema does not yet exist, creates it, and applies all pending migrations before the application begins serving requests.
+
+The relevant Flyway configuration in `application.properties` is:
+
+[source,properties]
+----
+pg-console.schema.enabled=${PG_CONSOLE_SCHEMA_ENABLED:true}
+quarkus.flyway.migrate-at-start=${pg-console.schema.enabled}
+quarkus.flyway.baseline-on-migrate=true
+quarkus.flyway.schemas=pgconsole
+----
+
+[NOTE]
+====
+`quarkus.flyway.baseline-on-migrate=true` is the default to handle environments where the schema was partially created before Flyway was introduced.
+====
+
+=== Metadata Datasource Separation
+
+The `pgconsole` schema can be stored in a separate database from the one being monitored, which is useful when the monitored database is read-only or managed by a third party. See xref:configuration.adoc#_metadata_datasource_separation[Metadata Datasource Separation] for configuration details, and xref:developer-guide:database-schema.adoc#_metadata_datasource_separation[Metadata Datasource Separation] for the architectural background.
+
+=== Verifying the Schema
+
+After startup, confirm that Flyway has created the schema successfully:
+
+[source,sql]
+----
+-- Check schema exists
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'pgconsole';
+
+-- Check Flyway history
+SELECT * FROM pgconsole.flyway_schema_history;
+
+-- Count tables
+SELECT count(*) FROM information_schema.tables WHERE table_schema = 'pgconsole';
+----
+
+A successful setup shows the `pgconsole` schema present, one or more rows in `flyway_schema_history` with `success = true`, and 30 or more tables.
+
+=== Troubleshooting Flyway
+
+**Permission Denied**::
+The database user must have `CREATE SCHEMA` privilege. Grant it with:
++
+[source,sql]
+----
+GRANT CREATE ON DATABASE postgres TO pgconsole_user;
+----
+
+**Checksum Mismatch**::
+Occurs if a migration file was modified after the first run. Flyway detects the discrepancy and refuses to proceed. Resolve it by enabling repair mode or manually updating `flyway_schema_history`:
++
+[source,properties]
+----
+quarkus.flyway.repair-at-start=true
+----
++
+[IMPORTANT]
+====
+Only enable `repair-at-start` temporarily to resolve a known mismatch. Remove it again afterwards to prevent inadvertent repairs in future.
+====
+
+**Baseline Issues**::
+If the schema was created manually before Flyway was introduced, Flyway may reject the existing schema as unmanaged. The default `quarkus.flyway.baseline-on-migrate=true` setting handles this by creating a baseline entry in `flyway_schema_history`.
+
+== Method 2 — Manual Setup with SQL Tools
+
+=== When to Use
+
+Manual setup is appropriate for:
+
+**Restricted Environments**::
+Environments where the application user cannot run DDL statements and a DBA must apply changes separately.
+
+**DBA Approval Workflows**::
+Organisations that require change advisory board (CAB) approval before any schema changes are applied to a database.
+
+**Air-Gapped Systems**::
+Systems without internet access or with strict controls on automated tooling.
+
+=== Using psql
+
+Connect to the target database as a superuser or a user with `CREATE SCHEMA` privilege, then run the following steps in order:
+
+[source,sql]
+----
+-- 1. Create the schema
+CREATE SCHEMA IF NOT EXISTS pgconsole;
+
+-- 2. Run the migration file
+\i src/main/resources/db/migration/V1__initial_schema.sql
+----
+
+After applying the migration, create the Flyway history table so that Flyway recognises the schema as already at version 1 and does not attempt to re-apply the migration on application startup:
+
+[source,sql]
+----
+-- 3. Create Flyway history table
+CREATE TABLE IF NOT EXISTS pgconsole.flyway_schema_history (
+    installed_rank INTEGER NOT NULL,
+    version VARCHAR(50),
+    description VARCHAR(200) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    script VARCHAR(1000) NOT NULL,
+    checksum INTEGER,
+    installed_by VARCHAR(100) NOT NULL,
+    installed_on TIMESTAMP NOT NULL DEFAULT now(),
+    execution_time INTEGER NOT NULL,
+    success BOOLEAN NOT NULL,
+    CONSTRAINT flyway_schema_history_pk PRIMARY KEY (installed_rank)
+);
+
+INSERT INTO pgconsole.flyway_schema_history
+    (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)
+VALUES
+    (1, '1', 'initial schema', 'SQL', 'V1__initial_schema.sql', NULL, current_user, 0, true);
+----
+
+[TIP]
+====
+Omitting the `checksum` value (leaving it `NULL`) prevents Flyway from performing checksum validation on the manually applied migration. This is safe for a one-time manual bootstrap.
+====
+
+=== Using pgAdmin or Other GUI Tools
+
+If psql is not available, use pgAdmin or any SQL client that can execute scripts against PostgreSQL:
+
+1. Open a query window connected to the target database.
+2. Copy the full contents of `src/main/resources/db/migration/V1__initial_schema.sql` and execute it.
+3. Copy the `CREATE TABLE` and `INSERT` statements for `pgconsole.flyway_schema_history` from the section above and execute them in the same query window.
+
+[NOTE]
+====
+Some GUI tools split statements on semicolons and may have difficulty with long migration scripts. If errors occur, try running the script in smaller sections or using the psql command-line client instead.
+====
+
+=== Verifying the Manual Setup
+
+Confirm the manual setup is complete and correct:
+
+[source,sql]
+----
+SELECT count(*) FROM information_schema.tables WHERE table_schema = 'pgconsole';
+-- Expected: 30+ tables
+
+SELECT * FROM pgconsole.system_metrics_history LIMIT 0;
+-- Should return empty result with correct columns
+----
+
+A count of 30 or more tables confirms the migration file was applied in full. The `LIMIT 0` query verifies that the `system_metrics_history` table exists with the expected column structure.
+
+== Database Permissions
+
+=== Schema Creation Permissions
+
+The database user running the initial setup requires `CREATE` privilege on the database:
+
+[source,sql]
+----
+-- Grant schema creation privilege
+GRANT CREATE ON DATABASE postgres TO pgconsole_user;
+----
+
+=== Runtime Permissions
+
+Once the schema exists, pg-console requires the following permissions to operate:
+
+[source,sql]
+----
+-- Grant usage and full access to the pgconsole schema
+GRANT USAGE ON SCHEMA pgconsole TO pgconsole_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgconsole TO pgconsole_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgconsole TO pgconsole_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole GRANT ALL ON TABLES TO pgconsole_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole GRANT ALL ON SEQUENCES TO pgconsole_user;
+
+-- Grant read access to system views
+GRANT pg_monitor TO pgconsole_user;
+----
+
+[NOTE]
+====
+`ALTER DEFAULT PRIVILEGES` ensures that any new tables or sequences created by future Flyway migrations are automatically accessible to `pgconsole_user` without requiring additional `GRANT` statements.
+====
+
+=== Example: Dedicated Application User
+
+The following script creates a dedicated user and grants all required permissions for both schema creation and runtime operation:
+
+[source,sql]
+----
+-- Create dedicated user
+CREATE USER pgconsole_app WITH PASSWORD 'secure_password';
+
+-- Monitoring permissions
+GRANT pg_monitor TO pgconsole_app;
+GRANT CONNECT ON DATABASE postgres TO pgconsole_app;
+
+-- Schema permissions (if schema already exists)
+GRANT USAGE ON SCHEMA pgconsole TO pgconsole_app;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgconsole TO pgconsole_app;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgconsole TO pgconsole_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole GRANT ALL ON TABLES TO pgconsole_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgconsole GRANT ALL ON SEQUENCES TO pgconsole_app;
+
+-- Or, if schema needs to be created by this user:
+GRANT CREATE ON DATABASE postgres TO pgconsole_app;
+----
+
+[IMPORTANT]
+====
+Store the database password securely. Do not hard-code credentials in `application.properties` or pass them via unencrypted environment variables in production. Use a secrets manager or vault integration where available.
+====
+
+== Upgrading the Schema
+
+=== How Flyway Handles Upgrades
+
+Future versions of pg-console may include additional migration files such as `V2__add_alerts_table.sql` or `V3__add_audit_log.sql`. On startup, Flyway reads `flyway_schema_history` to determine the current schema version and applies only the migrations that have not yet been run, in version order.
+
+This means upgrades are automatic: update the pg-console JAR and restart the application. Flyway handles the rest.
+
+=== Manual Upgrade Process
+
+For environments where `quarkus.flyway.migrate-at-start=false` is set (Flyway disabled), manually apply new migration files and record them in `flyway_schema_history`:
+
+1. Identify new migration files in `src/main/resources/db/migration/` by comparing the version numbers to the latest entry in `flyway_schema_history`.
+2. Execute each new migration file in version order using psql or your SQL tool.
+3. Insert a corresponding row into `pgconsole.flyway_schema_history` for each migration applied, incrementing `installed_rank` and setting `success = true`.
+
+=== Checking the Current Version
+
+To determine which migrations have been applied and whether any failed:
+
+[source,sql]
+----
+SELECT version, description, installed_on, success
+FROM pgconsole.flyway_schema_history
+ORDER BY installed_rank;
+----
+
+Any row with `success = false` indicates a failed migration that must be resolved before the application will start.
+
+== Removing the Schema
+
+To remove the `pgconsole` schema and all its contents entirely:
+
+[source,sql]
+----
+DROP SCHEMA IF EXISTS pgconsole CASCADE;
+----
+
+[WARNING]
+====
+This permanently deletes all historical data, bookmarks, audit logs, and alert history stored in the `pgconsole` schema. This action cannot be undone. Take a database backup before proceeding.
+====
+
+The `CASCADE` clause drops all tables, sequences, and the `flyway_schema_history` table contained within the schema. No additional cleanup is required.
+
+If you wish to continue using pg-console without the schema after removal, see xref:schema-free-mode.adoc[Schema-Free Mode] for read-only operation using in-memory data retention.
+
+== Next Steps
+
+* xref:developer-guide:database-schema.adoc[Database Schema] — complete schema design reference including all tables and relationships
+* xref:configuration.adoc[Configuration Reference] — all pg-console configuration settings
+* xref:schema-free-mode.adoc[Schema-Free Mode] — read-only operation without creating database objects
+* xref:security.adoc[Security Configuration] — securing database access and credentials
