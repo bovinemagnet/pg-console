@@ -35,15 +35,15 @@ dependencies {
     implementation "com.openhtmltopdf:openhtmltopdf-pdfbox:$openhtmltopdfVersion"
 
     // Test dependencies - Core
-    testImplementation 'io.quarkus:quarkus-junit5'
-    testImplementation 'io.quarkus:quarkus-junit5-mockito'
+    testImplementation 'io.quarkus:quarkus-junit'
+    testImplementation 'io.quarkus:quarkus-junit-mockito'
     testImplementation 'io.rest-assured:rest-assured'
     testImplementation 'io.quarkus:quarkus-jdbc-h2'
 
     // Test dependencies - Testcontainers for PostgreSQL integration tests
-    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
-    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
-    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    //testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    //testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    //testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
     // Test dependencies - Better assertions
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
