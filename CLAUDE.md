@@ -40,7 +40,7 @@ Starts PostgreSQL on port 5432 with user `postgres`/`postgres` and sample data.
 - `POSTGRES_PASSWORD` - Database password (default: `postgres`)
 - `PG_CONSOLE_DATABASES` - Comma-separated list of database names to monitor (default: all non-template databases)
   - Example: `PG_CONSOLE_DATABASES=postgres,myapp_prod` - shows only these two databases
-  - Example: `PG_CONSOLE_DATABASES=sim_prd_eplus` - shows only this database
+  - Example: `PG_CONSOLE_DATABASES=myapp_prod` - shows only this database
   - Leave empty to show all databases
 - `PG_CONSOLE_HISTORY_ENABLED` - Enable/disable history sampling (default: `true`)
 - `PG_CONSOLE_HISTORY_INTERVAL` - Sampling interval in seconds (default: `60`)

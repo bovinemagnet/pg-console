@@ -129,7 +129,7 @@ java -jar build/quarkus-app/quarkus-run.jar
 .Example: Monitor Single Database
 [source,bash]
 ----
-export PG_CONSOLE_DATABASES=sim_prd_eplus
+export PG_CONSOLE_DATABASES=myapp_prod
 
 java -jar build/quarkus-app/quarkus-run.jar
 ----

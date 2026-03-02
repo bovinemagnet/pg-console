@@ -119,7 +119,7 @@ unset PG_CONSOLE_DATABASES
 export PG_CONSOLE_DATABASES=app_prod,analytics_prod
 
 # Monitor single database
-export PG_CONSOLE_DATABASES=sim_prd_eplus
+export PG_CONSOLE_DATABASES=myapp_prod
 ----
 
 == Schema and Persistence Mode
