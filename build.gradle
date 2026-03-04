@@ -41,9 +41,9 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-jdbc-h2'
 
     // Test dependencies - Testcontainers for PostgreSQL integration tests
-    //testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
-    //testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
-    //testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
 
     // Test dependencies - Better assertions
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
@@ -52,8 +52,32 @@ dependencies {
     testImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 }
 
-group 'com.bovinemagnet'
-version '1.0.0-SNAPSHOT'
+group = 'com.bovinemagnet'
+
+// Default version for local/dev builds
+def defaultVersion = '0.0.0-SNAPSHOT'
+
+// GitHub Actions exposes refs like:
+// refs/tags/v1.2.3
+// and also GITHUB_REF_NAME = v1.2.34
+def githubRef = System.getenv('GITHUB_REF')
+def githubRefName = System.getenv('GITHUB_REF_NAME')
+
+// Optional manual override for local testing:
+// ./gradlew build -PreleaseVersion=1.2.3
+def releaseVersionProp = project.findProperty('releaseVersion')
+
+if (releaseVersionProp) {
+    version = releaseVersionProp.toString()
+} else if (githubRefName?.startsWith('v')) {
+    version = githubRefName.substring(1) // strip leading "v"
+} else if (githubRef?.startsWith('refs/tags/v')) {
+    version = githubRef.replace('refs/tags/v', '')
+} else {
+    version = defaultVersion
+}
+
+println "Project version: ${version}"
 
 java {
     toolchain {
@@ -233,5 +257,36 @@ tasks.register('buildWithDocs') {
 if (project.hasProperty('withDocs')) {
     tasks.named('quarkusDev') {
         dependsOn 'processResources'
+    }
+}
+
+
+tasks.register('prepareReleaseArtifact') {
+    description = 'Copies the releaseable JAR to build/release/pg-console.jar'
+    group = 'build'
+    dependsOn 'buildWithDocs'
+
+    doLast {
+        def jars = fileTree(buildDir) {
+            include '**/*.jar'
+            exclude '**/*-sources.jar', '**/*-javadoc.jar', '**/original-*.jar'
+        }.files.findAll { it.isFile() }
+
+        if (jars.isEmpty()) {
+            throw new GradleException("No release jar found under ${buildDir}")
+        }
+
+        def preferred = jars.find { it.name.contains('runner') } ?: jars.first()
+
+        def releaseDir = file("${buildDir}/release")
+        releaseDir.mkdirs()
+
+        copy {
+            from preferred
+            into releaseDir
+            rename { 'pg-console.jar' }
+        }
+
+        println "Prepared release artifact: ${releaseDir}/pg-console.jar (from ${preferred.name})"
     }
 }

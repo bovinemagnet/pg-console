@@ -306,6 +306,44 @@ test_endpoint "/api/v1/logging/presets"
 # Note: /api/v1/logging/debug is POST/DELETE only (requires auth)
 
 echo ""
+echo -e "${YELLOW}=== Diagnostics History Dashboards ===${NC}"
+test_endpoint "/diagnostics/query-trends?instance=${INSTANCE}"
+test_endpoint "/diagnostics/database-trends?instance=${INSTANCE}"
+test_endpoint "/diagnostics/infrastructure-trends?instance=${INSTANCE}"
+
+echo ""
+echo -e "${YELLOW}=== Diagnostics History API ===${NC}"
+test_endpoint "/api/diagnostics/history/queries/list?instance=${INSTANCE}&hours=24"
+test_endpoint "/api/diagnostics/history/queries?instance=${INSTANCE}&queryId=0&hours=24"
+test_endpoint "/api/diagnostics/history/database?instance=${INSTANCE}&database=postgres&hours=24"
+test_endpoint "/api/diagnostics/history/infrastructure?instance=${INSTANCE}&hours=24"
+
+echo ""
+echo -e "${YELLOW}=== Metrics History Extended Ranges ===${NC}"
+test_endpoint "/diagnostics/metrics-history?instance=${INSTANCE}&minutes=360"
+test_endpoint "/diagnostics/metrics-history?instance=${INSTANCE}&minutes=4320"
+test_endpoint "/diagnostics/metrics-history?instance=${INSTANCE}&minutes=10080"
+test_endpoint "/api/diagnostics/metrics-history/connections?instance=${INSTANCE}&minutes=360"
+test_endpoint "/api/diagnostics/metrics-history/transactions?instance=${INSTANCE}&minutes=4320"
+
+echo ""
+echo -e "${YELLOW}=== Stopwatch Pages ===${NC}"
+test_endpoint "/stopwatch?instance=${INSTANCE}"
+
+echo ""
+echo -e "${YELLOW}=== Stopwatch API ===${NC}"
+test_endpoint "/api/stopwatch/active?instance=${INSTANCE}"
+test_endpoint "/api/stopwatch/recent?instance=${INSTANCE}"
+
+echo ""
+echo -e "${YELLOW}=== Window Comparison Pages ===${NC}"
+test_endpoint "/window-compare?instance=${INSTANCE}"
+
+echo ""
+echo -e "${YELLOW}=== Window Comparison API ===${NC}"
+test_endpoint "/api/window-compare/presets?instance=${INSTANCE}"
+
+echo ""
 echo -e "${YELLOW}=== Documentation ===${NC}"
 test_endpoint "/docs/index.html"
 
