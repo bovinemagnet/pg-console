@@ -1,0 +1,83 @@
+%% Stopwatch Feature Workflow in pg-console
+%% Shows the lifecycle of a monitoring session from start to result
+
+flowchart TD
+    %% Entry point
+    Navigate["Navigate to /stopwatch"]
+
+    %% States
+    Idle["Idle State<br/>(no active session)<br/>Shows recent sessions table"]
+    StartBtn["Click 'Start Session'"]
+    CaptureStart["Capture Start Snapshot<br/>(POST /api/stopwatch/start)"]
+
+    subgraph Running["Running State"]
+        LiveTimer["Live Elapsed Timer<br/>(JavaScript setInterval)"]
+        LiveMetrics["Live Metrics Polling<br/>(htmx every 5 seconds)"]
+        StopBtn["Click 'Stop Session'"]
+        CancelBtn["Click 'Cancel'"]
+    end
+
+    subgraph Snapshot["Snapshot Contents"]
+        Connections["Connections<br/>(total, active, blocked, idle-in-txn)"]
+        Cache["Cache hit ratio<br/>Longest query duration"]
+        Transactions["Transaction counts<br/>(commits, rollbacks)"]
+        Tuples["Tuple operations<br/>(inserts, updates, deletes)"]
+        TopQueries["Top 20 queries<br/>by total time"]
+    end
+
+    CaptureStop["Capture Stop Snapshot<br/>(POST /api/stopwatch/stop)"]
+    SaveSession["Save session to<br/>pgconsole.stopwatch_session"]
+    ResultPage["Redirect to /stopwatch/{id}<br/>(Result Page)"]
+    Cancelled["Session discarded<br/>Return to Idle"]
+
+    subgraph Result["Result Page"]
+        BeforeAfter["Before/After comparison table"]
+        ColourDeltas["Colour-coded deltas<br/>(green=improvement, red=degradation)"]
+        QueryDiff["Top query changes"]
+    end
+
+    RecentSessions["Recent Sessions Table<br/>(View links to past results)"]
+
+    %% Flow
+    Navigate --> Idle
+    Idle --> StartBtn
+    StartBtn --> CaptureStart
+    CaptureStart -->|snapshots| Snapshot
+    Snapshot --> Running
+
+    Running --> LiveTimer
+    Running --> LiveMetrics
+    Running --> StopBtn
+    Running --> CancelBtn
+
+    StopBtn --> CaptureStop
+    CaptureStop -->|snapshots| Snapshot
+    CaptureStop --> SaveSession
+    SaveSession --> ResultPage
+    ResultPage --> Result
+    Result --> BeforeAfter
+    Result --> ColourDeltas
+    Result --> QueryDiff
+
+    CancelBtn --> Cancelled
+    Cancelled --> Idle
+
+    Idle --> RecentSessions
+    RecentSessions -->|"View link"| ResultPage
+
+    %% Styling
+    classDef navClass fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef stateClass fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef actionClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef snapshotClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef resultClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef runningClass fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+
+    class Navigate navClass
+    class Idle,Cancelled stateClass
+    class StartBtn,StopBtn,CancelBtn actionClass
+    class CaptureStart,CaptureStop,SaveSession actionClass
+    class Connections,Cache,Transactions,Tuples,TopQueries snapshotClass
+    class ResultPage,BeforeAfter,ColourDeltas,QueryDiff resultClass
+    class LiveTimer,LiveMetrics runningClass
+    class RecentSessions stateClass

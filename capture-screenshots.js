@@ -47,6 +47,11 @@ const DASHBOARDS = [
   { route: '/diagnostics/xid-wraparound', filename: 'screenshot-xid-wraparound-dark.png', waitFor: '.card' },
   { route: '/insights', filename: 'screenshot-insights-dark.png', waitFor: '.card' },
   { route: '/security', filename: 'screenshot-security-dark.png', waitFor: '.card' },
+  { route: '/stopwatch', filename: 'screenshot-stopwatch-dark.png', waitFor: '.card' },
+  { route: '/window-compare', filename: 'screenshot-window-compare-dark.png', waitFor: '.card' },
+  { route: '/diagnostics/query-trends?instance=default', filename: 'screenshot-query-trends-dark.png', waitFor: '.card' },
+  { route: '/diagnostics/database-trends?instance=default', filename: 'screenshot-database-trends-dark.png', waitFor: '.card' },
+  { route: '/diagnostics/infrastructure-trends?instance=default', filename: 'screenshot-infrastructure-trends-dark.png', waitFor: '.card' },
 ];
 
 async function main() {

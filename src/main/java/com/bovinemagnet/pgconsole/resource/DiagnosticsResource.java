@@ -13,6 +13,7 @@ import com.bovinemagnet.pgconsole.model.XidWraparound;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.LiveChartHistoryStore;
+import com.bovinemagnet.pgconsole.service.MetricsHistoryBridgeService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import com.bovinemagnet.pgconsole.service.SparklineService;
 import io.quarkus.qute.Template;
@@ -112,6 +113,15 @@ public class DiagnosticsResource {
     Template metricsHistory;
 
     @Inject
+    Template queryTrends;
+
+    @Inject
+    Template databaseTrends;
+
+    @Inject
+    Template infrastructureTrends;
+
+    @Inject
     PostgresService postgresService;
 
     @Inject
@@ -125,6 +135,9 @@ public class DiagnosticsResource {
 
     @Inject
     LiveChartHistoryStore liveChartHistoryStore;
+
+    @Inject
+    MetricsHistoryBridgeService metricsHistoryBridgeService;
 
     /**
      * Returns the default instance name from configuration.
@@ -661,11 +674,11 @@ public class DiagnosticsResource {
 
         // Validate minutes against allowed values
         int validMinutes = switch (minutes) {
-            case 5, 10, 30, 60, 1440 -> minutes;
+            case 5, 10, 30, 60, 360, 1440, 4320, 10080 -> minutes;
             default -> 30;
         };
 
-        int dataPoints = liveChartHistoryStore.getPointCount(instanceName);
+        int dataPoints = metricsHistoryBridgeService.getDataPointCount(instanceName, validMinutes);
 
         return metricsHistory.data("appName", appName)
                 .data("appVersion", appVersion)
@@ -676,6 +689,111 @@ public class DiagnosticsResource {
                 .data("instances", dataSourceManager.getInstanceInfoList())
                 .data("minutes", validMinutes)
                 .data("dataPoints", dataPoints)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
+    }
+
+    // ========================================
+    // Query Trends Dashboard
+    // ========================================
+
+    /**
+     * Displays the Query Trends dashboard showing historical query performance
+     * data from persisted history tables with Chart.js visualisations.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param hours    the time window in hours
+     * @return rendered template
+     */
+    @GET
+    @Path("/query-trends")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance queryTrends(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("query-trends");
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+
+        return queryTrends.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "query-trends")
+                .data("pageTitle", "Query Trends")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("hours", clampedHours)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
+    }
+
+    // ========================================
+    // Database Trends Dashboard
+    // ========================================
+
+    /**
+     * Displays the Database Trends dashboard showing per-database historical
+     * metrics from persisted history tables with Chart.js visualisations.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param hours    the time window in hours
+     * @return rendered template
+     */
+    @GET
+    @Path("/database-trends")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance databaseTrends(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("database-trends");
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+
+        return databaseTrends.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "database-trends")
+                .data("pageTitle", "Database Trends")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("hours", clampedHours)
+                .data("schemaEnabled", config.schema().enabled())
+                .data("toggles", getToggles());
+    }
+
+    // ========================================
+    // Infrastructure Trends Dashboard
+    // ========================================
+
+    /**
+     * Displays the Infrastructure Trends dashboard showing WAL, checkpoint,
+     * and buffer metrics from persisted history tables with Chart.js visualisations.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param hours    the time window in hours
+     * @return rendered template
+     */
+    @GET
+    @Path("/infrastructure-trends")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance infrastructureTrends(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("infrastructure-trends");
+
+        String instanceName = "default".equals(instance) ? getDefaultInstance() : instance;
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+
+        return infrastructureTrends.data("appName", appName)
+                .data("appVersion", appVersion)
+                .data("currentPage", "infrastructure-trends")
+                .data("pageTitle", "Infrastructure Trends")
+                .data("instance", instanceName)
+                .data("currentInstance", instanceName)
+                .data("instances", dataSourceManager.getInstanceInfoList())
+                .data("hours", clampedHours)
                 .data("schemaEnabled", config.schema().enabled())
                 .data("toggles", getToggles());
     }

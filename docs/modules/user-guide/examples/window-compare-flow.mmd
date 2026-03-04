@@ -1,0 +1,37 @@
+flowchart TD
+    A([User opens /window-compare]) --> B{Choose comparison type}
+    B --> C[Select a Preset]
+    B --> D[Enter custom date/time ranges]
+
+    C --> E[Preset: Yesterday vs Today\nor Last Week Same Time]
+    D --> F[Window A: Baseline\nstart + end datetime]
+    D --> G[Window B: Current\nstart + end datetime]
+
+    E --> H[Submit to /window-compare/result]
+    F --> H
+    G --> H
+
+    H --> I[GET /api/window-compare/compare\nwith ISO-8601 parameters]
+
+    I --> J[(pgconsole schema\nhistory tables)]
+
+    J --> K[Aggregate samples\nfor Window A]
+    J --> L[Aggregate samples\nfor Window B]
+
+    K --> M[Compute deltas\nand change %]
+    L --> M
+
+    M --> N[Match queries by query_id\nbetween windows]
+
+    N --> O{Query status}
+    O --> P[New: appeared in Window B only]
+    O --> Q[Gone: disappeared from Window B]
+    O --> R[Regression: mean_time increased > threshold]
+    O --> S[OK: within acceptable range]
+
+    M --> T[Overall direction badge\nImproved / Degraded / Mixed]
+    P --> U([Result page rendered])
+    Q --> U
+    R --> U
+    S --> U
+    T --> U

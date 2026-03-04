@@ -19,8 +19,14 @@
                href="/diagnostics/metrics-history?instance={instance}&minutes=30">30 min</a>
             <a class="btn btn-outline-secondary btn-sm {#if minutes == 60}active{/if}"
                href="/diagnostics/metrics-history?instance={instance}&minutes=60">1 hour</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 360}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=360">6 hours</a>
             <a class="btn btn-outline-secondary btn-sm {#if minutes == 1440}active{/if}"
                href="/diagnostics/metrics-history?instance={instance}&minutes=1440">24 hours</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 4320}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=4320">3 days</a>
+            <a class="btn btn-outline-secondary btn-sm {#if minutes == 10080}active{/if}"
+               href="/diagnostics/metrics-history?instance={instance}&minutes=10080">7 days</a>
         </div>
 
         <!-- Export Buttons -->

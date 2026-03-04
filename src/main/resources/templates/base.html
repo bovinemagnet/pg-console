@@ -1356,6 +1356,36 @@
                         <span class="nav-link-text">Metrics History</span>
                     </a>
                     {/if}
+                    {#if toggles.queryTrends}
+                    <a class="nav-link" href="/diagnostics/query-trends?instance={currentInstance ?: 'default'}" data-title="Query Trends">
+                        <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
+                        <span class="nav-link-text">Query Trends</span>
+                    </a>
+                    {/if}
+                    {#if toggles.databaseTrends}
+                    <a class="nav-link" href="/diagnostics/database-trends?instance={currentInstance ?: 'default'}" data-title="Database Trends">
+                        <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
+                        <span class="nav-link-text">Database Trends</span>
+                    </a>
+                    {/if}
+                    {#if toggles.infrastructureTrends}
+                    <a class="nav-link" href="/diagnostics/infrastructure-trends?instance={currentInstance ?: 'default'}" data-title="Infrastructure Trends">
+                        <i class="bi bi-motherboard" aria-hidden="true"></i>
+                        <span class="nav-link-text">Infra Trends</span>
+                    </a>
+                    {/if}
+                    {#if toggles.stopwatch}
+                    <a class="nav-link" href="/stopwatch?instance={currentInstance ?: 'default'}" data-title="Stopwatch">
+                        <i class="bi bi-stopwatch" aria-hidden="true"></i>
+                        <span class="nav-link-text">Stopwatch</span>
+                    </a>
+                    {/if}
+                    {#if toggles.windowCompare}
+                    <a class="nav-link" href="/window-compare?instance={currentInstance ?: 'default'}" data-title="Window Compare">
+                        <i class="bi bi-layout-split" aria-hidden="true"></i>
+                        <span class="nav-link-text">Window Compare</span>
+                    </a>
+                    {/if}
                     {#if toggles.xidWraparound}
                     <a class="nav-link" href="/diagnostics/xid-wraparound?instance={currentInstance ?: 'default'}" data-title="XID Wraparound">
                         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>

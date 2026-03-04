@@ -633,6 +633,215 @@ public class HistoryRepository {
     }
 
     /**
+     * Retrieves aggregated database metrics history for an instance.
+     * <p>
+     * Sums metrics across all databases at each sample point to provide
+     * system-wide transaction and tuple operation totals. Useful for computing
+     * rates from cumulative counters when bridging to persisted data.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param hours number of hours of history to retrieve
+     * @return list of aggregated database metrics ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
+    public List<DatabaseMetricsHistory> getAggregatedDatabaseMetricsHistory(String instanceId, int hours) {
+        List<DatabaseMetricsHistory> history = new ArrayList<>();
+        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
+
+        String sql = """
+            SELECT sampled_at,
+                   SUM(num_backends) as num_backends,
+                   SUM(xact_commit) as xact_commit,
+                   SUM(xact_rollback) as xact_rollback,
+                   SUM(blks_hit) as blks_hit,
+                   SUM(blks_read) as blks_read,
+                   SUM(tup_returned) as tup_returned,
+                   SUM(tup_fetched) as tup_fetched,
+                   SUM(tup_inserted) as tup_inserted,
+                   SUM(tup_updated) as tup_updated,
+                   SUM(tup_deleted) as tup_deleted,
+                   SUM(deadlocks) as deadlocks,
+                   SUM(conflicts) as conflicts,
+                   SUM(temp_files) as temp_files,
+                   SUM(temp_bytes) as temp_bytes,
+                   SUM(database_size_bytes) as database_size_bytes
+            FROM pgconsole.database_metrics_history
+            WHERE instance_id = ? AND sampled_at >= ?
+            GROUP BY sampled_at
+            ORDER BY sampled_at ASC
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(since));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    DatabaseMetricsHistory m = new DatabaseMetricsHistory();
+                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setNumBackends(rs.getInt("num_backends"));
+                    m.setXactCommit(rs.getLong("xact_commit"));
+                    m.setXactRollback(rs.getLong("xact_rollback"));
+                    m.setBlksHit(rs.getLong("blks_hit"));
+                    m.setBlksRead(rs.getLong("blks_read"));
+                    m.setTupReturned(getLongOrNull(rs, "tup_returned"));
+                    m.setTupFetched(getLongOrNull(rs, "tup_fetched"));
+                    m.setTupInserted(getLongOrNull(rs, "tup_inserted"));
+                    m.setTupUpdated(getLongOrNull(rs, "tup_updated"));
+                    m.setTupDeleted(getLongOrNull(rs, "tup_deleted"));
+                    m.setDeadlocks(getLongOrNull(rs, "deadlocks"));
+                    m.setConflicts(getLongOrNull(rs, "conflicts"));
+                    m.setTempFiles(getLongOrNull(rs, "temp_files"));
+                    m.setTempBytes(getLongOrNull(rs, "temp_bytes"));
+                    m.setDatabaseSizeBytes(getLongOrNull(rs, "database_size_bytes"));
+                    history.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get aggregated database metrics for " + instanceId, e);
+        }
+
+        return history;
+    }
+
+    /**
+     * Retrieves system metrics within a specific time range for an instance.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param start      start of the time range (inclusive)
+     * @param end        end of the time range (inclusive)
+     * @return list of system metrics snapshots ordered by sample time (ascending)
+     * @throws RuntimeException if database query fails
+     */
+    public List<SystemMetricsHistory> getSystemMetricsInRange(String instanceId, Instant start, Instant end) {
+        List<SystemMetricsHistory> history = new ArrayList<>();
+
+        String sql = """
+            SELECT id, sampled_at, total_connections, max_connections, active_queries,
+                   idle_connections, idle_in_transaction, blocked_queries,
+                   longest_query_seconds, longest_transaction_seconds,
+                   cache_hit_ratio, total_database_size_bytes
+            FROM pgconsole.system_metrics_history
+            WHERE instance_id = ? AND sampled_at >= ? AND sampled_at <= ?
+            ORDER BY sampled_at ASC
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(start));
+            stmt.setTimestamp(3, Timestamp.from(end));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    SystemMetricsHistory m = new SystemMetricsHistory();
+                    m.setId(rs.getLong("id"));
+                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setTotalConnections(rs.getInt("total_connections"));
+                    m.setMaxConnections(rs.getInt("max_connections"));
+                    m.setActiveQueries(rs.getInt("active_queries"));
+                    m.setIdleConnections(rs.getInt("idle_connections"));
+                    m.setIdleInTransaction(rs.getInt("idle_in_transaction"));
+                    m.setBlockedQueries(rs.getInt("blocked_queries"));
+                    m.setLongestQuerySeconds(getDoubleOrNull(rs, "longest_query_seconds"));
+                    m.setLongestTransactionSeconds(getDoubleOrNull(rs, "longest_transaction_seconds"));
+                    m.setCacheHitRatio(getDoubleOrNull(rs, "cache_hit_ratio"));
+                    m.setTotalDatabaseSizeBytes(getLongOrNull(rs, "total_database_size_bytes"));
+                    history.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get system metrics in range for " + instanceId, e);
+        }
+
+        return history;
+    }
+
+    /**
+     * Retrieves distinct database names from history for an instance.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @return list of distinct database names
+     * @throws RuntimeException if database query fails
+     */
+    public List<String> getDistinctDatabaseNames(String instanceId) {
+        List<String> names = new ArrayList<>();
+
+        String sql = """
+            SELECT DISTINCT database_name
+            FROM pgconsole.database_metrics_history
+            WHERE instance_id = ?
+            ORDER BY database_name
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString("database_name"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get distinct database names for " + instanceId, e);
+        }
+
+        return names;
+    }
+
+    /**
+     * Retrieves distinct query IDs from recent history for an instance.
+     *
+     * @param instanceId the PostgreSQL instance identifier
+     * @param hours number of hours to look back
+     * @return list of query ID and text pairs
+     * @throws RuntimeException if database query fails
+     */
+    public List<QueryMetricsHistory> getDistinctQueryIds(String instanceId, int hours) {
+        List<QueryMetricsHistory> results = new ArrayList<>();
+        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
+
+        String sql = """
+            SELECT query_id, MAX(query_text) as query_text,
+                   AVG(mean_time_ms) as mean_time_ms,
+                   SUM(total_calls) as total_calls,
+                   SUM(total_time_ms) as total_time_ms,
+                   COUNT(*) as sample_count
+            FROM pgconsole.query_metrics_history
+            WHERE instance_id = ? AND sampled_at >= ?
+            GROUP BY query_id
+            ORDER BY SUM(total_time_ms) DESC
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, instanceId);
+            stmt.setTimestamp(2, Timestamp.from(since));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    QueryMetricsHistory m = new QueryMetricsHistory();
+                    m.setQueryId(rs.getString("query_id"));
+                    m.setQueryText(rs.getString("query_text"));
+                    m.setMeanTimeMs(rs.getDouble("mean_time_ms"));
+                    m.setTotalCalls(rs.getLong("total_calls"));
+                    m.setTotalTimeMs(rs.getDouble("total_time_ms"));
+                    results.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get distinct query IDs for " + instanceId, e);
+        }
+
+        return results;
+    }
+
+    /**
      * Safely retrieves a Double value from a ResultSet, handling SQL NULL values.
      * <p>
      * Returns null if the database column contains NULL, otherwise returns the numeric value.

@@ -1,0 +1,105 @@
+{#include base}
+{#title}Stopwatch Result - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-stopwatch"></i> Stopwatch Result</h1>
+        <p class="text-muted">Session #{session.id} &mdash; Duration: {session.elapsedDisplay}</p>
+    </div>
+    <div class="col-auto">
+        <a href="/stopwatch?instance={instance}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Stopwatch
+        </a>
+    </div>
+</div>
+
+<!-- Session Info -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-info-circle"></i> Session Details</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <strong>Started:</strong><br>{session.startedAt}
+            </div>
+            <div class="col-md-3">
+                <strong>Stopped:</strong><br>{session.stoppedAt}
+            </div>
+            <div class="col-md-3">
+                <strong>Duration:</strong><br>{session.elapsedDisplay}
+            </div>
+            <div class="col-md-3">
+                <strong>Status:</strong><br>
+                <span class="badge bg-success">Completed</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Before/After Comparison -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-arrow-left-right"></i> Before / After Comparison</h5>
+    </div>
+    <div class="card-body">
+        {#if deltas.size > 0}
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th class="text-end">Before</th>
+                        <th class="text-end">After</th>
+                        <th class="text-end">Delta</th>
+                        <th class="text-end">Change %</th>
+                        <th>Direction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for delta in deltas}
+                    <tr>
+                        <td>{delta.name}</td>
+                        <td class="text-end">{delta.startValue}</td>
+                        <td class="text-end">{delta.endValue}</td>
+                        <td class="text-end {delta.cssClass}">
+                            {#if delta.delta > 0}+{/if}{delta.delta}
+                        </td>
+                        <td class="text-end {delta.cssClass}">
+                            {#if delta.deltaPercent > 0}+{/if}{delta.deltaPercent}%
+                        </td>
+                        <td>
+                            {#if delta.direction == 'improvement'}
+                            <i class="bi bi-arrow-up-circle text-success"></i>
+                            {#else if delta.direction == 'degradation'}
+                            <i class="bi bi-arrow-down-circle text-danger"></i>
+                            {#else}
+                            <i class="bi bi-dash-circle text-muted"></i>
+                            {/if}
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+        {#else}
+        <p class="text-muted">No metric comparison data available for this session.</p>
+        {/if}
+    </div>
+</div>
+
+<!-- Notes -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-pencil"></i> Notes</h5>
+    </div>
+    <div class="card-body">
+        <p id="notesDisplay" class="mb-2">{session.notes ?: 'No notes added.'}</p>
+    </div>
+</div>
+
+</div>
+
+{/include}

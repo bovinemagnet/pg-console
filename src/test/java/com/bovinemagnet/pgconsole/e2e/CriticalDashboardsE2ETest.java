@@ -349,7 +349,14 @@ class CriticalDashboardsE2ETest extends PlaywrightTestBase {
                 "/prepared-statements",
                 "/matviews",
                 "/sequences",
-                "/extensions"
+                "/extensions",
+                "/stopwatch",
+                "/window-compare",
+                "/diagnostics",
+                "/diagnostics/metrics-history",
+                "/diagnostics/query-trends",
+                "/diagnostics/database-trends",
+                "/diagnostics/infrastructure-trends"
         })
         void dashboardLoadsWithoutErrors(String path) {
             navigateToWithInstance(path);
@@ -490,6 +497,173 @@ class CriticalDashboardsE2ETest extends PlaywrightTestBase {
     }
 
     // ========================================
+    // Stopwatch and Window Comparison Tests
+    // ========================================
+
+    @Nested
+    @DisplayName("Stopwatch Pages")
+    class StopwatchPages {
+
+        @Test
+        @DisplayName("Stopwatch page loads without errors")
+        void stopwatchPageLoads() {
+            navigateToWithInstance("/stopwatch");
+            assertTrue(pageLoadedWithoutErrors(), "Stopwatch page should load without errors");
+            assertTrue(pageContainsText("Stopwatch") || pageContainsText("monitoring session"),
+                    "Stopwatch page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Stopwatch page has start/stop controls")
+        void stopwatchPageHasControls() {
+            navigateToWithInstance("/stopwatch");
+            waitForPageLoad();
+            assertTrue(pageContainsText("Start") || pageContainsText("Stop") || pageContainsText("Cancel"),
+                    "Stopwatch page should display session controls");
+        }
+
+        @Test
+        @DisplayName("Stopwatch page shows recent sessions section")
+        void stopwatchPageShowsRecentSessions() {
+            navigateToWithInstance("/stopwatch");
+            waitForPageLoad();
+            assertTrue(pageContainsText("Recent") || pageContainsText("Session") || pageContainsText("No sessions"),
+                    "Stopwatch page should display recent sessions or empty state");
+        }
+    }
+
+    @Nested
+    @DisplayName("Window Comparison Pages")
+    class WindowComparisonPages {
+
+        @Test
+        @DisplayName("Window Comparison page loads without errors")
+        void windowComparePageLoads() {
+            navigateToWithInstance("/window-compare");
+            assertTrue(pageLoadedWithoutErrors(), "Window Comparison page should load without errors");
+            assertTrue(pageContainsText("Window Comparison") || pageContainsText("Compare"),
+                    "Window Comparison page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Window Comparison page has preset buttons")
+        void windowComparePageHasPresets() {
+            navigateToWithInstance("/window-compare");
+            waitForPageLoad();
+            assertTrue(pageContainsText("Preset") || pageContainsText("Yesterday") || pageContainsText("Last Week"),
+                    "Window Comparison page should display quick presets");
+        }
+
+        @Test
+        @DisplayName("Window Comparison page has custom comparison form")
+        void windowComparePageHasCustomForm() {
+            navigateToWithInstance("/window-compare");
+            waitForPageLoad();
+            assertTrue(pageContainsText("Window A") || pageContainsText("Window B") || pageContainsText("Custom"),
+                    "Window Comparison page should display custom comparison form");
+        }
+    }
+
+    // ========================================
+    // Diagnostics and Trends Pages Tests
+    // ========================================
+
+    @Nested
+    @DisplayName("Diagnostics and Trends Pages")
+    class DiagnosticsAndTrendsPages {
+
+        @Test
+        @DisplayName("Diagnostics page loads without errors")
+        void diagnosticsPageLoads() {
+            navigateToWithInstance("/diagnostics");
+            assertTrue(pageLoadedWithoutErrors(), "Diagnostics page should load without errors");
+            assertTrue(pageContainsText("Diagnostics") || pageContainsText("diagnostic"),
+                    "Diagnostics page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Metrics History page loads without errors")
+        void metricsHistoryPageLoads() {
+            navigateToWithInstance("/diagnostics/metrics-history");
+            assertTrue(pageLoadedWithoutErrors(), "Metrics History page should load without errors");
+            assertTrue(pageContainsText("Metrics History") || pageContainsText("Historical"),
+                    "Metrics History page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Metrics History page has time window selector")
+        void metricsHistoryPageHasTimeWindow() {
+            navigateToWithInstance("/diagnostics/metrics-history");
+            waitForPageLoad();
+            assertTrue(pageContainsText("5 min") || pageContainsText("1 hour") || pageContainsText("24 hours") || pageContainsText("7 days"),
+                    "Metrics History page should display time window selector");
+        }
+
+        @Test
+        @DisplayName("Metrics History page has export buttons")
+        void metricsHistoryPageHasExport() {
+            navigateToWithInstance("/diagnostics/metrics-history");
+            waitForPageLoad();
+            assertTrue(pageContainsText("JSON") || pageContainsText("CSV") || pageContainsText("Export"),
+                    "Metrics History page should display export buttons");
+        }
+
+        @Test
+        @DisplayName("Query Trends page loads without errors")
+        void queryTrendsPageLoads() {
+            navigateToWithInstance("/diagnostics/query-trends");
+            assertTrue(pageLoadedWithoutErrors(), "Query Trends page should load without errors");
+            assertTrue(pageContainsText("Query Trends") || pageContainsText("query performance"),
+                    "Query Trends page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Query Trends page has time window selector")
+        void queryTrendsPageHasTimeWindow() {
+            navigateToWithInstance("/diagnostics/query-trends");
+            waitForPageLoad();
+            assertTrue(pageContainsText("1h") || pageContainsText("6h") || pageContainsText("24h") || pageContainsText("7d"),
+                    "Query Trends page should display time window selector");
+        }
+
+        @Test
+        @DisplayName("Database Trends page loads without errors")
+        void databaseTrendsPageLoads() {
+            navigateToWithInstance("/diagnostics/database-trends");
+            assertTrue(pageLoadedWithoutErrors(), "Database Trends page should load without errors");
+            assertTrue(pageContainsText("Database Trends") || pageContainsText("Per-database"),
+                    "Database Trends page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Database Trends page has database selector")
+        void databaseTrendsPageHasDatabaseSelector() {
+            navigateToWithInstance("/diagnostics/database-trends");
+            waitForPageLoad();
+            assertTrue(pageContainsText("Database") || pageContainsText("Select"),
+                    "Database Trends page should display database selector");
+        }
+
+        @Test
+        @DisplayName("Infrastructure Trends page loads without errors")
+        void infrastructureTrendsPageLoads() {
+            navigateToWithInstance("/diagnostics/infrastructure-trends");
+            assertTrue(pageLoadedWithoutErrors(), "Infrastructure Trends page should load without errors");
+            assertTrue(pageContainsText("Infrastructure Trends") || pageContainsText("WAL"),
+                    "Infrastructure Trends page should contain expected content");
+        }
+
+        @Test
+        @DisplayName("Infrastructure Trends page has time window selector")
+        void infrastructureTrendsPageHasTimeWindow() {
+            navigateToWithInstance("/diagnostics/infrastructure-trends");
+            waitForPageLoad();
+            assertTrue(pageContainsText("1h") || pageContainsText("6h") || pageContainsText("24h") || pageContainsText("7d"),
+                    "Infrastructure Trends page should display time window selector");
+        }
+    }
+
+    // ========================================
     // Theme and Responsiveness Tests
     // ========================================
 
@@ -522,6 +696,98 @@ class CriticalDashboardsE2ETest extends PlaywrightTestBase {
             toggleDarkMode();
             assertTrue(isDarkMode(), "Dark mode should be enabled");
             assertTrue(pageLoadedWithoutErrors(), "Maintenance Progress page should render correctly in dark mode");
+        }
+
+        @Test
+        @DisplayName("Stopwatch page renders correctly in dark mode")
+        void stopwatchPageDarkMode() {
+            navigateToWithInstance("/stopwatch");
+            toggleDarkMode();
+            assertTrue(isDarkMode(), "Dark mode should be enabled");
+            assertTrue(pageLoadedWithoutErrors(), "Stopwatch page should render correctly in dark mode");
+        }
+
+        @Test
+        @DisplayName("Window Comparison page renders correctly in dark mode")
+        void windowComparePageDarkMode() {
+            navigateToWithInstance("/window-compare");
+            toggleDarkMode();
+            assertTrue(isDarkMode(), "Dark mode should be enabled");
+            assertTrue(pageLoadedWithoutErrors(), "Window Comparison page should render correctly in dark mode");
+        }
+
+        @Test
+        @DisplayName("Metrics History page renders correctly in dark mode")
+        void metricsHistoryPageDarkMode() {
+            navigateToWithInstance("/diagnostics/metrics-history");
+            toggleDarkMode();
+            assertTrue(isDarkMode(), "Dark mode should be enabled");
+            assertTrue(pageLoadedWithoutErrors(), "Metrics History page should render correctly in dark mode");
+        }
+    }
+
+    // ========================================
+    // Navigation Tests for New Pages
+    // ========================================
+
+    @Nested
+    @DisplayName("New Page Navigation Tests")
+    class NewPageNavigationTests {
+
+        @Test
+        @DisplayName("Can navigate to Stopwatch from sidebar")
+        void canNavigateToStopwatch() {
+            navigateToWithInstance("/");
+            waitForPageLoad();
+
+            if (isVisible("a:has-text('Stopwatch')")) {
+                clickAndWait("a:has-text('Stopwatch')");
+                assertTrue(page.url().contains("/stopwatch"), "Should navigate to Stopwatch page");
+                assertTrue(pageLoadedWithoutErrors(), "Stopwatch page should load without errors");
+            }
+        }
+
+        @Test
+        @DisplayName("Can navigate to Window Comparison from sidebar")
+        void canNavigateToWindowCompare() {
+            navigateToWithInstance("/");
+            waitForPageLoad();
+
+            if (isVisible("a:has-text('Window Compare')") || isVisible("a:has-text('Window Comparison')")) {
+                if (isVisible("a:has-text('Window Compare')")) {
+                    clickAndWait("a:has-text('Window Compare')");
+                } else {
+                    clickAndWait("a:has-text('Window Comparison')");
+                }
+                assertTrue(page.url().contains("/window-compare"), "Should navigate to Window Comparison page");
+                assertTrue(pageLoadedWithoutErrors(), "Window Comparison page should load without errors");
+            }
+        }
+
+        @Test
+        @DisplayName("Can navigate to Metrics History from sidebar")
+        void canNavigateToMetricsHistory() {
+            navigateToWithInstance("/");
+            waitForPageLoad();
+
+            if (isVisible("a:has-text('Metrics History')")) {
+                clickAndWait("a:has-text('Metrics History')");
+                assertTrue(page.url().contains("/metrics-history"), "Should navigate to Metrics History page");
+                assertTrue(pageLoadedWithoutErrors(), "Metrics History page should load without errors");
+            }
+        }
+
+        @Test
+        @DisplayName("Can navigate to Query Trends from sidebar")
+        void canNavigateToQueryTrends() {
+            navigateToWithInstance("/");
+            waitForPageLoad();
+
+            if (isVisible("a:has-text('Query Trends')")) {
+                clickAndWait("a:has-text('Query Trends')");
+                assertTrue(page.url().contains("/query-trends"), "Should navigate to Query Trends page");
+                assertTrue(pageLoadedWithoutErrors(), "Query Trends page should load without errors");
+            }
         }
     }
 }

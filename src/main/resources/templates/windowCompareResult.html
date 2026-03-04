@@ -1,0 +1,199 @@
+{#include base}
+{#title}Window Comparison Result - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-layout-split"></i> Window Comparison Result</h1>
+        <p class="text-muted">
+            Overall:
+            {#if comparison.overallDirection == 'improved'}
+            <span class="badge bg-success"><i class="bi bi-arrow-up-circle"></i> Improved</span>
+            {#else if comparison.overallDirection == 'degraded'}
+            <span class="badge bg-danger"><i class="bi bi-arrow-down-circle"></i> Degraded</span>
+            {#else}
+            <span class="badge bg-secondary"><i class="bi bi-dash-circle"></i> Mixed</span>
+            {/if}
+        </p>
+    </div>
+    <div class="col-auto">
+        <a href="/window-compare?instance={instance}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Setup
+        </a>
+    </div>
+</div>
+
+{#if comparison.hasData}
+
+<!-- Window Info -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-info">
+            <div class="card-header bg-info bg-opacity-10">
+                <h6 class="mb-0"><i class="bi bi-a-circle"></i> Window A (Baseline)</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Start:</strong><br>
+                        <span class="small">{comparison.windowA.windowStart}</span>
+                    </div>
+                    <div class="col-6">
+                        <strong>End:</strong><br>
+                        <span class="small">{comparison.windowA.windowEnd}</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <strong>Duration:</strong> {comparison.windowA.durationDisplay}
+                    &mdash; <strong>Samples:</strong> {comparison.windowA.sampleCount}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header bg-warning bg-opacity-10">
+                <h6 class="mb-0"><i class="bi bi-b-circle"></i> Window B (Current)</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Start:</strong><br>
+                        <span class="small">{comparison.windowB.windowStart}</span>
+                    </div>
+                    <div class="col-6">
+                        <strong>End:</strong><br>
+                        <span class="small">{comparison.windowB.windowEnd}</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <strong>Duration:</strong> {comparison.windowB.durationDisplay}
+                    &mdash; <strong>Samples:</strong> {comparison.windowB.sampleCount}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metric Deltas -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-arrow-left-right"></i> Metric Comparison</h5>
+    </div>
+    <div class="card-body">
+        {#if comparison.deltas.size > 0}
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th class="text-end">Window A</th>
+                        <th class="text-end">Window B</th>
+                        <th class="text-end">Delta</th>
+                        <th class="text-end">Change %</th>
+                        <th>Direction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for delta in comparison.deltas}
+                    <tr>
+                        <td>{delta.name}</td>
+                        <td class="text-end">{delta.startValue}</td>
+                        <td class="text-end">{delta.endValue}</td>
+                        <td class="text-end {delta.cssClass}">
+                            {#if delta.delta > 0}+{/if}{delta.delta}
+                        </td>
+                        <td class="text-end {delta.cssClass}">
+                            {#if delta.deltaPercent > 0}+{/if}{delta.deltaPercent}%
+                        </td>
+                        <td>
+                            {#if delta.direction == 'improvement'}
+                            <i class="bi bi-arrow-up-circle text-success"></i>
+                            {#else if delta.direction == 'degradation'}
+                            <i class="bi bi-arrow-down-circle text-danger"></i>
+                            {#else}
+                            <i class="bi bi-dash-circle text-muted"></i>
+                            {/if}
+                        </td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+        {#else}
+        <p class="text-muted">No metric comparison data available.</p>
+        {/if}
+    </div>
+</div>
+
+<!-- Query Changes -->
+{#if comparison.queryChanges.size > 0}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-database"></i> Query Performance Changes</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Query</th>
+                        <th class="text-end">Mean Time A (ms)</th>
+                        <th class="text-end">Mean Time B (ms)</th>
+                        <th class="text-end">Delta (ms)</th>
+                        <th class="text-end">Calls A</th>
+                        <th class="text-end">Calls B</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#for qc in comparison.queryChanges}
+                    <tr class="{qc.cssClass}">
+                        <td>
+                            {#if qc.status == 'new'}
+                            <span class="badge bg-info">New</span>
+                            {#else if qc.status == 'gone'}
+                            <span class="badge bg-secondary">Gone</span>
+                            {#else if qc.regression}
+                            <span class="badge bg-danger">Regression</span>
+                            {#else}
+                            <span class="badge bg-success">OK</span>
+                            {/if}
+                        </td>
+                        <td>
+                            <code class="small" title="{qc.queryText}">{#if qc.queryText.length() > 80}{qc.queryText.substring(0, 80)}...{#else}{qc.queryText}{/if}</code>
+                        </td>
+                        <td class="text-end">{qc.meanTimeA}</td>
+                        <td class="text-end">{qc.meanTimeB}</td>
+                        <td class="text-end {qc.cssClass}">
+                            {#if qc.meanTimeDelta > 0}+{/if}{qc.meanTimeDelta}
+                        </td>
+                        <td class="text-end">{qc.callCountA}</td>
+                        <td class="text-end">{qc.callCountB}</td>
+                    </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{/if}
+
+{#else}
+<!-- No Data -->
+<div class="card mb-4">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+        <h3 class="mt-3">Insufficient Data</h3>
+        <p class="text-muted mb-4">One or both windows do not have enough history data for comparison.</p>
+        <a href="/window-compare?instance={instance}" class="btn btn-primary">
+            <i class="bi bi-arrow-left"></i> Try Different Windows
+        </a>
+    </div>
+</div>
+{/if}
+
+</div>
+
+{/include}

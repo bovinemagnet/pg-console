@@ -361,6 +361,110 @@ class NavigationE2ETest extends PlaywrightTestBase {
         assertTrue(basePage.pageLoadedWithoutErrors(), "Security roles page should load without errors");
     }
 
+    // ========== Diagnostics and Trends Section ==========
+
+    /**
+     * Verifies that the diagnostics page loads successfully.
+     * <p>
+     * Tests the diagnostics landing page which provides access to metrics history,
+     * query trends, database trends, and infrastructure trends.
+     */
+    @Test
+    @DisplayName("Diagnostics page loads without errors")
+    void diagnosticsPageLoads() {
+        basePage.navigateToWithInstance("/diagnostics");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Diagnostics page should load without errors");
+    }
+
+    /**
+     * Verifies that the metrics history page loads successfully.
+     * <p>
+     * Tests the metrics history dashboard which displays historical database metrics
+     * with configurable time windows and chart visualisations for connections,
+     * transaction rates, tuple operations, and cache hit ratios.
+     */
+    @Test
+    @DisplayName("Metrics history page loads without errors")
+    void metricsHistoryPageLoads() {
+        basePage.navigateToWithInstance("/diagnostics/metrics-history");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Metrics history page should load without errors");
+    }
+
+    /**
+     * Verifies that the query trends page loads successfully.
+     * <p>
+     * Tests the query trends dashboard which displays historical query performance
+     * from persisted metrics, showing tracked queries with average mean time,
+     * total calls, and total time.
+     */
+    @Test
+    @DisplayName("Query trends page loads without errors")
+    void queryTrendsPageLoads() {
+        basePage.navigateToWithInstance("/diagnostics/query-trends");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Query trends page should load without errors");
+    }
+
+    /**
+     * Verifies that the database trends page loads successfully.
+     * <p>
+     * Tests the database trends dashboard which displays per-database historical
+     * metrics from persisted data with database-specific charts and selectors.
+     */
+    @Test
+    @DisplayName("Database trends page loads without errors")
+    void databaseTrendsPageLoads() {
+        basePage.navigateToWithInstance("/diagnostics/database-trends");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Database trends page should load without errors");
+    }
+
+    /**
+     * Verifies that the infrastructure trends page loads successfully.
+     * <p>
+     * Tests the infrastructure trends dashboard which displays WAL activity,
+     * checkpoint frequency, and buffer statistics over time.
+     */
+    @Test
+    @DisplayName("Infrastructure trends page loads without errors")
+    void infrastructureTrendsPageLoads() {
+        basePage.navigateToWithInstance("/diagnostics/infrastructure-trends");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Infrastructure trends page should load without errors");
+    }
+
+    // ========== Stopwatch and Window Comparison Section ==========
+
+    /**
+     * Verifies that the stopwatch page loads successfully.
+     * <p>
+     * Tests the stopwatch feature which allows users to start a monitoring session,
+     * perform database work, then stop to see a before/after comparison of metrics.
+     */
+    @Test
+    @DisplayName("Stopwatch page loads without errors")
+    void stopwatchPageLoads() {
+        basePage.navigateToWithInstance("/stopwatch");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Stopwatch page should load without errors");
+    }
+
+    /**
+     * Verifies that the window comparison page loads successfully.
+     * <p>
+     * Tests the window comparison feature which compares metrics between two
+     * time windows to identify trends and regressions.
+     */
+    @Test
+    @DisplayName("Window comparison page loads without errors")
+    void windowComparePageLoads() {
+        basePage.navigateToWithInstance("/window-compare");
+
+        assertTrue(basePage.pageLoadedWithoutErrors(), "Window comparison page should load without errors");
+    }
+
     // ========== Sidebar Navigation ==========
 
     /**

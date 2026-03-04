@@ -2,16 +2,21 @@ package com.bovinemagnet.pgconsole.resource;
 
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.ColumnCorrelation;
+import com.bovinemagnet.pgconsole.model.DatabaseMetricsHistory;
 import com.bovinemagnet.pgconsole.model.HotUpdateEfficiency;
 import com.bovinemagnet.pgconsole.model.IndexRedundancy;
+import com.bovinemagnet.pgconsole.model.InfrastructureMetricsHistory;
 import com.bovinemagnet.pgconsole.model.LiveChartHistoryPoint;
 import com.bovinemagnet.pgconsole.model.PipelineRisk;
+import com.bovinemagnet.pgconsole.model.QueryMetricsHistory;
 import com.bovinemagnet.pgconsole.model.StatisticalFreshness;
 import com.bovinemagnet.pgconsole.model.ToastBloat;
 import com.bovinemagnet.pgconsole.model.WriteReadRatio;
 import com.bovinemagnet.pgconsole.model.XidWraparound;
+import com.bovinemagnet.pgconsole.repository.HistoryRepository;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.LiveChartHistoryStore;
+import com.bovinemagnet.pgconsole.service.MetricsHistoryBridgeService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
@@ -23,7 +28,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -62,6 +66,12 @@ public class DiagnosticsApiResource {
 
     @Inject
     LiveChartHistoryStore liveChartHistoryStore;
+
+    @Inject
+    MetricsHistoryBridgeService metricsHistoryBridgeService;
+
+    @Inject
+    HistoryRepository historyRepository;
 
     /**
      * Returns the default instance name from configuration.
@@ -316,6 +326,9 @@ public class DiagnosticsApiResource {
 
     /**
      * Returns historical connection counts as time-series arrays.
+     * <p>
+     * Routes to in-memory store for short windows (up to 60 min) or
+     * persisted history tables for longer windows (up to 7 days).
      *
      * @param instance the PostgreSQL instance name
      * @param minutes  the time window in minutes
@@ -330,26 +343,15 @@ public class DiagnosticsApiResource {
 
         String instanceName = resolveInstance(instance);
         int clampedMinutes = clampMinutes(minutes);
-        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
-
-        List<Long> timestamps = new ArrayList<>(points.size());
-        List<Double> active = new ArrayList<>(points.size());
-        List<Double> idle = new ArrayList<>(points.size());
-        List<Double> idleInTxn = new ArrayList<>(points.size());
-
-        for (LiveChartHistoryPoint p : points) {
-            timestamps.add(p.getSampledAt().toEpochMilli());
-            active.add(p.getActive());
-            idle.add(p.getIdle());
-            idleInTxn.add(p.getIdleInTransaction());
-        }
+        var ts = metricsHistoryBridgeService.getConnectionsHistory(instanceName, clampedMinutes);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("timestamps", timestamps);
-        result.put("active", active);
-        result.put("idle", idle);
-        result.put("idleInTransaction", idleInTxn);
-        result.put("dataPoints", points.size());
+        result.put("timestamps", ts.getTimestamps());
+        result.put("active", ts.getSeries().get("active"));
+        result.put("idle", ts.getSeries().get("idle"));
+        result.put("idleInTransaction", ts.getSeries().get("idleInTransaction"));
+        result.put("dataPoints", ts.getDataPoints());
+        result.put("dataSource", ts.getDataSource());
         return result;
     }
 
@@ -357,7 +359,8 @@ public class DiagnosticsApiResource {
      * Returns historical transaction rates as time-series arrays.
      * <p>
      * Rate calculation is done server-side: iterates adjacent points and
-     * computes delta / seconds_elapsed.
+     * computes delta / seconds_elapsed. Routes to bridge service for
+     * in-memory or persisted data.
      *
      * @param instance the PostgreSQL instance name
      * @param minutes  the time window in minutes
@@ -372,39 +375,22 @@ public class DiagnosticsApiResource {
 
         String instanceName = resolveInstance(instance);
         int clampedMinutes = clampMinutes(minutes);
-        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
-
-        List<Long> timestamps = new ArrayList<>();
-        List<Double> commitsRate = new ArrayList<>();
-        List<Double> rollbacksRate = new ArrayList<>();
-
-        for (int i = 1; i < points.size(); i++) {
-            LiveChartHistoryPoint prev = points.get(i - 1);
-            LiveChartHistoryPoint curr = points.get(i);
-            double seconds = Duration.between(prev.getSampledAt(), curr.getSampledAt()).toMillis() / 1000.0;
-            if (seconds <= 0) continue;
-
-            double cRate = Math.max(0, (curr.getCommits() - prev.getCommits()) / seconds);
-            double rRate = Math.max(0, (curr.getRollbacks() - prev.getRollbacks()) / seconds);
-
-            timestamps.add(curr.getSampledAt().toEpochMilli());
-            commitsRate.add(Math.round(cRate * 10.0) / 10.0);
-            rollbacksRate.add(Math.round(rRate * 10.0) / 10.0);
-        }
+        var ts = metricsHistoryBridgeService.getTransactionsHistory(instanceName, clampedMinutes);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("timestamps", timestamps);
-        result.put("commitsRate", commitsRate);
-        result.put("rollbacksRate", rollbacksRate);
-        result.put("dataPoints", timestamps.size());
+        result.put("timestamps", ts.getTimestamps());
+        result.put("commitsRate", ts.getSeries().get("commitsRate"));
+        result.put("rollbacksRate", ts.getSeries().get("rollbacksRate"));
+        result.put("dataPoints", ts.getDataPoints());
+        result.put("dataSource", ts.getDataSource());
         return result;
     }
 
     /**
      * Returns historical tuple operation rates as time-series arrays.
      * <p>
-     * Rate calculation is done server-side: iterates adjacent points and
-     * computes delta / seconds_elapsed.
+     * Rate calculation is done server-side. Routes to bridge service for
+     * in-memory or persisted data.
      *
      * @param instance the PostgreSQL instance name
      * @param minutes  the time window in minutes
@@ -419,40 +405,22 @@ public class DiagnosticsApiResource {
 
         String instanceName = resolveInstance(instance);
         int clampedMinutes = clampMinutes(minutes);
-        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
-
-        List<Long> timestamps = new ArrayList<>();
-        List<Double> insertsRate = new ArrayList<>();
-        List<Double> updatesRate = new ArrayList<>();
-        List<Double> deletesRate = new ArrayList<>();
-
-        for (int i = 1; i < points.size(); i++) {
-            LiveChartHistoryPoint prev = points.get(i - 1);
-            LiveChartHistoryPoint curr = points.get(i);
-            double seconds = Duration.between(prev.getSampledAt(), curr.getSampledAt()).toMillis() / 1000.0;
-            if (seconds <= 0) continue;
-
-            double iRate = Math.max(0, (curr.getInserted() - prev.getInserted()) / seconds);
-            double uRate = Math.max(0, (curr.getUpdated() - prev.getUpdated()) / seconds);
-            double dRate = Math.max(0, (curr.getDeleted() - prev.getDeleted()) / seconds);
-
-            timestamps.add(curr.getSampledAt().toEpochMilli());
-            insertsRate.add(Math.round(iRate * 10.0) / 10.0);
-            updatesRate.add(Math.round(uRate * 10.0) / 10.0);
-            deletesRate.add(Math.round(dRate * 10.0) / 10.0);
-        }
+        var ts = metricsHistoryBridgeService.getTuplesHistory(instanceName, clampedMinutes);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("timestamps", timestamps);
-        result.put("insertsRate", insertsRate);
-        result.put("updatesRate", updatesRate);
-        result.put("deletesRate", deletesRate);
-        result.put("dataPoints", timestamps.size());
+        result.put("timestamps", ts.getTimestamps());
+        result.put("insertsRate", ts.getSeries().get("insertsRate"));
+        result.put("updatesRate", ts.getSeries().get("updatesRate"));
+        result.put("deletesRate", ts.getSeries().get("deletesRate"));
+        result.put("dataPoints", ts.getDataPoints());
+        result.put("dataSource", ts.getDataSource());
         return result;
     }
 
     /**
      * Returns historical cache hit ratios as time-series arrays.
+     * <p>
+     * Routes to bridge service for in-memory or persisted data.
      *
      * @param instance the PostgreSQL instance name
      * @param minutes  the time window in minutes
@@ -467,24 +435,95 @@ public class DiagnosticsApiResource {
 
         String instanceName = resolveInstance(instance);
         int clampedMinutes = clampMinutes(minutes);
-        List<LiveChartHistoryPoint> points = liveChartHistoryStore.getHistory(instanceName, clampedMinutes);
-
-        List<Long> timestamps = new ArrayList<>(points.size());
-        List<Double> bufferHit = new ArrayList<>(points.size());
-        List<Double> indexHit = new ArrayList<>(points.size());
-
-        for (LiveChartHistoryPoint p : points) {
-            timestamps.add(p.getSampledAt().toEpochMilli());
-            bufferHit.add(Math.round(p.getBufferCacheHitRatio() * 100.0) / 100.0);
-            indexHit.add(Math.round(p.getIndexCacheHitRatio() * 100.0) / 100.0);
-        }
+        var ts = metricsHistoryBridgeService.getCacheHistory(instanceName, clampedMinutes);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("timestamps", timestamps);
-        result.put("bufferHitRatio", bufferHit);
-        result.put("indexHitRatio", indexHit);
-        result.put("dataPoints", points.size());
+        result.put("timestamps", ts.getTimestamps());
+        result.put("bufferHitRatio", ts.getSeries().get("bufferHitRatio"));
+        result.put("indexHitRatio", ts.getSeries().get("indexHitRatio"));
+        result.put("dataPoints", ts.getDataPoints());
+        result.put("dataSource", ts.getDataSource());
         return result;
+    }
+
+    /**
+     * Returns a list of tracked queries with aggregated metrics.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param hours    the time window in hours
+     * @return list of query summaries
+     */
+    @GET
+    @Path("/history/queries/list")
+    public List<QueryMetricsHistory> getTrackedQueries(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("query-trends");
+
+        String instanceName = resolveInstance(instance);
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+        return historyRepository.getDistinctQueryIds(instanceName, clampedHours);
+    }
+
+    /**
+     * Returns time-series data for a specific query.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param queryId  the query identifier
+     * @param hours    the time window in hours
+     * @return list of query metrics history points
+     */
+    @GET
+    @Path("/history/queries")
+    public List<QueryMetricsHistory> getQueryHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("queryId") String queryId,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("query-trends");
+
+        String instanceName = resolveInstance(instance);
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+        return historyRepository.getQueryMetricsHistory(instanceName, queryId, clampedHours);
+    }
+
+    /**
+     * Returns time-series data for a specific database.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param database the database name
+     * @param hours    the time window in hours
+     * @return list of database metrics history points
+     */
+    @GET
+    @Path("/history/database")
+    public List<DatabaseMetricsHistory> getDatabaseHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("database") String database,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("database-trends");
+
+        String instanceName = resolveInstance(instance);
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+        return historyRepository.getDatabaseMetricsHistory(instanceName, database, clampedHours);
+    }
+
+    /**
+     * Returns time-series data for infrastructure metrics.
+     *
+     * @param instance the PostgreSQL instance name
+     * @param hours    the time window in hours
+     * @return list of infrastructure metrics history points
+     */
+    @GET
+    @Path("/history/infrastructure")
+    public List<InfrastructureMetricsHistory> getInfrastructureHistory(
+            @QueryParam("instance") @DefaultValue("default") String instance,
+            @QueryParam("hours") @DefaultValue("24") int hours) {
+        featureToggleService.requirePageEnabled("infrastructure-trends");
+
+        String instanceName = resolveInstance(instance);
+        int clampedHours = Math.max(1, Math.min(hours, 168));
+        return historyRepository.getInfrastructureMetricsHistory(instanceName, clampedHours);
     }
 
     /**
@@ -580,11 +619,11 @@ public class DiagnosticsApiResource {
      * Clamps the minutes parameter to allowed values.
      *
      * @param minutes the requested minutes
-     * @return clamped value (minimum 1, maximum 1440)
+     * @return clamped value (minimum 1, maximum 10080 i.e. 7 days)
      */
     private int clampMinutes(int minutes) {
         if (minutes < 1) return 5;
-        if (minutes > 1440) return 1440;
+        if (minutes > 10080) return 10080;
         return minutes;
     }
 }

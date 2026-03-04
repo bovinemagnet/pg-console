@@ -1,0 +1,231 @@
+{#include base}
+{#title}Query Trends - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Query Trends</h1>
+        <p class="text-muted">Historical query performance from persisted metrics</p>
+    </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <div class="btn-group" role="group" aria-label="Time window">
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 1}active{/if}"
+               href="/diagnostics/query-trends?instance={instance}&hours=1">1h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 6}active{/if}"
+               href="/diagnostics/query-trends?instance={instance}&hours=6">6h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 24}active{/if}"
+               href="/diagnostics/query-trends?instance={instance}&hours=24">24h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 72}active{/if}"
+               href="/diagnostics/query-trends?instance={instance}&hours=72">3d</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 168}active{/if}"
+               href="/diagnostics/query-trends?instance={instance}&hours=168">7d</a>
+        </div>
+        <span class="badge bg-info" id="queryCountBadge">
+            <i class="bi bi-database"></i> <span id="queryCount">-</span> queries
+        </span>
+    </div>
+</div>
+
+<!-- Query List Table -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-list-task"></i> Tracked Queries</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" id="queryTable">
+                <thead>
+                    <tr>
+                        <th>Query ID</th>
+                        <th>Query Text</th>
+                        <th class="text-end">Avg Mean Time (ms)</th>
+                        <th class="text-end">Total Calls</th>
+                        <th class="text-end">Total Time (ms)</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="queryTableBody">
+                    <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Query Chart (shown when a query is selected) -->
+<div class="card mb-4" id="queryChartCard" style="display: none;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0"><i class="bi bi-graph-up"></i> <span id="selectedQueryTitle">Query Detail</span></h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="hideChart()">
+            <i class="bi bi-x-lg"></i> Close
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="meanTimeChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="callsChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="chart-container" style="position: relative; height: 250px;">
+                    <canvas id="totalTimeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+    const instance = '{instance ?: "default"}';
+    const hours = {hours};
+    let meanTimeChart, callsChart, totalTimeChart;
+
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            x: {
+                type: 'time',
+                time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'dd HH:mm' } },
+                title: { display: false }
+            },
+            y: { beginAtZero: true, title: { display: false } }
+        },
+        plugins: {
+            legend: { display: true, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: { mode: 'index', intersect: false }
+        }
+    };
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function buildRow(q) {
+        const tr = document.createElement('tr');
+        const queryText = q.queryText || '';
+        const truncatedText = queryText.substring(0, 80) + (queryText.length > 80 ? '...' : '');
+
+        const tdId = document.createElement('td');
+        const code = document.createElement('code');
+        code.className = 'small';
+        code.textContent = q.queryId || '';
+        tdId.appendChild(code);
+
+        const tdText = document.createElement('td');
+        tdText.className = 'small';
+        tdText.title = queryText;
+        tdText.textContent = truncatedText;
+
+        const tdMean = document.createElement('td');
+        tdMean.className = 'text-end';
+        tdMean.textContent = (q.meanTimeMs || 0).toFixed(2);
+
+        const tdCalls = document.createElement('td');
+        tdCalls.className = 'text-end';
+        tdCalls.textContent = (q.totalCalls || 0).toLocaleString();
+
+        const tdTotal = document.createElement('td');
+        tdTotal.className = 'text-end';
+        tdTotal.textContent = (q.totalTimeMs || 0).toFixed(1);
+
+        const tdBtn = document.createElement('td');
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-outline-primary';
+        btn.addEventListener('click', function() { showQueryChart(q.queryId || ''); });
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-graph-up';
+        btn.appendChild(icon);
+        tdBtn.appendChild(btn);
+
+        tr.appendChild(tdId);
+        tr.appendChild(tdText);
+        tr.appendChild(tdMean);
+        tr.appendChild(tdCalls);
+        tr.appendChild(tdTotal);
+        tr.appendChild(tdBtn);
+        return tr;
+    }
+
+    function loadQueryList() {
+        fetch('/api/diagnostics/history/queries/list?instance=' + encodeURIComponent(instance) + '&hours=' + hours)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('queryCount').textContent = data.length;
+                const tbody = document.getElementById('queryTableBody');
+                tbody.replaceChildren();
+                if (data.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 6;
+                    td.className = 'text-center text-muted';
+                    td.textContent = 'No query history data available. Ensure history sampling is enabled.';
+                    tr.appendChild(td);
+                    tbody.appendChild(tr);
+                    return;
+                }
+                data.forEach(function(q) { tbody.appendChild(buildRow(q)); });
+            })
+            .catch(err => console.warn('Failed to load query list:', err));
+    }
+
+    function showQueryChart(queryId) {
+        document.getElementById('queryChartCard').style.display = 'block';
+        document.getElementById('selectedQueryTitle').textContent = 'Query: ' + queryId;
+
+        fetch('/api/diagnostics/history/queries?instance=' + encodeURIComponent(instance) + '&queryId=' + encodeURIComponent(queryId) + '&hours=' + hours)
+            .then(r => r.json())
+            .then(data => {
+                const points = data.map(d => ({ x: new Date(d.sampledAt).getTime(), meanTime: d.meanTimeMs, calls: d.totalCalls, totalTime: d.totalTimeMs }));
+
+                updateChart(meanTimeChart, 'Mean Time (ms)', points.map(p => ({ x: p.x, y: p.meanTime })), '#007bff');
+                updateChart(callsChart, 'Total Calls', points.map(p => ({ x: p.x, y: p.calls })), '#28a745');
+                updateChart(totalTimeChart, 'Total Time (ms)', points.map(p => ({ x: p.x, y: p.totalTime })), '#dc3545');
+            })
+            .catch(err => console.warn('Failed to load query history:', err));
+
+        document.getElementById('queryChartCard').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function hideChart() {
+        document.getElementById('queryChartCard').style.display = 'none';
+    }
+
+    function updateChart(chart, label, data, colour) {
+        chart.data.datasets[0].label = label;
+        chart.data.datasets[0].data = data;
+        chart.data.datasets[0].borderColor = colour;
+        chart.data.datasets[0].backgroundColor = colour + '1a';
+        chart.update();
+    }
+
+    function createChart(canvasId) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: { datasets: [{ label: '', data: [], tension: 0.2, fill: true, pointRadius: 0 }] },
+            options: commonOptions
+        });
+    }
+
+    meanTimeChart = createChart('meanTimeChart');
+    callsChart = createChart('callsChart');
+    totalTimeChart = createChart('totalTimeChart');
+    loadQueryList();
+</script>
+
+{/include}

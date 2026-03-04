@@ -672,6 +672,51 @@ public class FeatureToggleService {
         return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().metricsHistoryEnabled();
     }
 
+    /**
+     * Checks if the Query Trends page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isQueryTrendsEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().queryTrendsEnabled();
+    }
+
+    /**
+     * Checks if the Database Trends page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isDatabaseTrendsEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().databaseTrendsEnabled();
+    }
+
+    /**
+     * Checks if the Infrastructure Trends page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isInfrastructureTrendsEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().infrastructureTrendsEnabled();
+    }
+
+    /**
+     * Checks if the Stopwatch page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isStopwatchEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().stopwatchEnabled();
+    }
+
+    /**
+     * Checks if the Window Compare page is enabled.
+     *
+     * @return true if page is enabled
+     */
+    public boolean isWindowCompareEnabled() {
+        return isDiagnosticsSectionEnabled() && dashboardConfig.diagnostics().windowCompareEnabled();
+    }
+
     // ========================================
     // Guard methods
     // ========================================
@@ -761,6 +806,11 @@ public class FeatureToggleService {
             case "xid-wraparound" -> isXidWraparoundEnabled();
             case "live-sparklines" -> isLiveSparklinesEnabled();
             case "metrics-history" -> isMetricsHistoryEnabled();
+            case "query-trends" -> isQueryTrendsEnabled();
+            case "database-trends" -> isDatabaseTrendsEnabled();
+            case "infrastructure-trends" -> isInfrastructureTrendsEnabled();
+            case "stopwatch" -> isStopwatchEnabled();
+            case "window-compare" -> isWindowCompareEnabled();
             // System (always enabled)
             case "about" -> true;
             default -> true;
@@ -861,6 +911,11 @@ public class FeatureToggleService {
         toggles.put("xidWraparound", isXidWraparoundEnabled());
         toggles.put("liveSparklines", isLiveSparklinesEnabled());
         toggles.put("metricsHistory", isMetricsHistoryEnabled());
+        toggles.put("queryTrends", isQueryTrendsEnabled());
+        toggles.put("databaseTrends", isDatabaseTrendsEnabled());
+        toggles.put("infrastructureTrends", isInfrastructureTrendsEnabled());
+        toggles.put("stopwatch", isStopwatchEnabled());
+        toggles.put("windowCompare", isWindowCompareEnabled());
 
         return toggles;
     }

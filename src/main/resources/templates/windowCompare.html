@@ -1,0 +1,151 @@
+{#include base}
+{#title}Window Comparison - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-layout-split"></i> Window Comparison</h1>
+        <p class="text-muted">Compare metrics between two time windows to identify trends and regressions</p>
+    </div>
+</div>
+
+<!-- Presets -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-lightning"></i> Quick Presets</h5>
+    </div>
+    <div class="card-body">
+        {#if presets.size > 0}
+        <div class="d-flex flex-wrap gap-2">
+            {#for preset in presets}
+            {#if preset.get('available')}
+            <a href="/window-compare/result?startA={preset.get('startA')}&endA={preset.get('endA')}&startB={preset.get('startB')}&endB={preset.get('endB')}&instance={instance}"
+               class="btn btn-outline-primary">
+                <i class="bi bi-clock-history"></i> {preset.get('name')}
+            </a>
+            {#else}
+            <button class="btn btn-outline-secondary" disabled title="Insufficient history data for this comparison">
+                <i class="bi bi-clock-history"></i> {preset.get('name')}
+                <span class="badge bg-secondary ms-1">No data</span>
+            </button>
+            {/if}
+            {/for}
+        </div>
+        {#else}
+        <p class="text-muted mb-0">No presets available.</p>
+        {/if}
+    </div>
+</div>
+
+<!-- Custom Comparison -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-sliders"></i> Custom Comparison</h5>
+    </div>
+    <div class="card-body">
+        <form id="compareForm" action="/window-compare/result" method="GET">
+            <input type="hidden" name="instance" value="{instance}">
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card border-info">
+                        <div class="card-header bg-info bg-opacity-10">
+                            <h6 class="mb-0"><i class="bi bi-a-circle"></i> Window A (Baseline)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="startALocal" class="form-label">Start</label>
+                                <input type="datetime-local" class="form-control" id="startALocal" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="endALocal" class="form-label">End</label>
+                                <input type="datetime-local" class="form-control" id="endALocal" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning bg-opacity-10">
+                            <h6 class="mb-0"><i class="bi bi-b-circle"></i> Window B (Current)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="startBLocal" class="form-label">Start</label>
+                                <input type="datetime-local" class="form-control" id="startBLocal" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="endBLocal" class="form-label">End</label>
+                                <input type="datetime-local" class="form-control" id="endBLocal" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden fields for ISO-8601 values -->
+            <input type="hidden" name="startA" id="startA">
+            <input type="hidden" name="endA" id="endA">
+            <input type="hidden" name="startB" id="startB">
+            <input type="hidden" name="endB" id="endB">
+
+            <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary" id="compareBtn">
+                    <i class="bi bi-arrow-left-right"></i> Compare Windows
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Set default values: Window A = yesterday same time range, Window B = today
+    (function() {
+        var now = new Date();
+        var todayStart = new Date(now);
+        todayStart.setHours(Math.max(0, now.getHours() - 8), 0, 0, 0);
+
+        var yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        var yesterdayEnd = new Date(now);
+        yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+
+        function toLocalDatetime(d) {
+            var year = d.getFullYear();
+            var month = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            var hours = String(d.getHours()).padStart(2, '0');
+            var mins = String(d.getMinutes()).padStart(2, '0');
+            return year + '-' + month + '-' + day + 'T' + hours + ':' + mins;
+        }
+
+        document.getElementById('startALocal').value = toLocalDatetime(yesterdayStart);
+        document.getElementById('endALocal').value = toLocalDatetime(yesterdayEnd);
+        document.getElementById('startBLocal').value = toLocalDatetime(todayStart);
+        document.getElementById('endBLocal').value = toLocalDatetime(now);
+    })();
+
+    // Convert local datetime to ISO-8601 on submit
+    document.getElementById('compareForm').addEventListener('submit', function(e) {
+        var startALocal = document.getElementById('startALocal').value;
+        var endALocal = document.getElementById('endALocal').value;
+        var startBLocal = document.getElementById('startBLocal').value;
+        var endBLocal = document.getElementById('endBLocal').value;
+
+        if (!startALocal || !endALocal || !startBLocal || !endBLocal) {
+            e.preventDefault();
+            alert('Please fill in all date/time fields.');
+            return;
+        }
+
+        document.getElementById('startA').value = new Date(startALocal).toISOString();
+        document.getElementById('endA').value = new Date(endALocal).toISOString();
+        document.getElementById('startB').value = new Date(startBLocal).toISOString();
+        document.getElementById('endB').value = new Date(endBLocal).toISOString();
+    });
+</script>
+
+</div>
+
+{/include}

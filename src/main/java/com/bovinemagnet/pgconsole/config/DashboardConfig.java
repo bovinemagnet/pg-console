@@ -750,5 +750,50 @@ public interface DashboardConfig {
 		@WithName("metrics-history")
 		@WithDefault("true")
 		boolean metricsHistoryEnabled();
+
+		/**
+		 * Enable or disable the Query Trends page (/diagnostics/query-trends).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("query-trends")
+		@WithDefault("true")
+		boolean queryTrendsEnabled();
+
+		/**
+		 * Enable or disable the Database Trends page (/diagnostics/database-trends).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("database-trends")
+		@WithDefault("true")
+		boolean databaseTrendsEnabled();
+
+		/**
+		 * Enable or disable the Infrastructure Trends page (/diagnostics/infrastructure-trends).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("infrastructure-trends")
+		@WithDefault("true")
+		boolean infrastructureTrendsEnabled();
+
+		/**
+		 * Enable or disable the Stopwatch page (/stopwatch).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("stopwatch")
+		@WithDefault("true")
+		boolean stopwatchEnabled();
+
+		/**
+		 * Enable or disable the Window Compare page (/window-compare).
+		 *
+		 * @return true if page is enabled
+		 */
+		@WithName("window-compare")
+		@WithDefault("true")
+		boolean windowCompareEnabled();
 	}
 }

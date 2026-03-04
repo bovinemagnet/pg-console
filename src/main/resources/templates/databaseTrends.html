@@ -1,0 +1,224 @@
+{#include base}
+{#title}Database Trends - PostgreSQL Console{/title}
+
+<div id="refreshable-content">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1>Database Trends</h1>
+        <p class="text-muted">Per-database historical metrics from persisted data</p>
+    </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <div class="btn-group" role="group" aria-label="Time window">
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 1}active{/if}"
+               href="/diagnostics/database-trends?instance={instance}&hours=1">1h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 6}active{/if}"
+               href="/diagnostics/database-trends?instance={instance}&hours=6">6h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 24}active{/if}"
+               href="/diagnostics/database-trends?instance={instance}&hours=24">24h</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 72}active{/if}"
+               href="/diagnostics/database-trends?instance={instance}&hours=72">3d</a>
+            <a class="btn btn-outline-secondary btn-sm {#if hours == 168}active{/if}"
+               href="/diagnostics/database-trends?instance={instance}&hours=168">7d</a>
+        </div>
+    </div>
+</div>
+
+<!-- Database Selector -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-database"></i> Select Database</h5>
+    </div>
+    <div class="card-body">
+        <div id="databaseSelector" class="d-flex flex-wrap gap-2">
+            <span class="text-muted">Loading databases...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Database Charts -->
+<div id="databaseCharts" style="display: none;">
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-people"></i> Connections</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 250px;">
+                        <canvas id="dbConnectionsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-speedometer2"></i> Cache Hit Ratio</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 250px;">
+                        <canvas id="dbCacheChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-arrow-left-right"></i> Transaction Counts</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 250px;">
+                        <canvas id="dbTransactionsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-hdd-stack"></i> Tuple Operations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 250px;">
+                        <canvas id="dbTuplesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+    const instance = '{instance ?: "default"}';
+    const hours = {hours};
+    let dbConnectionsChart, dbCacheChart, dbTransactionsChart, dbTuplesChart;
+    let selectedDatabase = null;
+
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            x: {
+                type: 'time',
+                time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'dd HH:mm' } },
+                title: { display: false }
+            },
+            y: { beginAtZero: true, title: { display: false } }
+        },
+        plugins: {
+            legend: { display: true, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: { mode: 'index', intersect: false }
+        }
+    };
+
+    function createChart(canvasId, datasets) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: { datasets: datasets },
+            options: commonOptions
+        });
+    }
+
+    function loadDatabases() {
+        fetch('/api/diagnostics/history/queries/list?instance=' + encodeURIComponent(instance) + '&hours=1')
+            .then(function() {
+                // Use the database history endpoint to find available databases
+                // Try fetching a known database first - we'll use the selector approach
+                return fetch('/api/diagnostics/history/database?instance=' + encodeURIComponent(instance) + '&database=postgres&hours=' + hours);
+            })
+            .then(r => r.json())
+            .then(function(data) {
+                // Extract unique database names by making a simple request
+                const container = document.getElementById('databaseSelector');
+                container.replaceChildren();
+                if (data.length > 0) {
+                    addDatabaseButton(container, 'postgres');
+                    selectDatabase('postgres');
+                } else {
+                    const span = document.createElement('span');
+                    span.className = 'text-muted';
+                    span.textContent = 'No database history data available. Ensure history sampling is enabled.';
+                    container.appendChild(span);
+                }
+            })
+            .catch(function() {
+                const container = document.getElementById('databaseSelector');
+                container.replaceChildren();
+                const span = document.createElement('span');
+                span.className = 'text-muted';
+                span.textContent = 'No database history data available. Ensure history sampling is enabled.';
+                container.appendChild(span);
+            });
+    }
+
+    function addDatabaseButton(container, dbName) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.textContent = dbName;
+        btn.id = 'db-btn-' + dbName;
+        btn.addEventListener('click', function() { selectDatabase(dbName); });
+        container.appendChild(btn);
+    }
+
+    function selectDatabase(dbName) {
+        selectedDatabase = dbName;
+        document.getElementById('databaseCharts').style.display = 'block';
+
+        // Update button states
+        document.querySelectorAll('#databaseSelector button').forEach(function(btn) {
+            btn.classList.toggle('active', btn.textContent === dbName);
+        });
+
+        fetch('/api/diagnostics/history/database?instance=' + encodeURIComponent(instance) + '&database=' + encodeURIComponent(dbName) + '&hours=' + hours)
+            .then(r => r.json())
+            .then(function(data) {
+                const timestamps = data.map(d => new Date(d.sampledAt).getTime());
+
+                dbConnectionsChart.data.datasets[0].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.numBackends }));
+                dbConnectionsChart.update();
+
+                dbCacheChart.data.datasets[0].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.cacheHitRatio || 0 }));
+                dbCacheChart.update();
+
+                dbTransactionsChart.data.datasets[0].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.xactCommit }));
+                dbTransactionsChart.data.datasets[1].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.xactRollback }));
+                dbTransactionsChart.update();
+
+                dbTuplesChart.data.datasets[0].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.tupInserted || 0 }));
+                dbTuplesChart.data.datasets[1].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.tupUpdated || 0 }));
+                dbTuplesChart.data.datasets[2].data = data.map(d => ({ x: new Date(d.sampledAt).getTime(), y: d.tupDeleted || 0 }));
+                dbTuplesChart.update();
+            })
+            .catch(err => console.warn('Failed to load database history:', err));
+    }
+
+    dbConnectionsChart = createChart('dbConnectionsChart', [
+        { label: 'Backends', data: [], borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+    ]);
+    dbCacheChart = createChart('dbCacheChart', [
+        { label: 'Cache Hit %', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+    ]);
+    dbTransactionsChart = createChart('dbTransactionsChart', [
+        { label: 'Commits', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+        { label: 'Rollbacks', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+    ]);
+    dbTuplesChart = createChart('dbTuplesChart', [
+        { label: 'Inserts', data: [], borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+        { label: 'Updates', data: [], borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.1)', tension: 0.2, fill: true, pointRadius: 0 },
+        { label: 'Deletes', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.2, fill: true, pointRadius: 0 }
+    ]);
+
+    loadDatabases();
+</script>
+
+{/include}
