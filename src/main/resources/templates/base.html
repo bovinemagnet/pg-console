@@ -2195,16 +2195,17 @@
         // ============================================
         // Table Filter (client-side row filtering)
         // ============================================
-        document.addEventListener('DOMContentLoaded', function() {
+        function initTableFilters() {
             document.querySelectorAll('.table-filter-input').forEach(function(input) {
-                var targetId = input.getAttribute('data-table');
-                var table = targetId ? document.getElementById(targetId) : input.closest('.card, .col-12, .col')?.querySelector('table');
-                if (!table) return;
-                var tbody = table.querySelector('tbody');
-                if (!tbody) return;
+                if (input.dataset.filterBound) return;
+                input.dataset.filterBound = 'true';
 
                 input.addEventListener('input', function() {
                     var filter = this.value.toLowerCase();
+                    // Find first table in the refreshable content area
+                    var container = document.getElementById('refreshable-content') || document.querySelector('main') || document.body;
+                    var tbody = container.querySelector('table tbody');
+                    if (!tbody) return;
                     var rows = tbody.querySelectorAll('tr');
                     var visibleCount = 0;
                     rows.forEach(function(row) {
@@ -2213,14 +2214,15 @@
                         row.style.display = match ? '' : 'none';
                         if (match) visibleCount++;
                     });
-                    // Update count badge if present
                     var badge = input.parentElement.querySelector('.filter-count');
                     if (badge) {
                         badge.textContent = visibleCount + ' / ' + rows.length;
                     }
                 });
             });
-        });
+        }
+        document.addEventListener('DOMContentLoaded', initTableFilters);
+        document.addEventListener('htmx:afterSettle', initTableFilters);
 
     </script>
 
