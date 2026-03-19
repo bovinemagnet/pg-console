@@ -8,6 +8,17 @@
         <h1>Locks & Blocking</h1>
         <p class="text-muted">View current lock contention and blocking relationships</p>
     </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <div class="input-group input-group-sm" style="width: 250px;">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control table-filter-input" placeholder="Filter locks..." aria-label="Filter locks">
+            <span class="input-group-text filter-count text-muted"></span>
+        </div>
+        <a href="/locks/export?instance={currentInstance ?: 'default'}"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+    </div>
 </div>
 
 <!-- Blocking Tree Section -->

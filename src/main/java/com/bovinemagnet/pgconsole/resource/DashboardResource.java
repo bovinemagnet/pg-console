@@ -942,6 +942,35 @@ public class DashboardResource {
     }
 
     /**
+     * Returns a small badge showing the count of active and blocked queries.
+     * <p>
+     * Used by the sidebar navigation to provide at-a-glance activity awareness.
+     * The badge is polled every 10 seconds via htmx.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTML badge fragment, or empty string if no active queries
+     */
+    @GET
+    @Path("/fragments/activity-badge")
+    @Produces(MediaType.TEXT_HTML)
+    public String activityBadge(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+        var stats = postgresService.getOverviewStats(instance);
+        int active = stats.getActiveQueries();
+        int blocked = stats.getBlockedQueries();
+
+        if (active == 0 && blocked == 0) {
+            return "";
+        }
+
+        if (blocked > 0) {
+            return "<span class=\"badge bg-danger ms-1\" title=\"" + active + " active, " + blocked + " blocked\">" + active + "/" + blocked + "</span>";
+        }
+
+        return "<span class=\"badge bg-primary ms-1\" title=\"" + active + " active queries\">" + active + "</span>";
+    }
+
+    /**
      * Formats a number with thousand separators for display.
      *
      * @param number the number to format
@@ -2449,6 +2478,165 @@ public class DashboardResource {
                          .data("schemaEnabled", config.schema().enabled())
                          .data("inMemoryMinutes", config.schema().inMemoryMinutes())
                          .data("toggles", featureToggleService.getAllToggles());
+    }
+
+    /**
+     * Exports current activity as a CSV file.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with CSV content and download headers
+     */
+    @GET
+    @Path("/activity/export")
+    @Produces("text/csv")
+    public Response exportActivity(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        List<Activity> activities = postgresService.getCurrentActivity(instance);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("PID,User,Database,Application,State,Wait Event,Query Start,Query,Blocking PID\n");
+
+        for (Activity a : activities) {
+            csv.append(a.getPid()).append(",")
+               .append(escapeCsv(a.getUser())).append(",")
+               .append(escapeCsv(a.getDatabase())).append(",")
+               .append(escapeCsv(a.getApplicationName())).append(",")
+               .append(escapeCsv(a.getState())).append(",")
+               .append(escapeCsv(a.getWaitEvent())).append(",")
+               .append(a.getQueryStart() != null ? a.getQueryStart().toString() : "").append(",")
+               .append(escapeCsv(a.getQuery())).append(",")
+               .append(a.getBlockingPid() != null ? a.getBlockingPid() : "")
+               .append("\n");
+        }
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String filename = String.format("activity-%s-%s.csv", instance, timestamp);
+
+        return Response.ok(csv.toString())
+                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .build();
+    }
+
+    /**
+     * Exports lock information as a CSV file.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with CSV content and download headers
+     */
+    @GET
+    @Path("/locks/export")
+    @Produces("text/csv")
+    public Response exportLocks(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        List<LockInfo> locks = postgresService.getLockInfo(instance);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("PID,User,Lock Type,Relation,Mode,Granted,State,Query\n");
+
+        for (LockInfo l : locks) {
+            csv.append(l.getPid()).append(",")
+               .append(escapeCsv(l.getUser())).append(",")
+               .append(escapeCsv(l.getLockType())).append(",")
+               .append(escapeCsv(l.getRelation())).append(",")
+               .append(escapeCsv(l.getMode())).append(",")
+               .append(l.isGranted()).append(",")
+               .append(escapeCsv(l.getState())).append(",")
+               .append(escapeCsv(l.getQuery()))
+               .append("\n");
+        }
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String filename = String.format("locks-%s-%s.csv", instance, timestamp);
+
+        return Response.ok(csv.toString())
+                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .build();
+    }
+
+    /**
+     * Exports table statistics as a CSV file.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with CSV content and download headers
+     */
+    @GET
+    @Path("/tables/export")
+    @Produces("text/csv")
+    public Response exportTables(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        List<TableStats> tables = postgresService.getTableStats(instance);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Schema,Table,Seq Scans,Index Scans,Inserts,Updates,Deletes,")
+           .append("Live Tuples,Dead Tuples,Dead %,Last Vacuum,Last Analyse\n");
+
+        for (TableStats t : tables) {
+            csv.append(escapeCsv(t.getSchemaName())).append(",")
+               .append(escapeCsv(t.getTableName())).append(",")
+               .append(t.getSeqScan()).append(",")
+               .append(t.getIdxScan()).append(",")
+               .append(t.getnTupIns()).append(",")
+               .append(t.getnTupUpd()).append(",")
+               .append(t.getnTupDel()).append(",")
+               .append(t.getnLiveTup()).append(",")
+               .append(t.getnDeadTup()).append(",")
+               .append(String.format("%.1f", t.getDeadTupleRatio())).append(",")
+               .append(t.getLastVacuumAny() != null ? t.getLastVacuumAny().toString() : "Never").append(",")
+               .append(t.getLastAnalyzeAny() != null ? t.getLastAnalyzeAny().toString() : "Never")
+               .append("\n");
+        }
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String filename = String.format("tables-%s-%s.csv", instance, timestamp);
+
+        return Response.ok(csv.toString())
+                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .build();
+    }
+
+    /**
+     * Exports database metrics as a CSV file.
+     *
+     * @param instance the PostgreSQL instance identifier (defaults to "default")
+     * @return HTTP response with CSV content and download headers
+     */
+    @GET
+    @Path("/databases/export")
+    @Produces("text/csv")
+    public Response exportDatabases(
+            @QueryParam("instance") @DefaultValue("default") String instance) {
+
+        List<DatabaseMetrics> databases = postgresService.getAllDatabaseMetrics(instance);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Database,Size,Backends,Commits,Rollbacks,Cache Hit Ratio,")
+           .append("Blocks Read,Blocks Hit,Deadlocks,Conflicts,Temp Files,Temp Bytes\n");
+
+        for (DatabaseMetrics d : databases) {
+            csv.append(escapeCsv(d.getDatname())).append(",")
+               .append(escapeCsv(d.getDatabaseSize())).append(",")
+               .append(d.getNumBackends()).append(",")
+               .append(d.getXactCommit()).append(",")
+               .append(d.getXactRollback()).append(",")
+               .append(String.format("%.2f", d.getCacheHitRatio())).append(",")
+               .append(d.getBlksRead()).append(",")
+               .append(d.getBlksHit()).append(",")
+               .append(d.getDeadlocks()).append(",")
+               .append(d.getConflicts()).append(",")
+               .append(d.getTempFiles()).append(",")
+               .append(d.getTempBytes())
+               .append("\n");
+        }
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String filename = String.format("databases-%s-%s.csv", instance, timestamp);
+
+        return Response.ok(csv.toString())
+                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .build();
     }
 
     /**

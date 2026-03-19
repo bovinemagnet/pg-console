@@ -713,7 +713,18 @@
         .query-preview {
             font-family: monospace;
             font-size: 0.9em;
-            cursor: help;
+            cursor: pointer;
+            max-width: 350px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .query-preview.expanded {
+            white-space: pre-wrap;
+            max-width: none;
+            overflow: visible;
         }
 
         .query-full {
@@ -732,7 +743,7 @@
             color: var(--bs-body-color);
         }
 
-        .query-preview:hover .query-full {
+        .query-preview:not(.expanded):hover .query-full {
             display: block;
         }
 
@@ -1168,6 +1179,10 @@
                     <a class="nav-link" href="/activity?instance={currentInstance ?: 'default'}" data-title="Activity">
                         <i class="bi bi-activity" aria-hidden="true"></i>
                         <span class="nav-link-text">Activity</span>
+                        <span id="activity-badge"
+                              hx-get="/fragments/activity-badge?instance={currentInstance ?: 'default'}"
+                              hx-trigger="load, every 10s"
+                              hx-swap="innerHTML"></span>
                     </a>
                     {/if}
                     {#if toggles.slowQueries}
@@ -2167,6 +2182,46 @@
                     });
             });
         }
+        // ============================================
+        // Query Preview Click-to-Expand
+        // ============================================
+        document.addEventListener('click', function(e) {
+            var preview = e.target.closest('.query-preview');
+            if (preview) {
+                preview.classList.toggle('expanded');
+            }
+        });
+
+        // ============================================
+        // Table Filter (client-side row filtering)
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.table-filter-input').forEach(function(input) {
+                var targetId = input.getAttribute('data-table');
+                var table = targetId ? document.getElementById(targetId) : input.closest('.card, .col-12, .col')?.querySelector('table');
+                if (!table) return;
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+
+                input.addEventListener('input', function() {
+                    var filter = this.value.toLowerCase();
+                    var rows = tbody.querySelectorAll('tr');
+                    var visibleCount = 0;
+                    rows.forEach(function(row) {
+                        var text = row.textContent.toLowerCase();
+                        var match = !filter || text.indexOf(filter) !== -1;
+                        row.style.display = match ? '' : 'none';
+                        if (match) visibleCount++;
+                    });
+                    // Update count badge if present
+                    var badge = input.parentElement.querySelector('.filter-count');
+                    if (badge) {
+                        badge.textContent = visibleCount + ' / ' + rows.length;
+                    }
+                });
+            });
+        });
+
     </script>
 
     <!-- Keyboard Shortcuts Help Modal -->

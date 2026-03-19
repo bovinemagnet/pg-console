@@ -53,3 +53,5 @@ target/**
 
 # Enfironment stuff
 .env
+
+.auto-claude

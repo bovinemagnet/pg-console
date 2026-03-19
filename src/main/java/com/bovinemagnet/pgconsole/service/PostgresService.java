@@ -466,7 +466,11 @@ public class PostgresService {
 			    n_tup_upd,
 			    n_tup_del,
 			    n_live_tup,
-			    n_dead_tup
+			    n_dead_tup,
+			    last_vacuum,
+			    last_autovacuum,
+			    last_analyze,
+			    last_autoanalyze
 			FROM pg_stat_user_tables
 			WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
 			ORDER BY (n_live_tup + n_dead_tup) DESC
@@ -487,6 +491,14 @@ public class PostgresService {
 				stat.setnTupDel(rs.getLong("n_tup_del"));
 				stat.setnLiveTup(rs.getLong("n_live_tup"));
 				stat.setnDeadTup(rs.getLong("n_dead_tup"));
+				java.sql.Timestamp lvTs = rs.getTimestamp("last_vacuum");
+				if (lvTs != null) stat.setLastVacuum(lvTs.toLocalDateTime());
+				java.sql.Timestamp lavTs = rs.getTimestamp("last_autovacuum");
+				if (lavTs != null) stat.setLastAutovacuum(lavTs.toLocalDateTime());
+				java.sql.Timestamp laTs = rs.getTimestamp("last_analyze");
+				if (laTs != null) stat.setLastAnalyze(laTs.toLocalDateTime());
+				java.sql.Timestamp laaTs = rs.getTimestamp("last_autoanalyze");
+				if (laaTs != null) stat.setLastAutoanalyze(laaTs.toLocalDateTime());
 				stats.add(stat);
 			}
 		} catch (SQLException e) {

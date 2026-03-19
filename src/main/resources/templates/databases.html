@@ -8,6 +8,17 @@
         <h1>Database Metrics</h1>
         <p class="text-muted">Per-database statistics from pg_stat_database</p>
     </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <div class="input-group input-group-sm" style="width: 250px;">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control table-filter-input" placeholder="Filter databases..." aria-label="Filter databases">
+            <span class="input-group-text filter-count text-muted"></span>
+        </div>
+        <a href="/databases/export?instance={currentInstance ?: 'default'}"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+    </div>
 </div>
 
 {#if databases.isEmpty()}

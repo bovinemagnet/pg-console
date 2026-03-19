@@ -1,5 +1,8 @@
 package com.bovinemagnet.pgconsole.model;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
 /**
  * Represents table usage statistics from pg_stat_user_tables.
  * <p>
@@ -55,6 +58,18 @@ public class TableStats {
 
     /** The estimated number of dead rows in this table requiring vacuum. */
     private long nDeadTup;
+
+    /** Timestamp of the last manual VACUUM on this table, or null if never vacuumed. */
+    private LocalDateTime lastVacuum;
+
+    /** Timestamp of the last autovacuum on this table, or null if never auto-vacuumed. */
+    private LocalDateTime lastAutovacuum;
+
+    /** Timestamp of the last manual ANALYZE on this table, or null if never analysed. */
+    private LocalDateTime lastAnalyze;
+
+    /** Timestamp of the last auto-analyze on this table, or null if never auto-analysed. */
+    private LocalDateTime lastAutoanalyze;
 
     /**
      * Constructs a new TableStats instance with default values.
@@ -243,5 +258,117 @@ public class TableStats {
     public double getBloatRatio() {
         if (nLiveTup == 0) return 0.0;
         return (double) nDeadTup / (double) (nLiveTup + nDeadTup) * 100.0;
+    }
+
+    /**
+     * Returns the dead tuple ratio as a percentage of total tuples.
+     *
+     * @return the dead tuple percentage (0-100), or 0.0 if no tuples exist
+     */
+    public double getDeadTupleRatio() {
+        long total = nLiveTup + nDeadTup;
+        if (total == 0) return 0.0;
+        return (double) nDeadTup / (double) total * 100.0;
+    }
+
+    /**
+     * Returns the dead tuple ratio formatted to one decimal place.
+     *
+     * @return formatted string (e.g., "12.3")
+     */
+    public String getDeadTupleRatioFormatted() {
+        return String.format("%.1f", getDeadTupleRatio());
+    }
+
+    public LocalDateTime getLastVacuum() { return lastVacuum; }
+    public void setLastVacuum(LocalDateTime lastVacuum) { this.lastVacuum = lastVacuum; }
+
+    public LocalDateTime getLastAutovacuum() { return lastAutovacuum; }
+    public void setLastAutovacuum(LocalDateTime lastAutovacuum) { this.lastAutovacuum = lastAutovacuum; }
+
+    public LocalDateTime getLastAnalyze() { return lastAnalyze; }
+    public void setLastAnalyze(LocalDateTime lastAnalyze) { this.lastAnalyze = lastAnalyze; }
+
+    public LocalDateTime getLastAutoanalyze() { return lastAutoanalyze; }
+    public void setLastAutoanalyze(LocalDateTime lastAutoanalyze) { this.lastAutoanalyze = lastAutoanalyze; }
+
+    /**
+     * Returns the most recent vacuum timestamp (manual or auto).
+     *
+     * @return the latest vacuum timestamp, or null if never vacuumed
+     */
+    public LocalDateTime getLastVacuumAny() {
+        if (lastVacuum == null) return lastAutovacuum;
+        if (lastAutovacuum == null) return lastVacuum;
+        return lastVacuum.isAfter(lastAutovacuum) ? lastVacuum : lastAutovacuum;
+    }
+
+    /**
+     * Returns the most recent analyze timestamp (manual or auto).
+     *
+     * @return the latest analyze timestamp, or null if never analysed
+     */
+    public LocalDateTime getLastAnalyzeAny() {
+        if (lastAnalyze == null) return lastAutoanalyze;
+        if (lastAutoanalyze == null) return lastAnalyze;
+        return lastAnalyze.isAfter(lastAutoanalyze) ? lastAnalyze : lastAutoanalyze;
+    }
+
+    /**
+     * Returns a human-readable relative time string for the last vacuum.
+     * <p>
+     * Examples: "3h ago", "2d ago", "Never"
+     *
+     * @return relative time string
+     */
+    public String getLastVacuumAge() {
+        return formatAge(getLastVacuumAny());
+    }
+
+    /**
+     * Returns a human-readable relative time string for the last analyze.
+     *
+     * @return relative time string
+     */
+    public String getLastAnalyzeAge() {
+        return formatAge(getLastAnalyzeAny());
+    }
+
+    /**
+     * Returns a CSS class suffix for vacuum age colouring.
+     * <p>
+     * Green (&lt;1 day), yellow (1-7 days), red (&gt;7 days or never).
+     *
+     * @return "success", "warning", or "danger"
+     */
+    public String getVacuumAgeColour() {
+        return ageColour(getLastVacuumAny());
+    }
+
+    /**
+     * Returns a CSS class suffix for analyze age colouring.
+     *
+     * @return "success", "warning", or "danger"
+     */
+    public String getAnalyzeAgeColour() {
+        return ageColour(getLastAnalyzeAny());
+    }
+
+    private String formatAge(LocalDateTime timestamp) {
+        if (timestamp == null) return "Never";
+        long hours = ChronoUnit.HOURS.between(timestamp, LocalDateTime.now());
+        if (hours < 1) return "<1h ago";
+        if (hours < 24) return hours + "h ago";
+        long days = hours / 24;
+        if (days < 30) return days + "d ago";
+        return (days / 30) + "mo ago";
+    }
+
+    private String ageColour(LocalDateTime timestamp) {
+        if (timestamp == null) return "danger";
+        long hours = ChronoUnit.HOURS.between(timestamp, LocalDateTime.now());
+        if (hours < 24) return "success";
+        if (hours < 168) return "warning"; // 7 days
+        return "danger";
     }
 }

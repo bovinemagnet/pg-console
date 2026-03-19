@@ -5,6 +5,7 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -181,6 +182,10 @@ public class StartupBanner {
 		if ("0.0.0.0".equals(host)) {
 			host = "localhost";
 		}
-		return "http://" + host + ":" + httpPort;
+		// Read the actual port at runtime (handles port=0 where OS assigns a random port)
+		int actualPort = ConfigProvider.getConfig()
+				.getOptionalValue("quarkus.http.port", Integer.class)
+				.orElse(httpPort);
+		return "http://" + host + ":" + actualPort;
 	}
 }
