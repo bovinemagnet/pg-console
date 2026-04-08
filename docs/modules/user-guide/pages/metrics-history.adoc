@@ -5,19 +5,22 @@ Paul Snow
 :keywords: metrics history, historical monitoring, chart.js, database metrics, connections, transactions, cache hit ratio, export
 
 [abstract]
-This guide explains how to use pg-console's Metrics History feature to visualise and analyse historical database metrics. Unlike Live Charts which only show real-time data, Metrics History retains up to 24 hours of in-memory metrics with configurable time windows and data export capabilities.
+This guide explains how to use pg-console's Metrics History feature to visualise and analyse historical database metrics. Unlike Live Charts which only show real-time data, Metrics History provides up to 7 days of historical metrics by combining in-memory data (for recent periods) with persisted database storage (for longer ranges), along with configurable time windows and data export capabilities.
+
+.Metrics history dashboard in dark mode
+image::screenshot-metrics-history-dark.png[Metrics History Dashboard,width=800]
 
 == What Is Metrics History?
 
-Metrics History is a diagnostic dashboard that captures and displays historical database metrics over time. The feature collects metrics every 5 seconds and retains data in-memory for up to 24 hours, allowing you to analyse trends and identify patterns that may not be visible in real-time monitoring.
+Metrics History is a diagnostic dashboard that captures and displays historical database metrics over time. For recent data (up to 60 minutes), it uses in-memory storage sampled every 5 seconds. For longer ranges (up to 7 days), it seamlessly switches to persisted database tables sampled every 60 seconds. This dual-source approach provides both high-resolution recent data and long-term trend visibility.
 
 === Key Features
 
 * *4 Chart.js visualisations* - Database connections, transaction rates, tuple operations, and cache hit ratios
-* *Flexible time windows* - View data from the last 5 minutes to 24 hours
+* *Extended time windows* - View data from the last 5 minutes to 7 days
+* *Dual data sources* - In-memory storage for recent data, persisted tables for historical data
 * *Auto-refresh* - Charts update automatically every 10 seconds
 * *Data export* - Export metrics to JSON or CSV formats
-* *In-memory storage* - Fast access without database overhead
 * *Feature toggle* - Enable/disable via configuration
 
 == How It Differs from Live Charts
@@ -29,11 +32,11 @@ Metrics History and Live Charts both monitor database performance, but serve dif
 |Feature |Metrics History |Live Charts
 
 |Data retention
-|Up to 24 hours in-memory
+|Up to 7 days (in-memory + persisted)
 |Lost on page navigation
 
 |Time windows
-|5 min, 10 min, 30 min, 1 hour, 24 hours
+|5 min, 10 min, 30 min, 1 hour, 6 hours, 24 hours, 3 days, 7 days
 |Last 50 data points only
 
 |Historical analysis
@@ -69,6 +72,9 @@ Control the time window using the `minutes` query parameter:
 /diagnostics/metrics-history?minutes=30  # Last 30 minutes
 /diagnostics/metrics-history?minutes=60  # Last 1 hour
 /diagnostics/metrics-history?minutes=1440  # Last 24 hours
+/diagnostics/metrics-history?minutes=360   # Last 6 hours (persisted data)
+/diagnostics/metrics-history?minutes=4320  # Last 3 days (persisted data)
+/diagnostics/metrics-history?minutes=10080 # Last 7 days (persisted data)
 ----
 
 For multi-instance deployments, specify the instance:
@@ -215,9 +221,42 @@ The dashboard provides preset time windows for quick navigation:
 |24 hours
 |Last 24 hours
 |Daily trends, capacity planning
+
+|6 hours
+|Last 6 hours
+|Extended shift analysis, overnight monitoring
+
+|3 days
+|Last 3 days (72 hours)
+|Weekend comparison, multi-day trends
+
+|7 days
+|Last 7 days (168 hours)
+|Weekly patterns, capacity planning
 |===
 
 Clicking a time window button updates the charts and adjusts the URL parameter accordingly.
+
+== Data Source Selection
+
+Metrics History automatically selects the optimal data source based on the requested time window:
+
+[cols="1,2,2"]
+|===
+|Time Range |Data Source |Resolution
+
+|≤ 60 minutes
+|In-memory (`LiveChartHistoryStore`)
+|5-second samples
+
+|> 60 minutes
+|Persisted database tables
+|60-second samples
+|===
+
+The transition is seamless — the UI and API behave identically regardless of data source. The response includes metadata indicating the data source and resolution.
+
+NOTE: Persisted data requires history sampling to be enabled (`PG_CONSOLE_HISTORY_ENABLED=true`). If history sampling is disabled, time ranges beyond 60 minutes will return empty data.
 
 == Data Export
 
@@ -297,11 +336,13 @@ The sampling interval is fixed at 5 seconds and cannot be changed via configurat
 
 === Data Retention
 
-Metrics are retained in-memory for up to 24 hours. Older data points are automatically purged to prevent unbounded memory growth.
+In-memory metrics are retained for up to 24 hours with 5-second resolution. Persisted metrics are retained according to the configured retention period (default: 7 days) with 60-second resolution.
 
-* *Retention period:* 24 hours
-* *Maximum data points:* 17,280 (24 hours × 3600 seconds / 5 seconds)
+* *In-memory retention:* 24 hours (5-second samples)
+* *Persisted retention:* Configurable, default 7 days (60-second samples)
+* *Maximum in-memory data points:* 17,280 (24 hours × 3600 seconds / 5 seconds)
 * *Memory impact:* Approximately 2-5 MB depending on instance count
+* *Persisted storage:* Grows with retention period; approximately 50-100 MB per instance for 7 days
 
 == How Data Is Collected
 
@@ -338,7 +379,7 @@ This server-side calculation ensures accurate rates even when charts are paused 
 
 [NOTE]
 ====
-Metrics History does not create additional database tables or write to disk. All data is volatile and lost on application restart.
+In-memory metrics are volatile and lost on application restart. For long-term retention, the background metrics sampler persists data to the `pgconsole` schema tables. See xref:developer-guide:database-schema.adoc[Database Schema] for table details.
 ====
 
 == Use Cases
@@ -450,3 +491,5 @@ curl http://localhost:8080/api/diagnostics/metrics-history/connections
 * xref:diagnostics.adoc[Advanced Diagnostics] - Overview of diagnostic features
 * xref:api-reference:endpoints.adoc#metrics-history-api[Metrics History API] - API endpoint reference
 * xref:admin-guide:configuration.adoc#diagnostics-configuration[Diagnostics Configuration] - Feature toggle configuration
+* xref:stopwatch.adoc[Stopwatch] - Start/stop monitoring sessions with before/after comparison
+* xref:window-compare.adoc[Window Comparison] - Side-by-side time window comparison

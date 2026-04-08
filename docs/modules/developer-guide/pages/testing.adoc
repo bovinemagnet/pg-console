@@ -758,6 +758,13 @@ class NavigationE2ETest extends PlaywrightTestBase {
 * Health Check (`/health-check`)
 * Security (`/security`)
 * Security Roles (`/security/roles`)
+* Diagnostics (`/diagnostics`)
+* Metrics History (`/diagnostics/metrics-history`)
+* Query Trends (`/diagnostics/query-trends`)
+* Database Trends (`/diagnostics/database-trends`)
+* Infrastructure Trends (`/diagnostics/infrastructure-trends`)
+* Stopwatch (`/stopwatch`)
+* Window Comparison (`/window-compare`)
 
 ==== ThemeE2ETest
 

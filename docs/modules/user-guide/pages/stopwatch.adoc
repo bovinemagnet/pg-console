@@ -1,0 +1,416 @@
+= Stopwatch
+Paul Snow
+0.0.0
+:description: Guide to using pg-console's Stopwatch feature for capturing before/after metric snapshots around database work sessions
+:keywords: stopwatch, monitoring session, before after comparison, delta metrics, deployment verification, query tuning, snapshot
+
+[abstract]
+This guide explains how to use pg-console's Stopwatch feature to capture point-in-time metric snapshots before and after database work, then compare the results with colour-coded deltas showing exactly what changed.
+
+.Stopwatch dashboard in dark mode
+image::screenshot-stopwatch-dark.png[Stopwatch Dashboard,width=800]
+
+== Overview
+
+The Stopwatch feature provides a structured way to measure the impact of database work. Rather than eyeballing charts and trying to correlate timestamps, you start a session before your work and stop it when you finish. pg-console captures a full metrics snapshot at each point and computes the delta between them.
+
+This is particularly useful when you want a definitive answer to questions such as: did this migration increase cache pressure? Did this query change reduce blocked connections? Did this deployment alter transaction throughput?
+
+=== Key Features
+
+* *Point-in-time snapshots* - Captures a comprehensive metrics baseline at start and stop
+* *Colour-coded delta table* - Green for improvements, red for degradations, grey for negligible change
+* *Top query comparison* - Before/after view of the top 20 queries by total execution time
+* *Live running state* - Elapsed timer and live metric polling during the session
+* *Session history* - Recent sessions are retained and viewable at any time
+* *One active session per instance* - Prevents conflicting measurements
+* *Feature toggle* - Enable or disable via configuration
+
+=== How It Differs from Other Monitoring Tools
+
+[cols="1,2,2,2"]
+|===
+|Aspect |Stopwatch |Metrics History |Live Charts
+
+|Purpose
+|Before/after comparison of a specific work window
+|Historical trend analysis over hours
+|Real-time observation of current activity
+
+|Data granularity
+|Two snapshots (start and stop)
+|Continuous samples every 5 seconds
+|Continuous samples with configurable refresh
+
+|Persistence
+|Stored in `pgconsole.stopwatch_session` table
+|In-memory only (lost on restart)
+|In-memory only (lost on navigation)
+
+|Best for
+|Deployment verification, migration testing
+|Post-incident analysis, capacity planning
+|Observing immediate impact of changes
+|===
+
+[TIP]
+====
+Use the Stopwatch when you need a clear, documented answer to "what did this change do to my database?" Use xref:metrics-history.adoc[Metrics History] when you need to investigate a time period after the fact without having set up a session beforehand.
+====
+
+== Accessing the Stopwatch
+
+Navigate to the Stopwatch dashboard from the main navigation menu: *Diagnostics* → *Stopwatch*.
+
+The main dashboard URL is: `/stopwatch`
+
+Individual session results are available at: `+/stopwatch/{id}+`
+
+== Workflow
+
+.Stopwatch session lifecycle
+[mermaid]
+----
+include::example$stopwatch-workflow.mmd[]
+----
+
+=== Starting a Session
+
+1. Navigate to `/stopwatch`.
+2. Review the *Recent Sessions* table at the bottom of the page to confirm there is no conflicting active session.
+3. Click *Start Session*.
+
+pg-console immediately captures a start snapshot by calling `POST /api/stopwatch/start`. The page transitions to the *Running* state.
+
+[NOTE]
+====
+Only one session can be active per pg-console instance at a time. If a session is already running when you navigate to `/stopwatch`, you will see the running state rather than the start button.
+====
+
+=== Monitoring a Running Session
+
+While a session is active, the page displays:
+
+* *Elapsed timer* - A live clock updated every second via JavaScript, showing how long the session has been running.
+* *Live metrics* - Key current metrics refreshed every 5 seconds via htmx polling against `GET /api/stopwatch/status`.
+
+You can navigate away from the page and return at any time; the session continues running in the background until explicitly stopped or cancelled.
+
+=== Stopping a Session
+
+When your database work is complete:
+
+1. Return to `/stopwatch` if you navigated away.
+2. Click *Stop Session*.
+
+pg-console captures the stop snapshot via `POST /api/stopwatch/stop`, persists the complete session to `pgconsole.stopwatch_session`, and redirects you to the result page at `+/stopwatch/{id}+`.
+
+=== Cancelling a Session
+
+If you started a session by mistake or want to discard the measurement:
+
+1. Click *Cancel* on the running state page.
+
+This calls `POST /api/stopwatch/cancel`, discards the in-progress session without saving it, and returns the page to the idle state. No entry is written to the session history.
+
+== Understanding Results
+
+The result page at `+/stopwatch/{id}+` presents the before/after comparison for the completed session.
+
+=== Before/After Comparison Table
+
+The comparison table lists each captured metric with three columns:
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Before
+|The metric value at session start
+
+|After
+|The metric value at session stop
+
+|Change
+|The absolute delta and percentage change, colour-coded by significance
+|===
+
+=== Metrics Captured
+
+The following metrics are included in every snapshot:
+
+[cols="1,3"]
+|===
+|Metric |Description
+
+|Total connections
+|Count of all current database connections
+
+|Active queries
+|Connections in the `active` state, executing a query
+
+|Blocked queries
+|Connections waiting on a lock
+
+|Idle in transaction
+|Connections holding an open transaction without executing a query
+
+|Cache hit ratio
+|Percentage of block reads served from PostgreSQL's buffer cache
+
+|Longest query duration
+|Duration of the longest currently running query at snapshot time
+
+|Commits
+|Cumulative transaction commit count (from `pg_stat_database`)
+
+|Rollbacks
+|Cumulative transaction rollback count (from `pg_stat_database`)
+
+|Inserts
+|Cumulative row insert count
+
+|Updates
+|Cumulative row update count
+
+|Deletes
+|Cumulative row delete count
+
+|Top 20 queries
+|The top 20 queries by total execution time (from `pg_stat_statements`)
+|===
+
+=== Colour-Coded Deltas
+
+Changes are colour-coded to make it immediately clear whether the database improved or degraded over the session:
+
+[cols="1,1,3"]
+|===
+|Colour |Meaning |Example conditions
+
+|Green
+|Improvement
+|Cache hit ratio increased; blocked queries decreased; rollbacks decreased
+
+|Red
+|Degradation
+|Cache hit ratio decreased; blocked queries increased; rollbacks increased
+
+|Grey
+|Negligible or neutral
+|Change below significance threshold; metrics where direction is ambiguous
+|===
+
+Each cell also shows the absolute delta (e.g. `+3`) and the percentage change (e.g. `+15.0%`) where applicable.
+
+=== Top Query Comparison
+
+Below the metrics table, the result page shows the top 20 queries by total execution time from both the start and stop snapshots. This allows you to identify:
+
+* Queries that appeared in the top 20 only after your work (newly expensive queries)
+* Queries that disappeared from the top 20 (resolved performance issues)
+* Queries whose total time or call count changed significantly
+
+== Configuration
+
+=== Feature Toggle
+
+Enable or disable the Stopwatch feature using the feature toggle:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_STOPWATCH=true
+----
+
+The corresponding configuration property is:
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.stopwatch=true
+----
+
+* *Default:* `true` (enabled)
+* *Effect when disabled:* The `/stopwatch` dashboard and all `/api/stopwatch/*` endpoints return 404.
+
+For full configuration details, see xref:admin-guide:configuration.adoc[Configuration Reference].
+
+=== Database Storage
+
+Session data is persisted to the `pgconsole.stopwatch_session` table, created by the V2 Flyway migration. This table stores:
+
+* Session start and stop timestamps
+* JSONB snapshots of all captured metrics at both points
+* JSONB array of the top 20 queries at both points
+
+Sessions are retained until manually deleted. There is currently no automatic retention policy for stopwatch sessions; they are small in size and accumulate only when explicitly created.
+
+== Use Cases
+
+=== Deployment Verification
+
+Use the Stopwatch to confirm that an application deployment has not negatively affected database performance:
+
+1. Start a session immediately before deploying.
+2. Deploy the new application version.
+3. Allow the application to process a representative load (5–15 minutes).
+4. Stop the session.
+5. Review the result page for unexpected increases in blocked queries, rollbacks, or drops in cache hit ratio.
+
+=== Migration Testing
+
+When running schema migrations or data transformations, the Stopwatch provides a precise record of their impact:
+
+1. Start a session before executing the migration script.
+2. Run the migration.
+3. Stop the session immediately after the migration completes.
+4. Check tuple operation deltas to verify the expected row counts were processed.
+5. Verify no unexpected lock contention appeared (blocked queries delta).
+
+=== Query Tuning Verification
+
+After optimising a slow query, confirm the improvement is measurable at the database level:
+
+1. Start a session.
+2. Execute a representative workload using the original query.
+3. Note the top queries list while the session is running.
+4. Stop the session and review the result.
+5. Start a new session.
+6. Execute the same workload using the optimised query.
+7. Stop and compare the two result pages side by side using the *Recent Sessions* table.
+
+=== Load Test Baselining
+
+Capture a clean metrics baseline before and after a load test run:
+
+1. Start a session when the load test begins.
+2. Run the load test to completion.
+3. Stop the session.
+4. Use the commit, rollback, and tuple operation deltas to characterise database throughput for the load scenario.
+5. Retain the session result as a reference for future comparisons.
+
+== API Endpoints
+
+The following REST API endpoints support the Stopwatch feature:
+
+[cols="1,1,3"]
+|===
+|Method |Endpoint |Description
+
+|`POST`
+|`/api/stopwatch/start`
+|Start a new monitoring session and capture the start snapshot
+
+|`POST`
+|`/api/stopwatch/stop`
+|Stop the active session, capture the stop snapshot, and persist the result
+
+|`POST`
+|`/api/stopwatch/cancel`
+|Cancel the active session without saving
+
+|`GET`
+|`/api/stopwatch/active`
+|Return information about the currently active session, or 404 if none
+
+|`GET`
+|`/api/stopwatch/recent`
+|Return a list of recent completed sessions
+
+|`GET`
+|`/api/stopwatch/status`
+|Return live metrics for the currently running session (used by htmx polling)
+|===
+
+For complete API documentation including request and response schemas, see xref:api-reference:endpoints.adoc[REST API Endpoints].
+
+== Troubleshooting
+
+=== Start Button Not Appearing
+
+*Symptom:* Navigating to `/stopwatch` shows the running state or an error rather than the start button.
+
+*Possible causes:*
+
+1. *A session is already active* - Another user or process started a session. Check the running state page for the elapsed time to determine how long it has been running.
+2. *Feature toggle disabled* - The page returns 404 rather than showing the dashboard.
+
+*Resolution:*
+
+[source,bash]
+----
+# Check active session via API
+curl http://localhost:8080/api/stopwatch/active
+
+# Verify feature toggle
+echo $PG_CONSOLE_DASH_STOPWATCH
+----
+
+If a stale session is blocking a new one, use the Cancel button or call the cancel endpoint directly:
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/stopwatch/cancel
+----
+
+=== Result Page Shows No Query Comparison
+
+*Symptom:* The top queries section on the result page is empty or shows only one side of the comparison.
+
+*Possible causes:*
+
+1. *`pg_stat_statements` not enabled* - The extension must be loaded in `postgresql.conf` for query data to be captured.
+2. *Statistics reset between start and stop* - If `pg_stat_reset()` was called during the session, cumulative counters will appear as smaller values at stop than at start.
+3. *Very short session duration* - If stopped within seconds of starting, insufficient query executions may have been recorded.
+
+*Resolution:*
+
+[source,sql]
+----
+-- Verify pg_stat_statements is available
+SELECT count(*) FROM pg_stat_statements LIMIT 1;
+
+-- Check when statistics were last reset
+SELECT stats_reset FROM pg_stat_database WHERE datname = current_database();
+----
+
+=== Deltas Show Unexpected Decreases in Cumulative Counters
+
+*Symptom:* Commit, rollback, insert, update, or delete counts show a negative delta.
+
+*Possible causes:*
+
+1. *Database statistics were reset* - `pg_stat_reset()` was called between start and stop, resetting cumulative counters.
+2. *Database reconnection* - The monitoring connection changed databases between snapshots.
+
+*Resolution:*
+
+Avoid calling `pg_stat_reset()` during an active Stopwatch session. If a reset occurred, cancel the session and start a fresh one.
+
+=== Session Not Persisting After Stop
+
+*Symptom:* Stopping a session does not redirect to a result page, or the result page returns 404.
+
+*Possible causes:*
+
+1. *Database write failure* - The `pgconsole` schema or `stopwatch_session` table may be missing or inaccessible.
+2. *Flyway migration not run* - The V2 migration that creates `stopwatch_session` has not been applied.
+
+*Resolution:*
+
+[source,bash]
+----
+# Check application logs for persistence errors
+docker logs pg-console | grep -i stopwatch
+
+# Verify the table exists
+psql -c "\dt pgconsole.*"
+----
+
+Ensure the pg-console database user has INSERT and SELECT privileges on the `pgconsole` schema.
+
+== Related Topics
+
+* xref:diagnostics.adoc[Advanced Diagnostics] - Overview of all diagnostic features
+* xref:metrics-history.adoc[Metrics History] - Historical metric visualisation with configurable time windows
+* xref:api-reference:endpoints.adoc[REST API Endpoints] - Complete API reference including Stopwatch endpoints
+* xref:admin-guide:configuration.adoc[Configuration Reference] - Feature toggle and general configuration

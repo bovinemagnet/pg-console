@@ -15,6 +15,7 @@ By default, pg-console creates a dedicated schema named `pgconsole` in the monit
 * System-level metrics history (connections, cache hits, blocking queries, database size)
 * Query performance metrics from `pg_stat_statements`
 * Per-database metrics history (transactions, cache hits, deadlocks, tuple operations)
+* Stopwatch sessions for before/after metric comparison
 * Audit logs, bookmarks, notifications, and insights (extended features)
 
 The schema is created and managed automatically using Flyway migrations, which run on application startup.
@@ -345,6 +346,115 @@ WHERE instance_id = 'default'
 ORDER BY sampled_at;
 ----
 
+== Stopwatch Tables
+
+These tables support the Stopwatch feature for recording before/after metric snapshots during monitoring sessions.
+
+=== stopwatch_session
+
+Stores stopwatch monitoring sessions with point-in-time metric snapshots captured at start and stop. Used by the Stopwatch feature to show before/after comparison of database metrics.
+
+[cols="1,1,3"]
+|===
+|Column |Type |Description
+
+|`id`
+|`BIGSERIAL`
+|Primary key (auto-incrementing)
+
+|`instance_id`
+|`VARCHAR(255)`
+|PostgreSQL instance identifier (default: 'default')
+
+|`status`
+|`VARCHAR(20)`
+|Session status: 'running', 'stopped', or 'cancelled'
+
+|`started_at`
+|`TIMESTAMP WITH TIME ZONE`
+|When the session was started
+
+|`stopped_at`
+|`TIMESTAMP WITH TIME ZONE`
+|When the session was stopped (NULL if running or cancelled)
+
+|`notes`
+|`TEXT`
+|Optional user notes for the session
+
+|`start_snapshot`
+|`JSONB`
+|Point-in-time metric snapshot at session start (connections, queries, cache ratio, transactions, tuples, locks)
+
+|`end_snapshot`
+|`JSONB`
+|Point-in-time metric snapshot at session stop
+
+|`top_queries_start`
+|`JSONB`
+|Top 20 queries by total time at session start (serialised SlowQuery list)
+
+|`top_queries_end`
+|`JSONB`
+|Top 20 queries by total time at session stop
+
+|`created_at`
+|`TIMESTAMP WITH TIME ZONE`
+|Record creation timestamp
+|===
+
+==== Indexes
+
+`idx_stopwatch_session_instance_started`::
+B-tree index on `(instance_id, started_at DESC)` for retrieving recent sessions per instance.
+
+`idx_stopwatch_session_status`::
+B-tree index on `(status)` for finding active sessions.
+
+==== JSONB Snapshot Structure
+
+The `start_snapshot` and `end_snapshot` columns store metric snapshots as JSONB with the following structure:
+
+[source,json]
+----
+{
+  "totalConnections": 25,
+  "activeQueries": 3,
+  "blockedQueries": 0,
+  "idleInTransaction": 1,
+  "cacheHitRatio": 99.85,
+  "longestQuerySeconds": 2.5,
+  "xactCommit": 156789,
+  "xactRollback": 45,
+  "tupInserted": 1234,
+  "tupUpdated": 567,
+  "tupDeleted": 89
+}
+----
+
+==== Sample Query
+
+[source,sql]
+----
+-- Get recent completed sessions
+SELECT id, started_at, stopped_at,
+       stopped_at - started_at AS duration,
+       notes
+FROM pgconsole.stopwatch_session
+WHERE instance_id = 'default'
+  AND status = 'stopped'
+ORDER BY started_at DESC
+LIMIT 10;
+
+-- Compare start/end snapshots
+SELECT id,
+       start_snapshot->>'totalConnections' AS start_conns,
+       end_snapshot->>'totalConnections' AS end_conns,
+       (end_snapshot->>'cacheHitRatio')::numeric - (start_snapshot->>'cacheHitRatio')::numeric AS cache_delta
+FROM pgconsole.stopwatch_session
+WHERE id = 1;
+----
+
 == Flyway Migrations
 
 pg-console uses Flyway to manage database schema migrations. Migration scripts are located in `src/main/resources/db/migration/` and follow Flyway's naming convention.
@@ -367,6 +477,9 @@ Creates the complete `pgconsole` schema including all tables, indexes, and const
 * Custom dashboards (`custom_dashboard`, `custom_widget`)
 
 All schema objects are created in a single migration to ensure consistency and simplify initial deployment.
+
+`V2__stopwatch_sessions.sql`::
+Creates the `pgconsole.stopwatch_session` table for storing stopwatch monitoring sessions with JSONB metric snapshots. Includes indexes for instance/time lookups and status filtering.
 
 === Migration Execution
 
@@ -436,6 +549,7 @@ The `MetricsSamplerService` runs a daily cleanup job that:
   * `system_metrics_history`
   * `query_metrics_history`
   * `database_metrics_history`
+  * `stopwatch_session`
 . Logs the number of records deleted
 . Runs `VACUUM` to reclaim storage space
 
@@ -455,10 +569,15 @@ WHERE sampled_at < NOW() - INTERVAL '7 days';
 DELETE FROM pgconsole.database_metrics_history
 WHERE sampled_at < NOW() - INTERVAL '7 days';
 
+-- Delete old stopwatch sessions
+DELETE FROM pgconsole.stopwatch_session
+WHERE created_at < NOW() - INTERVAL '7 days';
+
 -- Reclaim storage
 VACUUM pgconsole.system_metrics_history;
 VACUUM pgconsole.query_metrics_history;
 VACUUM pgconsole.database_metrics_history;
+VACUUM pgconsole.stopwatch_session;
 ----
 
 === Disabling Retention

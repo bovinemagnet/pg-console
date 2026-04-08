@@ -6,6 +6,9 @@ Paul Snow
 
 A lightweight, self-hosted web dashboard for PostgreSQL operational insight and performance monitoring.
 
+.pg-console overview dashboard
+image::screenshot-overview-dark.png[pg-console Overview Dashboard,width=800]
+
 == Features
 
 === Monitoring Dashboards
@@ -27,6 +30,9 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 * *Explain Plan* - Generate EXPLAIN/ANALYZE/BUFFERS plans for queries directly from the Query Detail page
 * *Incident Reports* - Capture point-in-time snapshots of database state for troubleshooting
 * *Alerting* - Webhook notifications when thresholds are exceeded (connections, blocked queries, cache hit ratio)
+* *Historical Trends* - Query, database, and infrastructure trend analysis from persisted metrics (up to 7 days)
+* *Stopwatch* - Start/stop monitoring sessions to measure the impact of database operations
+* *Window Comparison* - Side-by-side comparison of two time windows to identify trends and regressions
 
 === Query & Index Optimisation
 
@@ -43,7 +49,7 @@ A lightweight, self-hosted web dashboard for PostgreSQL operational insight and 
 * *Query Tooltips* - Hover to view full SQL queries
 * *pg_stat_statements Indicator* - Visual badge showing extension availability
 * *SVG Sparklines* - Inline trend charts showing historical metrics (connections, queries, cache hit ratio)
-* *Metrics History* - Interactive Chart.js dashboard with up to 24 hours of in-memory metrics and JSON/CSV export
+* *Metrics History* - Interactive Chart.js dashboard with up to 7 days of historical metrics from persisted storage and JSON/CSV export
 
 === Multi-Instance Support
 
@@ -306,6 +312,21 @@ GRANT SELECT ON pg_stat_statements TO your_user;
 |`/partitions`
 |Table partitioning insights and health
 
+|`/diagnostics/query-trends`
+|Query performance trends from persisted history (up to 7 days)
+
+|`/diagnostics/database-trends`
+|Per-database trend charts from persisted history
+
+|`/diagnostics/infrastructure-trends`
+|Infrastructure trend charts (WAL, checkpoints, buffers)
+
+|`/stopwatch`
+|Start/stop monitoring sessions with before/after comparison
+
+|`/window-compare`
+|Side-by-side comparison of two time windows
+
 |`/about`
 |Application and PostgreSQL server info
 
@@ -360,6 +381,8 @@ Comprehensive documentation is available organised into the following modules:
 * xref:admin-guide:multi-instance.adoc[Multi-Instance Setup] - Monitoring multiple PostgreSQL instances
 * xref:api-reference:endpoints.adoc[REST API Endpoints] - Complete API reference
 * xref:developer-guide:architecture.adoc[Architecture Overview] - System design and components
+* xref:user-guide:stopwatch.adoc[Stopwatch] - Start/stop monitoring sessions with before/after comparison
+* xref:user-guide:window-compare.adoc[Window Comparison] - Side-by-side time window comparison
 
 == Need Help?
 

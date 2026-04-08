@@ -18,11 +18,16 @@ The diagnostics section provides specialised monitoring capabilities beyond basi
 * Critical maintenance requirements (XID wraparound)
 * Real-time system trends (live charts)
 * Historical metric analysis (metrics history)
+* Historical trend analysis (query, database, infrastructure metrics over up to 7 days)
+* Time-based comparison tools (stopwatch sessions, window comparison)
 
 All diagnostics dashboards are accessible from the main navigation under the *Diagnostics* dropdown menu.
 
 [[diagnostics-index]]
 == Diagnostics Index Page
+
+.Diagnostics index page in dark mode
+image::screenshot-diagnostics-index-dark.png[Diagnostics Index,width=800]
 
 The diagnostics index page (`/diagnostics`) provides a central overview of all diagnostic tools with summary counts and quick navigation.
 
@@ -52,6 +57,9 @@ The index page displays cards for each diagnostic tool, organised into three cat
 * *XID Wraparound* - Count of databases at risk of transaction ID wraparound
 * *Live Charts* - Link to real-time metric visualisation
 * *Metrics History* - Historical metric trends with configurable time windows
+* *Query Trends* - Historical query performance analysis from persisted data
+* *Database Trends* - Per-database metric trends over time
+* *Infrastructure Trends* - WAL, checkpoint, and buffer activity trends
 
 === Issue Indicators
 
@@ -808,6 +816,9 @@ CLUSTER is less useful when:
 [[live-charts]]
 == Live Charts
 
+.Live charts dashboard in dark mode
+image::screenshot-live-charts-dark.png[Live Charts Dashboard,width=800]
+
 The live charts dashboard (`/diagnostics/live-charts`) displays real-time interactive charts of key database metrics.
 
 === Available Charts
@@ -895,6 +906,9 @@ Live charts continuously poll the database at the configured refresh interval. A
 
 [[metrics-history]]
 == Metrics History
+
+.Metrics history dashboard in dark mode
+image::screenshot-metrics-history-dark.png[Metrics History Dashboard,width=800]
 
 The Metrics History dashboard (`/diagnostics/metrics-history`) provides historical visualisation of database metrics with configurable time windows and export capabilities.
 
@@ -987,6 +1001,9 @@ For complete documentation, see xref:metrics-history.adoc[Metrics History].
 
 [[xid-wraparound]]
 == Transaction ID Wraparound Monitoring
+
+.XID wraparound monitoring dashboard in dark mode
+image::screenshot-xid-wraparound-dark.png[XID Wraparound Dashboard,width=800]
 
 The XID wraparound dashboard (`/diagnostics/xid-wraparound`) monitors transaction ID age per database to prevent catastrophic wraparound failures.
 
@@ -1177,6 +1194,120 @@ Toggle between light and dark colour schemes with the Dark Mode button in the na
 === Column Sorting
 
 Click column headers to sort data by that column. Click again to reverse sort order.
+
+[[query-trends]]
+== Query Trends
+
+.Query trends dashboard in dark mode
+image::screenshot-query-trends-dark.png[Query Trends Dashboard,width=800]
+
+The Query Trends dashboard (`/diagnostics/query-trends`) provides historical analysis of query performance from persisted `query_metrics_history` data, covering up to 7 days.
+
+=== Accessing Query Trends
+
+Navigate to *Diagnostics* → *Query Trends* or visit `/diagnostics/query-trends`.
+
+=== Features
+
+* *Query list* - Table of tracked queries with sparklines showing performance trends
+* *Detailed charts* - Click a query to expand Chart.js charts of mean execution time, call count, and total time over the selected period
+* *Time range selector* - Choose from 1 hour to 7 days of historical data
+* *Regression detection* - Queries with significant performance degradation are highlighted
+
+=== Data Source
+
+Query Trends reads from the `pgconsole.query_metrics_history` table, which is populated by the background metrics sampler every 60 seconds. This provides much longer retention than the in-memory Metrics History (up to 7 days vs 24 hours).
+
+=== Use Cases
+
+* *Post-deployment analysis* - Verify query performance hasn't degraded after releases
+* *Capacity planning* - Identify queries with growing execution times
+* *Optimisation targeting* - Find the queries consuming the most total database time
+
+=== Configuration
+
+Enable or disable via the feature toggle:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_QUERY_TRENDS=true   # default: true
+----
+
+Requires history sampling to be enabled (`PG_CONSOLE_HISTORY_ENABLED=true`).
+
+[[database-trends]]
+== Database Trends
+
+.Database trends dashboard in dark mode
+image::screenshot-database-trends-dark.png[Database Trends Dashboard,width=800]
+
+The Database Trends dashboard (`/diagnostics/database-trends`) shows per-database metrics over time from persisted `database_metrics_history` data.
+
+=== Accessing Database Trends
+
+Navigate to *Diagnostics* → *Database Trends* or visit `/diagnostics/database-trends`.
+
+=== Features
+
+* *Database selector* - Choose which database to analyse
+* *Connection charts* - Backend connection counts over time
+* *Transaction rate charts* - Commit and rollback rates per second
+* *Cache ratio charts* - Buffer cache and index cache hit ratios
+* *Tuple operation charts* - Insert, update, and delete rates
+* *Time range selector* - Choose from 1 hour to 7 days
+
+=== Data Source
+
+Reads from the `pgconsole.database_metrics_history` table. Cumulative counters (transactions, tuples) are converted to per-second rates using delta calculations between adjacent samples.
+
+=== Use Cases
+
+* *Per-database capacity planning* - Identify databases with growing workloads
+* *Cross-database comparison* - Compare activity patterns across databases
+* *Deadlock trend analysis* - Track deadlock frequency over time
+
+=== Configuration
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_DATABASE_TRENDS=true   # default: true
+----
+
+[[infrastructure-trends]]
+== Infrastructure Trends
+
+.Infrastructure trends dashboard in dark mode
+image::screenshot-infrastructure-trends-dark.png[Infrastructure Trends Dashboard,width=800]
+
+The Infrastructure Trends dashboard (`/diagnostics/infrastructure-trends`) shows WAL, checkpoint, and buffer activity over time from persisted data.
+
+=== Accessing Infrastructure Trends
+
+Navigate to *Diagnostics* → *Infrastructure Trends* or visit `/diagnostics/infrastructure-trends`.
+
+=== Features
+
+* *WAL activity charts* - WAL generation rates over time
+* *Checkpoint charts* - Checkpoint frequency and timing
+* *Buffer activity charts* - Buffer allocation and write patterns
+* *Time range selector* - Choose from 1 hour to 7 days
+
+=== Data Source
+
+Reads from the `pgconsole.infrastructure_metrics_history` table (if available) or derives infrastructure data from `system_metrics_history`.
+
+=== Use Cases
+
+* *Storage capacity planning* - Track WAL generation growth
+* *Checkpoint tuning* - Identify if checkpoints are too frequent or too slow
+* *I/O pattern analysis* - Understand buffer write patterns over time
+
+=== Configuration
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_INFRASTRUCTURE_TRENDS=true   # default: true
+----
 
 == API Access
 

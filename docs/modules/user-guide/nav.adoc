@@ -7,6 +7,8 @@
 *** xref:xid-wraparound.adoc[XID Wraparound Monitoring]
 *** xref:wal-checkpoint-monitoring.adoc[WAL & Checkpoint Monitoring]
 *** xref:metrics-history.adoc[Metrics History]
+*** xref:stopwatch.adoc[Stopwatch]
+*** xref:window-compare.adoc[Window Comparison]
 ** xref:runbooks.adoc[Runbooks]
 ** xref:database-diff.adoc[Database Diff]
 ** xref:schema-docs.adoc[Schema Documentation]

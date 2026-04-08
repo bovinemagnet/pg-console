@@ -1,0 +1,583 @@
+= Window Comparison
+Paul Snow
+0.0.0
+:description: Guide to using pg-console's Window Comparison feature for comparing database metrics between two arbitrary time windows to identify trends and regressions
+:keywords: window comparison, metrics comparison, performance regression, time window, baseline, query performance, historical analysis
+
+[abstract]
+This guide explains how to use pg-console's Window Comparison feature to compare database metrics side-by-side between two arbitrary time windows. Window Comparison is designed for release validation, regression hunting, and weekly health checks using persisted historical data.
+
+.Window comparison dashboard in dark mode
+image::screenshot-window-compare-dark.png[Window Comparison Dashboard,width=800]
+
+== Overview
+
+Window Comparison is a diagnostics tool that lets you select two time windows — a *Baseline* (Window A) and a *Current* (Window B) — and compare the aggregated database metrics from each window side-by-side. The feature surfaces metric deltas, percentage changes, and per-query performance shifts so you can answer questions such as:
+
+* Did a recent deployment degrade query performance?
+* Is this Tuesday's peak load worse than last Tuesday's?
+* Which queries regressed after a schema migration?
+
+Window Comparison works exclusively from persisted history data written to the `pgconsole` schema by the history sampling service. This means results are available for any point in time within the configured retention window (up to 7 days by default), and are not affected by page navigation or application restarts.
+
+.Window comparison data flow
+[mermaid]
+----
+include::example$window-compare-flow.mmd[]
+----
+
+== How It Differs from Stopwatch
+
+Both Window Comparison and xref:stopwatch.adoc[Stopwatch] support before/after analysis, but they serve different scenarios:
+
+[cols="1,2,2"]
+|===
+|Aspect |Window Comparison |Stopwatch
+
+|Data source
+|Persisted history (up to 7 days)
+|In-memory, live capture only
+
+|Time selection
+|Any two arbitrary windows in history
+|Real-time start/stop during a session
+
+|Minimum data age
+|Requires historical samples to exist
+|Captures from the moment you click Start
+
+|Use case
+|Retrospective analysis, release comparison
+|Live observation of an ongoing change
+
+|Presets
+|Yesterday vs Today, Last Week Same Time
+|None — manual start/stop only
+
+|Query matching
+|By `query_id` across windows
+|By `query_id` within the captured session
+|===
+
+[TIP]
+====
+Use Window Comparison when you want to compare a past period against another past period, or when you did not have Stopwatch running at the time of the event. Use Stopwatch when you are actively monitoring a change as it happens.
+====
+
+== Accessing Window Comparison
+
+Navigate to Window Comparison from the main navigation menu: *Diagnostics* → *Window Comparison*.
+
+The setup page URL is: `/window-compare`
+
+The result page URL is: `/window-compare/result`
+
+[NOTE]
+====
+If the Window Comparison menu item is not visible, the feature may be disabled. See <<configuration>> for details.
+====
+
+[[using-presets]]
+== Using Presets
+
+Presets provide one-click access to the most common comparison scenarios. The available presets are shown on the setup page at `/window-compare`.
+
+[cols="1,3"]
+|===
+|Preset |Description
+
+|Yesterday vs Today
+|Compares the same hour range from yesterday against the equivalent hours today. Useful for identifying daily regressions or improvements.
+
+|Last Week Same Time
+|Compares the same day of the week from 7 days ago against the current equivalent period. Useful for weekly trend analysis.
+|===
+
+=== Preset Availability
+
+Presets require sufficient historical data to be meaningful. When not enough history exists for a preset, the preset button is greyed out and displays a *No data* badge.
+
+[cols="1,3"]
+|===
+|Preset state |Condition
+
+|Active (clickable)
+|Sufficient historical samples exist for both the baseline and current windows
+
+|Greyed out with "No data" badge
+|Insufficient history — either history sampling has not been running long enough, or the retention window does not cover the required period
+|===
+
+[TIP]
+====
+If all presets show "No data", verify that history sampling is enabled and has been running for at least 24 hours. See <<history-requirements>>.
+====
+
+=== Running a Preset
+
+. Navigate to `/window-compare`.
+. Click the preset button for the comparison you want.
+. The result page loads automatically at `/window-compare/result` with the comparison calculated.
+
+[[custom-comparisons]]
+== Custom Comparisons
+
+For full control over the comparison windows, use the custom date/time inputs on the setup page.
+
+=== Input Fields
+
+The setup form provides two pairs of datetime inputs:
+
+[cols="1,1,3"]
+|===
+|Window |Field |Purpose
+
+|Window A (Baseline)
+|Start
+|Beginning of the baseline period
+
+|Window A (Baseline)
+|End
+|End of the baseline period
+
+|Window B (Current)
+|Start
+|Beginning of the comparison period
+
+|Window B (Current)
+|End
+|End of the comparison period
+|===
+
+=== Default Values
+
+When the setup page first loads, the inputs are pre-populated with sensible defaults:
+
+* *Window A* — Yesterday's hours equivalent to the current time (same start-of-day offset)
+* *Window B* — Today's hours from midnight to the current time
+
+This default mirrors the "Yesterday vs Today" preset, giving you a working example to adjust from.
+
+=== Time Zone Handling
+
+The datetime inputs use the `datetime-local` HTML input type, which captures values in your browser's local time zone. When you submit the form, JavaScript converts these local datetimes to ISO-8601 strings (including the UTC offset) before sending them to the server. This ensures the comparison is anchored to the correct absolute time regardless of the server's time zone.
+
+=== Submitting a Custom Comparison
+
+. On the setup page, adjust the four datetime inputs to define your two windows.
+. Click *Compare Windows*.
+. The result page loads at `/window-compare/result` with the comparison for your chosen windows.
+
+[source,text]
+----
+# Example: compare yesterday morning against this morning
+Window A: 2026-03-03T08:00 to 2026-03-03T12:00
+Window B: 2026-03-04T08:00 to 2026-03-04T12:00
+----
+
+[[understanding-results]]
+== Understanding Results
+
+The result page at `/window-compare/result` is divided into three areas: window summary cards, the metrics comparison table, and the query performance changes table.
+
+=== Window Summary Cards
+
+Two cards at the top of the page summarise the windows used for the comparison:
+
+[cols="1,3"]
+|===
+|Field |Description
+
+|Start
+|Start timestamp of the window (ISO-8601)
+
+|End
+|End timestamp of the window (ISO-8601)
+
+|Duration
+|Length of the window in hours and minutes
+
+|Sample count
+|Number of history samples found within the window
+|===
+
+A low sample count (fewer than 2) for either window produces a warning, because delta calculations require at least two data points to be reliable.
+
+=== Overall Direction Badge
+
+A badge at the top of the results page summarises the overall health change across all metrics:
+
+[cols="1,1,3"]
+|===
+|Badge |Colour |Meaning
+
+|Improved
+|Green
+|The majority of key metrics moved in a favourable direction
+
+|Degraded
+|Red
+|The majority of key metrics moved in an unfavourable direction
+
+|Mixed
+|Grey
+|Metrics moved in different directions, or changes were below the significance threshold
+|===
+
+[[metric-deltas]]
+=== Metric Comparison Table
+
+The metrics comparison table shows aggregated values for each tracked metric in both windows, along with the delta and direction indicator.
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Metric
+|Name of the database metric
+
+|Window A
+|Aggregated value for the baseline window
+
+|Window B
+|Aggregated value for the current window
+
+|Delta
+|Difference between Window B and Window A (positive = increase)
+
+|Change %
+|Percentage change from Window A to Window B
+
+|Direction
+|Coloured icon indicating whether the change is an improvement or degradation
+|===
+
+==== Direction Icons
+
+The direction icon interprets the *meaning* of a change, not just its sign. An increase is not always a degradation:
+
+[cols="1,1,3"]
+|===
+|Icon |Colour |Condition
+
+|Arrow up
+|Green
+|Improvement: cache hit ratio increased, or blocked queries decreased
+
+|Arrow down
+|Red
+|Degradation: cache hit ratio decreased, or blocked queries increased
+
+|Arrow up
+|Red
+|Degradation: query mean time increased, or connection count rose unexpectedly
+
+|Dash
+|Grey
+|Neutral: change was below the significance threshold
+|===
+
+The following table summarises the direction logic for each metric:
+
+[cols="1,2,1"]
+|===
+|Metric |Favourable direction |Notes
+
+|Cache hit ratio
+|Higher is better
+|Drops below 99% should be investigated
+
+|Blocked queries
+|Lower is better
+|Any increase warrants investigation
+
+|Active connections
+|Context-dependent
+|Unusually high values suggest connection leaks
+
+|Idle in transaction
+|Lower is better
+|Growth indicates connection pooling issues
+
+|Mean query time
+|Lower is better
+|Key regression indicator
+
+|Commits per second
+|Context-dependent
+|Unexpected drops may indicate connectivity issues
+
+|Rollbacks per second
+|Lower is better
+|Growth suggests application errors or deadlocks
+|===
+
+[[query-changes]]
+=== Query Performance Changes Table
+
+The query changes table matches queries between the two windows by `query_id` and reports performance changes for each.
+
+[cols="1,3"]
+|===
+|Column |Description
+
+|Status
+|Badge indicating the nature of the change (see below)
+
+|Query
+|Truncated query text (first ~100 characters)
+
+|Mean Time A
+|Average execution time in Window A (milliseconds)
+
+|Mean Time B
+|Average execution time in Window B (milliseconds)
+
+|Delta
+|Change in mean execution time (ms)
+
+|Calls A
+|Number of times the query was called in Window A
+
+|Calls B
+|Number of times the query was called in Window B
+|===
+
+==== Query Status Badges
+
+[cols="1,1,3"]
+|===
+|Badge |Colour |Meaning
+
+|New
+|Blue
+|Query appeared in Window B but was absent from Window A — a new query or one that crossed the `pg_stat_statements` threshold
+
+|Gone
+|Grey
+|Query was present in Window A but absent from Window B — may indicate a code path removed after a deployment
+
+|Regression
+|Red
+|Mean execution time increased beyond the regression threshold — warrants investigation
+
+|OK
+|Green
+|Query is present in both windows and mean time did not increase significantly
+|===
+
+[NOTE]
+====
+Query matching uses the `query_id` assigned by `pg_stat_statements`. If `pg_stat_statements` resets between windows (for example, via `pg_stat_reset()`), queries will appear as *New* in Window B rather than being matched correctly.
+====
+
+[[configuration]]
+== Configuration
+
+=== Feature Toggle
+
+Enable or disable Window Comparison using the feature toggle:
+
+[source,bash]
+----
+export PG_CONSOLE_DASH_WINDOW_COMPARE=true
+----
+
+[cols="1,3"]
+|===
+|Value |Effect
+
+|`true` (default)
+|Window Comparison is enabled; setup and result pages are accessible
+
+|`false`
+|Window Comparison is disabled; routes return 404 and the menu item is hidden
+|===
+
+The corresponding configuration property key is:
+
+[source,properties]
+----
+pg-console.dashboards.diagnostics.window-compare=true
+----
+
+[[history-requirements]]
+=== History Sampling Requirements
+
+Window Comparison reads exclusively from the persisted history tables in the `pgconsole` schema. It does *not* use the in-memory metrics used by xref:metrics-history.adoc[Metrics History].
+
+The following history sampling settings affect Window Comparison:
+
+[cols="1,2,2"]
+|===
+|Environment Variable |Description |Default
+
+|`PG_CONSOLE_HISTORY_ENABLED`
+|Must be `true` for any historical data to be collected
+|`true`
+
+|`PG_CONSOLE_HISTORY_INTERVAL`
+|Sampling interval in seconds; lower values give finer-grained windows
+|`60`
+
+|`PG_CONSOLE_HISTORY_RETENTION`
+|Days of history retained; Window Comparison can only reach as far back as this allows
+|`7`
+
+|`PG_CONSOLE_HISTORY_TOP_QUERIES`
+|Number of top queries sampled per interval; queries outside this set will not appear in the query changes table
+|`50`
+|===
+
+[IMPORTANT]
+====
+If `PG_CONSOLE_HISTORY_ENABLED` is `false`, no history data is available and Window Comparison will return empty results for all time ranges. Enable history sampling and wait for at least one sampling interval before attempting a comparison.
+====
+
+=== Minimum Data Requirements
+
+[cols="1,3"]
+|===
+|Requirement |Details
+
+|Minimum samples per window
+|At least 2 samples within each window are needed for reliable delta calculations
+
+|Minimum history age for presets
+|"Yesterday vs Today" requires at least 24 hours of history; "Last Week Same Time" requires at least 7 days
+
+|`pg_stat_statements` extension
+|Must be installed and enabled for query performance data to be available
+|===
+
+== Use Cases
+
+=== Release Validation
+
+After deploying a new application version, use Window Comparison to verify that database performance has not degraded:
+
+. Define Window A as the hour before the deployment.
+. Define Window B as the equivalent hour after the deployment.
+. Review the query changes table for *Regression* badges.
+. Check the metrics comparison table for drops in cache hit ratio or increases in blocked queries.
+
+If the overall direction badge shows *Degraded*, investigate the queries flagged as *Regression* first — these are the most likely cause.
+
+=== Weekly Performance Comparison
+
+Use the *Last Week Same Time* preset to compare this week's peak load against last week's equivalent period:
+
+. Navigate to `/window-compare`.
+. Click *Last Week Same Time*.
+. Review the overall direction badge and metric deltas.
+
+A consistent *Degraded* result across multiple weeks may indicate gradual data growth, index bloat, or a long-running application-level regression.
+
+=== Regression Hunting After Schema Changes
+
+After adding or removing indexes, running `VACUUM FULL`, or modifying table structures:
+
+. Use custom windows to bracket the schema change (before and after).
+. Focus on the query changes table for queries touching the modified table.
+. *Regression* badges indicate queries that slowed down; *Gone* badges may indicate queries that were eliminated by an index or materialised view.
+
+=== Capacity Planning Baseline
+
+Capture a Window A during a known quiet period and Window B during peak load. The metric deltas provide a quantitative measure of the difference between baseline and peak, which can inform connection pool sizing and hardware planning.
+
+== Troubleshooting
+
+=== Result Page Shows "No data for the selected windows"
+
+*Symptom:* The result page loads but the metrics table and query table are empty.
+
+*Possible causes:*
+
+. *History sampling is disabled* — Verify `PG_CONSOLE_HISTORY_ENABLED=true`.
+. *Windows fall outside the retention period* — Check `PG_CONSOLE_HISTORY_RETENTION`. The default of 7 days means windows older than 7 days return no data.
+. *No samples exist in the selected time range* — The windows may fall in a gap caused by an application restart or a period when sampling was paused.
+. *Window duration is too short* — A window shorter than `PG_CONSOLE_HISTORY_INTERVAL` seconds may contain zero samples.
+
+*Resolution:*
+
+[source,bash]
+----
+# Verify history sampling is enabled and running
+echo $PG_CONSOLE_HISTORY_ENABLED
+
+# Check how many history samples exist in the pgconsole schema
+psql -c "SELECT COUNT(*), MIN(sampled_at), MAX(sampled_at) FROM pgconsole.metrics_history;"
+----
+
+=== Presets Are All Greyed Out
+
+*Symptom:* Both preset buttons show "No data" and cannot be clicked.
+
+*Possible causes:*
+
+. Application has been running for less than 24 hours (insufficient history for "Yesterday vs Today").
+. `PG_CONSOLE_HISTORY_ENABLED` is `false`.
+. The `pgconsole` schema has not been created (Flyway migration has not run).
+
+*Resolution:*
+
+* Confirm history sampling is enabled and the application has been running long enough.
+* Use custom windows to compare whatever history is available, even if presets are unavailable.
+
+=== Query Changes Table Is Empty
+
+*Symptom:* The metrics comparison table shows data, but the query changes table is blank.
+
+*Possible causes:*
+
+. *`pg_stat_statements` not installed* — The extension is required for query-level data.
+. *`PG_CONSOLE_HISTORY_TOP_QUERIES` is set to 0* — No queries are being sampled.
+. *No queries executed during the sampled windows* — Both windows may have been idle periods.
+
+*Resolution:*
+
+[source,sql]
+----
+-- Verify pg_stat_statements is installed
+SELECT * FROM pg_extension WHERE extname = 'pg_stat_statements';
+
+-- Check if query history is being captured
+SELECT COUNT(*) FROM pgconsole.query_history;
+----
+
+=== Incorrect or Misleading Delta Values
+
+*Symptom:* Delta values appear unexpectedly large or negative in unexpected directions.
+
+*Possible causes:*
+
+. *`pg_stat_reset()` was called between the windows* — Cumulative counters reset to zero, causing very large apparent changes.
+. *Different sample counts between windows* — If Window A has many more samples than Window B (for example, Window B is only partially elapsed), averages may not be directly comparable.
+. *Database failover occurred* — Statistics counters restart after a failover.
+
+*Resolution:*
+
+* Check the sample counts shown in the window summary cards. A large disparity suggests the windows cover different amounts of activity.
+* Avoid calling `pg_stat_reset()` in production unless necessary.
+
+=== Feature Disabled (404 Response)
+
+*Symptom:* Navigating to `/window-compare` returns a 404 error.
+
+*Resolution:*
+
+[source,bash]
+----
+# Enable the feature
+export PG_CONSOLE_DASH_WINDOW_COMPARE=true
+
+# Restart the application for the change to take effect
+----
+
+== Related Topics
+
+* xref:diagnostics.adoc[Advanced Diagnostics] — Overview of all diagnostic features
+* xref:metrics-history.adoc[Metrics History] — In-memory historical charts with export support
+* xref:stopwatch.adoc[Stopwatch] — Live capture of a before/after comparison window
+* xref:api-reference:endpoints.adoc[REST API Endpoints] — Programmatic access to window comparison data
+* xref:admin-guide:configuration.adoc[Configuration Reference] — Full configuration property reference

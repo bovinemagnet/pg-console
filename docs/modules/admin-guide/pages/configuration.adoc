@@ -616,16 +616,21 @@ pg-console.dashboards.diagnostics.enabled=${PG_CONSOLE_DASH_DIAGNOSTICS:true}
 
 [source,bash]
 ----
-export PG_CONSOLE_DASH_PIPELINE_RISK=true        # Queue/pipeline backlog monitoring
-export PG_CONSOLE_DASH_TOAST_BLOAT=true          # TOAST table bloat analysis
-export PG_CONSOLE_DASH_INDEX_REDUNDANCY=true     # Duplicate/overlapping index detection
-export PG_CONSOLE_DASH_STAT_FRESHNESS=true       # Table statistics freshness
-export PG_CONSOLE_DASH_WRITE_READ=true           # Write/read ratio analysis
-export PG_CONSOLE_DASH_HOT_EFFICIENCY=true       # HOT update efficiency monitoring
-export PG_CONSOLE_DASH_CORRELATION=true          # Column correlation analysis
-export PG_CONSOLE_DASH_LIVE_CHARTS=true          # Real-time interactive charts
-export PG_CONSOLE_DASH_XID_WRAPAROUND=true       # Transaction ID wraparound monitoring
-export PG_CONSOLE_DASH_METRICS_HISTORY=true       # Historical metrics with Chart.js charts
+export PG_CONSOLE_DASH_PIPELINE_RISK=true           # Queue/pipeline backlog monitoring
+export PG_CONSOLE_DASH_TOAST_BLOAT=true             # TOAST table bloat analysis
+export PG_CONSOLE_DASH_INDEX_REDUNDANCY=true        # Duplicate/overlapping index detection
+export PG_CONSOLE_DASH_STAT_FRESHNESS=true          # Table statistics freshness
+export PG_CONSOLE_DASH_WRITE_READ=true              # Write/read ratio analysis
+export PG_CONSOLE_DASH_HOT_EFFICIENCY=true          # HOT update efficiency monitoring
+export PG_CONSOLE_DASH_CORRELATION=true             # Column correlation analysis
+export PG_CONSOLE_DASH_LIVE_CHARTS=true             # Real-time interactive charts
+export PG_CONSOLE_DASH_XID_WRAPAROUND=true          # Transaction ID wraparound monitoring
+export PG_CONSOLE_DASH_METRICS_HISTORY=true         # Historical metrics with Chart.js charts
+export PG_CONSOLE_DASH_QUERY_TRENDS=true            # Historical query performance trends
+export PG_CONSOLE_DASH_DATABASE_TRENDS=true         # Per-database metric trends
+export PG_CONSOLE_DASH_INFRASTRUCTURE_TRENDS=true   # WAL, checkpoint, and buffer trends
+export PG_CONSOLE_DASH_STOPWATCH=true               # Start/stop monitoring sessions with before/after comparison
+export PG_CONSOLE_DASH_WINDOW_COMPARE=true          # Side-by-side comparison of two time windows
 ----
 
 [source,properties]
@@ -640,7 +645,41 @@ pg-console.dashboards.diagnostics.correlation=${PG_CONSOLE_DASH_CORRELATION:true
 pg-console.dashboards.diagnostics.live-charts=${PG_CONSOLE_DASH_LIVE_CHARTS:true}
 pg-console.dashboards.diagnostics.xid-wraparound=${PG_CONSOLE_DASH_XID_WRAPAROUND:true}
 pg-console.dashboards.diagnostics.metrics-history=${PG_CONSOLE_DASH_METRICS_HISTORY:true}
+pg-console.dashboards.diagnostics.query-trends=${PG_CONSOLE_DASH_QUERY_TRENDS:true}
+pg-console.dashboards.diagnostics.database-trends=${PG_CONSOLE_DASH_DATABASE_TRENDS:true}
+pg-console.dashboards.diagnostics.infrastructure-trends=${PG_CONSOLE_DASH_INFRASTRUCTURE_TRENDS:true}
+pg-console.dashboards.diagnostics.stopwatch=${PG_CONSOLE_DASH_STOPWATCH:true}
+pg-console.dashboards.diagnostics.window-compare=${PG_CONSOLE_DASH_WINDOW_COMPARE:true}
 ----
+
+==== History-Dependent Diagnostic Pages
+
+NOTE: The Query Trends, Database Trends, Infrastructure Trends, and Window Compare pages require history sampling to be active in order to display meaningful data. Ensure `PG_CONSOLE_HISTORY_ENABLED=true` (the default) before enabling these toggles.
+
+[cols="2,1,3"]
+|===
+|Environment Variable |Default |Description
+
+|`PG_CONSOLE_DASH_QUERY_TRENDS`
+|`true`
+|Enable or disable the Query Trends page (`/diagnostics/query-trends`). Shows historical query performance from persisted data.
+
+|`PG_CONSOLE_DASH_DATABASE_TRENDS`
+|`true`
+|Enable or disable the Database Trends page (`/diagnostics/database-trends`). Shows per-database metric trends.
+
+|`PG_CONSOLE_DASH_INFRASTRUCTURE_TRENDS`
+|`true`
+|Enable or disable the Infrastructure Trends page (`/diagnostics/infrastructure-trends`). Shows WAL, checkpoint, and buffer trends.
+
+|`PG_CONSOLE_DASH_STOPWATCH`
+|`true`
+|Enable or disable the Stopwatch page (`/stopwatch`). Allows start/stop monitoring sessions with before/after metric comparison.
+
+|`PG_CONSOLE_DASH_WINDOW_COMPARE`
+|`true`
+|Enable or disable the Window Comparison page (`/window-compare`). Allows side-by-side comparison of two time windows.
+|===
 
 ==== Diagnostic Thresholds and Configuration
 

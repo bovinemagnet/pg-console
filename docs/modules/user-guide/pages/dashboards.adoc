@@ -22,6 +22,9 @@ All dashboards are accessible from the navigation bar at the top of the page:
 [[overview-dashboard]]
 == Overview Dashboard
 
+.Overview dashboard in dark mode
+image::screenshot-overview-dark.png[Overview Dashboard,width=800]
+
 The overview dashboard (`/`) provides a real-time summary of your PostgreSQL instance health.
 
 === Widgets
@@ -99,6 +102,9 @@ When xref:configuration.adoc#history-sampling[history sampling] is enabled, widg
 Hover over sparklines to see approximate values at different time points.
 
 == Slow Queries Dashboard
+
+.Slow queries dashboard in dark mode
+image::screenshot-slow-queries-dark.png[Slow Queries Dashboard,width=800]
 
 The slow queries dashboard (`/slow-queries`) analyses query performance using PostgreSQL's `pg_stat_statements` extension.
 
@@ -193,6 +199,9 @@ Resetting clears all historical query statistics. This operation cannot be undon
 
 == Activity Dashboard
 
+.Activity dashboard in dark mode
+image::screenshot-activity-dark.png[Activity Dashboard,width=800]
+
 The activity dashboard (`/activity`) shows current database connections and executing queries in real-time.
 
 === Connection List
@@ -280,6 +289,9 @@ Replace `PID` with the process ID from the activity dashboard.
 [[locks-dashboard]]
 == Locks Dashboard
 
+.Locks dashboard in dark mode
+image::screenshot-locks-dark.png[Locks Dashboard,width=800]
+
 The locks dashboard (`/locks`) visualises lock contention and blocking relationships.
 
 === Lock Summary
@@ -325,6 +337,9 @@ Terminating a query will roll back its transaction. Ensure this is acceptable be
 ====
 
 == Tables Dashboard
+
+.Tables dashboard in dark mode
+image::screenshot-tables-dark.png[Tables Dashboard,width=800]
 
 The tables dashboard (`/tables`) provides statistics on table and index usage.
 
@@ -417,6 +432,9 @@ View index-specific metrics by scrolling to the index section:
 Unused indexes (zero scans) can be candidates for removal to reduce maintenance overhead.
 
 == Databases Dashboard
+
+.Databases dashboard in dark mode
+image::screenshot-databases-dark.png[Databases Dashboard,width=800]
 
 The databases dashboard (`/databases`) compares metrics across all monitored databases.
 
