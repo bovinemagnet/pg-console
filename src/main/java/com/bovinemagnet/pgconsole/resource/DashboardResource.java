@@ -42,6 +42,7 @@ import com.bovinemagnet.pgconsole.service.SparklineService;
 import com.bovinemagnet.pgconsole.service.ReplicationService;
 import com.bovinemagnet.pgconsole.service.StatementsManagementService;
 import com.bovinemagnet.pgconsole.service.TableMaintenanceService;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -2139,7 +2140,7 @@ public class DashboardResource {
         String filename = String.format("slow-queries-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 
@@ -2170,7 +2171,7 @@ public class DashboardResource {
             instance, report.getFilenameTimestamp());
 
         return Response.ok(reportText)
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 
@@ -2514,7 +2515,7 @@ public class DashboardResource {
         String filename = String.format("activity-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 
@@ -2551,7 +2552,7 @@ public class DashboardResource {
         String filename = String.format("locks-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 
@@ -2593,7 +2594,7 @@ public class DashboardResource {
         String filename = String.format("tables-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 
@@ -2635,7 +2636,7 @@ public class DashboardResource {
         String filename = String.format("databases-%s-%s.csv", instance, timestamp);
 
         return Response.ok(csv.toString())
-                      .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                      .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                       .build();
     }
 

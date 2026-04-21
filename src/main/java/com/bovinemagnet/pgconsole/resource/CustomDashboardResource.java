@@ -5,6 +5,7 @@ import com.bovinemagnet.pgconsole.model.CustomWidget;
 import com.bovinemagnet.pgconsole.service.CustomDashboardService;
 import com.bovinemagnet.pgconsole.service.DataSourceManager;
 import com.bovinemagnet.pgconsole.service.FeatureToggleService;
+import com.bovinemagnet.pgconsole.util.HtmlText;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -425,7 +426,7 @@ public class CustomDashboardResource {
         // Simple HTML rendering for widget types
         if (data instanceof Map<?, ?> map) {
             if (map.containsKey("error")) {
-                return "<div class=\"alert alert-danger\">" + map.get("error") + "</div>";
+                return "<div class=\"alert alert-danger\">" + HtmlText.escape(map.get("error")) + "</div>";
             }
 
             StringBuilder html = new StringBuilder();
@@ -436,12 +437,12 @@ public class CustomDashboardResource {
                     Object current = map.get("current");
                     Object max = map.get("max");
                     Object pct = map.get("percentage");
-                    html.append("<div class=\"display-4 text-primary\">").append(current != null ? current : 0).append("</div>");
-                    html.append("<div class=\"text-muted\">of ").append(max != null ? max : 0).append(" max (").append(pct != null ? pct : 0).append("%)</div>");
+                    html.append("<div class=\"display-4 text-primary\">").append(HtmlText.escape(current != null ? current : 0)).append("</div>");
+                    html.append("<div class=\"text-muted\">of ").append(HtmlText.escape(max != null ? max : 0)).append(" max (").append(HtmlText.escape(pct != null ? pct : 0)).append("%)</div>");
                 }
                 case "cache-ratio" -> {
                     Object formatted = map.get("formatted");
-                    html.append("<div class=\"display-4 text-success\">").append(formatted != null ? formatted : "0%").append("</div>");
+                    html.append("<div class=\"display-4 text-success\">").append(HtmlText.escape(formatted != null ? formatted : "0%")).append("</div>");
                 }
                 case "active-queries", "blocked-queries" -> {
                     Object countObj = map.get("count");
@@ -451,18 +452,18 @@ public class CustomDashboardResource {
                 }
                 case "db-size" -> {
                     Object formatted = map.get("formatted");
-                    html.append("<div class=\"display-4 text-info\">").append(formatted != null ? formatted : "0 B").append("</div>");
+                    html.append("<div class=\"display-4 text-info\">").append(HtmlText.escape(formatted != null ? formatted : "0 B")).append("</div>");
                 }
                 case "longest-query" -> {
                     Object formatted = map.get("formatted");
-                    html.append("<div class=\"display-4 text-warning\">").append(formatted != null ? formatted : "0 ms").append("</div>");
+                    html.append("<div class=\"display-4 text-warning\">").append(HtmlText.escape(formatted != null ? formatted : "0 ms")).append("</div>");
                 }
                 default -> {
                     // Generic key-value display
                     html.append("<dl class=\"row mb-0\">");
                     for (Map.Entry<?, ?> entry : map.entrySet()) {
-                        html.append("<dt class=\"col-6\">").append(entry.getKey()).append("</dt>");
-                        html.append("<dd class=\"col-6\">").append(entry.getValue()).append("</dd>");
+                        html.append("<dt class=\"col-6\">").append(HtmlText.escape(entry.getKey())).append("</dt>");
+                        html.append("<dd class=\"col-6\">").append(HtmlText.escape(entry.getValue())).append("</dd>");
                     }
                     html.append("</dl>");
                 }
@@ -474,7 +475,7 @@ public class CustomDashboardResource {
             // Table data
             return "<div class=\"text-muted\">Table data available</div>";
         } else if (data instanceof String) {
-            // SVG sparkline or other string content
+            // SVG sparkline (generated server-side by SparklineService) — not escaped.
             return data.toString();
         }
 

@@ -3,6 +3,7 @@ package com.bovinemagnet.pgconsole.resource;
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.*;
 import com.bovinemagnet.pgconsole.service.*;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -372,7 +373,7 @@ public class DatabaseDiffResource {
                 sourceInstance, sourceDatabase, destInstance, destDatabase, timestamp);
 
         return Response.ok(script.getFullScript().getBytes(StandardCharsets.UTF_8))
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -406,7 +407,7 @@ public class DatabaseDiffResource {
                 sourceInstance, sourceDatabase, destInstance, destDatabase, timestamp);
 
         return Response.ok(html)
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -440,7 +441,7 @@ public class DatabaseDiffResource {
                 sourceInstance, sourceDatabase, destInstance, destDatabase, timestamp);
 
         return Response.ok(markdown.getBytes(StandardCharsets.UTF_8))
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -474,7 +475,7 @@ public class DatabaseDiffResource {
                 sourceInstance, sourceDatabase, destInstance, destDatabase, timestamp);
 
         return Response.ok(pdfBytes)
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 

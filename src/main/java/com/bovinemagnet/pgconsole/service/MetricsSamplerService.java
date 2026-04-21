@@ -82,7 +82,7 @@ public class MetricsSamplerService {
 
                 LOG.debugf("Metrics sampling completed for instance: %s", instanceId);
             } catch (Exception e) {
-                LOG.errorf("Failed to sample metrics for instance %s: %s", instanceId, e.getMessage());
+                LOG.errorf(e, "Failed to sample metrics for instance %s", instanceId);
             }
         }
     }
@@ -161,7 +161,7 @@ public class MetricsSamplerService {
                 historyRepository.saveSystemMetrics(instanceId, metrics);
             }
         } catch (SQLException e) {
-            LOG.warnf("Failed to sample system metrics for %s: %s", instanceId, e.getMessage());
+            LOG.warnf(e, "Failed to sample system metrics for %s", instanceId);
         }
     }
 
@@ -223,7 +223,7 @@ public class MetricsSamplerService {
                 }
             }
         } catch (SQLException e) {
-            LOG.warnf("Failed to sample query metrics for %s: %s", instanceId, e.getMessage());
+            LOG.warnf(e, "Failed to sample query metrics for %s", instanceId);
         }
     }
 
@@ -292,7 +292,7 @@ public class MetricsSamplerService {
                 historyRepository.saveDatabaseMetrics(instanceId, metrics);
             }
         } catch (SQLException e) {
-            LOG.warnf("Failed to sample database metrics for %s: %s", instanceId, e.getMessage());
+            LOG.warnf(e, "Failed to sample database metrics for %s", instanceId);
         }
     }
 
@@ -395,7 +395,7 @@ public class MetricsSamplerService {
 
             historyRepository.saveInfrastructureMetrics(instanceId, metrics);
         } catch (SQLException e) {
-            LOG.warnf("Failed to sample infrastructure metrics for %s: %s", instanceId, e.getMessage());
+            LOG.warnf(e, "Failed to sample infrastructure metrics for %s", instanceId);
         }
     }
 

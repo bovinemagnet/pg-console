@@ -3,6 +3,7 @@ package com.bovinemagnet.pgconsole.resource;
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.*;
 import com.bovinemagnet.pgconsole.service.*;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -513,7 +514,7 @@ public class InsightsResource {
                     executionId, runbookName, timestamp);
 
             return Response.ok(pdfBytes)
-                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                     .header("Content-Type", "application/pdf")
                     .build();
         } catch (Exception e) {

@@ -55,3 +55,6 @@ target/**
 .env
 
 .auto-claude
+
+# Stray screenshots at repo root (docs screenshots live under docs/modules/**/images/)
+/*.png

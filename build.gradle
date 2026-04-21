@@ -150,8 +150,12 @@ jacocoTestReport {
 
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
+            // Note: model/** is left in the report so classes with real logic
+            // (OverviewStats.TableSize.getFullName, DatabaseMetrics.getCacheHitRatio,
+            // NotificationChannel.getSuccessRate) contribute to coverage visibility.
+            // jacocoTestCoverageVerification still excludes model.* from the per-class
+            // 50% threshold to avoid pure getter/setter DTOs failing the build.
             fileTree(dir: it, exclude: [
-                '**/model/**',      // Exclude DTOs/POJOs
                 '**/config/**',     // Exclude configuration classes
                 '**/cli/**'         // Exclude CLI classes
             ])

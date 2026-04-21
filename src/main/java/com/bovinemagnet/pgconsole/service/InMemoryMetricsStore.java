@@ -35,6 +35,13 @@ public class InMemoryMetricsStore {
     private static final Logger LOG = Logger.getLogger("pgconsole.InMemoryMetricsStore");
 
     /**
+     * Hard cap per deque as defence-in-depth. Time-based eviction handles normal
+     * growth; this cap stops the store from growing without bound if the scheduled
+     * eviction is ever skipped or delayed.
+     */
+    private static final int MAX_ENTRIES_PER_DEQUE = 10_000;
+
+    /**
      * System metrics storage keyed by instance ID.
      */
     private final ConcurrentHashMap<String, ConcurrentLinkedDeque<SystemMetricsHistory>> systemMetrics =
@@ -74,6 +81,7 @@ public class InMemoryMetricsStore {
             metrics.setSampledAt(Instant.now());
         }
 
+        enforceCap(deque);
         deque.addLast(metrics);
         LOG.debugf("Added system metrics for instance '%s', store size: %d", instanceId, deque.size());
     }
@@ -151,6 +159,7 @@ public class InMemoryMetricsStore {
             metrics.setSampledAt(Instant.now());
         }
 
+        enforceCap(deque);
         deque.addLast(metrics);
         LOG.debugf("Added database metrics for '%s' on instance '%s', store size: %d",
                 databaseName, instanceId, deque.size());
@@ -207,6 +216,7 @@ public class InMemoryMetricsStore {
             metrics.setSampledAt(Instant.now());
         }
 
+        enforceCap(deque);
         deque.addLast(metrics);
         LOG.debugf("Added infrastructure metrics for instance '%s', store size: %d", instanceId, deque.size());
     }
@@ -302,6 +312,18 @@ public class InMemoryMetricsStore {
         if (totalEvicted > 0) {
             LOG.debugf("In-memory eviction complete: removed %d entries older than %d minutes",
                     totalEvicted, retentionMinutes);
+        }
+    }
+
+    /**
+     * Drops the oldest entries until the deque sits below {@link #MAX_ENTRIES_PER_DEQUE}.
+     * Runs in O(n) in the worst case but in practice n is at most a handful.
+     */
+    private static void enforceCap(ConcurrentLinkedDeque<?> deque) {
+        while (deque.size() >= MAX_ENTRIES_PER_DEQUE) {
+            if (deque.pollFirst() == null) {
+                break;
+            }
         }
     }
 

@@ -78,12 +78,12 @@
                     {#case 'connections'}
                         {#if widget.data}
                         <div class="text-center">
-                            <div class="display-4 text-primary">{widget.data.get('current')}</div>
-                            <div class="text-muted">of {widget.data.get('max')} max ({widget.data.get('percentage')}%)</div>
+                            <div class="display-4 text-primary">{widget.data.get('current') ?: 0}</div>
+                            <div class="text-muted">of {widget.data.get('max') ?: 0} max ({widget.data.get('percentage') ?: 0}%)</div>
                             <div class="progress mt-2" style="height: 8px;">
                                 <div class="progress-bar" role="progressbar"
-                                     style="width: {widget.data.get('percentage')}%"
-                                     aria-valuenow="{widget.data.get('percentage')}" aria-valuemin="0" aria-valuemax="100"></div>
+                                     style="width: {widget.data.get('percentage') ?: 0}%"
+                                     aria-valuenow="{widget.data.get('percentage') ?: 0}" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
                         </div>
                         {/if}

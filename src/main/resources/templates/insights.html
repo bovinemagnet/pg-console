@@ -200,8 +200,8 @@
                 <div class="mt-3">
                     <small class="text-muted">Try:</small>
                     {#for query in suggestedQueries}
-                    <button class="btn btn-sm btn-outline-secondary me-1 mb-1" type="button"
-                            onclick="document.querySelector('#nlQueryForm input[name=query]').value = '{query}'; htmx.trigger('#nlQueryForm', 'submit');">
+                    <button class="btn btn-sm btn-outline-secondary me-1 mb-1 js-suggested-query"
+                            type="button" data-query="{query}">
                         {query}
                     </button>
                     {/for}
@@ -357,6 +357,19 @@
 </style>
 
 <script>
+    // Suggested-query buttons: populate the NL query form and submit it.
+    // Uses data-query + delegated listener to keep query text out of any JS-string context.
+    document.body.addEventListener('click', function(event) \{
+        const btn = event.target.closest('.js-suggested-query');
+        if (!btn) return;
+        const input = document.querySelector('#nlQueryForm input[name=query]');
+        if (!input) return;
+        input.value = btn.dataset.query || '';
+        if (window.htmx) \{
+            window.htmx.trigger('#nlQueryForm', 'submit');
+        \}
+    \});
+
     // Handle NL query response
     document.body.addEventListener('htmx:afterSwap', function(event) \{
         if (event.detail.target.id === 'queryResult') \{

@@ -18,6 +18,7 @@ import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.LiveChartHistoryStore;
 import com.bovinemagnet.pgconsole.service.MetricsHistoryBridgeService;
 import com.bovinemagnet.pgconsole.service.PostgresService;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -582,7 +583,7 @@ public class DiagnosticsApiResource {
                 + ".json";
 
         return Response.ok(export, MediaType.APPLICATION_JSON)
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -611,7 +612,7 @@ public class DiagnosticsApiResource {
                 + ".csv";
 
         return Response.ok(csv.toString(), "text/csv")
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 

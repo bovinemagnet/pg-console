@@ -66,6 +66,26 @@ class SparklineServiceTest {
     }
 
     @Test
+    void testGenerateSparklineSkipsNullElements() {
+        // Gappy history data can contain nulls (metric unavailable for a sample).
+        List<Double> values = Arrays.asList(10.0, null, 20.0, null, 30.0);
+        String svg = sparklineService.generateSparkline(values, 120, 24);
+
+        assertNotNull(svg);
+        assertTrue(svg.contains("<path"));
+        assertFalse(svg.contains("sparkline-empty"));
+    }
+
+    @Test
+    void testGenerateSparklineWithAllNullsRendersEmpty() {
+        List<Double> values = Arrays.asList(null, null, null);
+        String svg = sparklineService.generateSparkline(values, 120, 24);
+
+        assertNotNull(svg);
+        assertTrue(svg.contains("sparkline-empty"));
+    }
+
+    @Test
     void testGenerateSparklineWithSingleValue() {
         List<Double> values = Collections.singletonList(50.0);
         String svg = sparklineService.generateSparkline(values, 120, 24);

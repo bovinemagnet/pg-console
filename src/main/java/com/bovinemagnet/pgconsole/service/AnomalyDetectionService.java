@@ -87,7 +87,9 @@ public class AnomalyDetectionService {
 
             LOG.infof("Baseline calculation completed for instance %s", instanceName);
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            // Inner helpers already handle SQLException; this is a scheduled-task safety net
+            // for programmer errors so the scheduler doesn't go into a crash loop.
             LOG.errorf(e, "Error calculating baselines for instance %s", instanceName);
         }
     }
@@ -150,7 +152,8 @@ public class AnomalyDetectionService {
                 }
             }
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            // Inner helpers already handle SQLException; last-resort catch for programmer bugs.
             LOG.errorf(e, "Error detecting anomalies for instance %s", instanceName);
         }
 
@@ -199,7 +202,7 @@ public class AnomalyDetectionService {
                 }
             }
 
-        } catch (Exception e) {
+        } catch (SQLException e) {
             LOG.errorf(e, "Error getting open anomalies for instance %s", instanceName);
         }
 
@@ -379,18 +382,25 @@ public class AnomalyDetectionService {
             """.formatted(metric.name, metric.name, metric.name, metric.name,
                 metric.name, metric.name, metric.name, days);
 
-        // Add time filters for seasonal patterns
+        // Add time filters for seasonal patterns (bound as parameters to avoid injection)
         if (hour != null) {
-            sql += " AND EXTRACT(HOUR FROM sampled_at) = " + hour;
+            sql += " AND EXTRACT(HOUR FROM sampled_at) = ?";
         }
         if (dayOfWeek != null) {
-            sql += " AND EXTRACT(DOW FROM sampled_at) = " + dayOfWeek;
+            sql += " AND EXTRACT(DOW FROM sampled_at) = ?";
         }
 
         try (Connection conn = ds.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, instanceName);
+            int paramIndex = 1;
+            stmt.setString(paramIndex++, instanceName);
+            if (hour != null) {
+                stmt.setInt(paramIndex++, hour);
+            }
+            if (dayOfWeek != null) {
+                stmt.setInt(paramIndex++, dayOfWeek);
+            }
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next() && rs.getInt("sample_count") >= 10) {

@@ -73,7 +73,7 @@
                         <div class="mb-3">
                             <label for="tags" class="form-label">Tags</label>
                             <input type="text" class="form-control" id="tags" name="tags"
-                                   value="{#for tag in dashboard.tags}{tag}{#if !hasNext}, {/if}{/for}"
+                                   value="{#if dashboard.tags}{#for tag in dashboard.tags}{tag}{#if !hasNext}, {/if}{/for}{/if}"
                                    placeholder="monitoring, production, performance">
                             <div class="form-text">Comma-separated list of tags</div>
                         </div>

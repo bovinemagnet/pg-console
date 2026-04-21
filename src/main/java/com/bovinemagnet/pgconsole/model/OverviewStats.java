@@ -635,7 +635,10 @@ public class OverviewStats {
          *         name if schema is null
          */
         public String getFullName() {
-            return schemaName + "." + tableName;
+            if (schemaName == null || schemaName.isEmpty()) {
+                return tableName != null ? tableName : "";
+            }
+            return schemaName + "." + (tableName != null ? tableName : "");
         }
     }
 

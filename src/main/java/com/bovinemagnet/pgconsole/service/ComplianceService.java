@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -486,19 +487,22 @@ public class ComplianceService {
     }
 
     private boolean isExtensionInstalled(String instanceName, String extensionName) {
-        String sql = "SELECT COUNT(*) FROM pg_extension WHERE extname = '" + extensionName + "'";
+        String sql = "SELECT COUNT(*) FROM pg_extension WHERE extname = ?";
 
         try (Connection conn = dataSourceManager.getDataSource(instanceName).getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
+            stmt.setString(1, extensionName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
             }
 
         } catch (SQLException e) {
-            LOG.errorf("Error checking extension %s for instance %s: %s",
-                    extensionName, instanceName, e.getMessage());
+            LOG.errorf(e, "Error checking extension %s for instance %s",
+                    extensionName, instanceName);
         }
 
         return false;

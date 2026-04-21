@@ -30,6 +30,24 @@ public class HistoryRepository {
     DataSource dataSource;
 
     /**
+     * Returns the supplied sample timestamp as a JDBC {@link Timestamp}, falling
+     * back to {@link Instant#now()} when the caller did not set one. Keeps the
+     * sampler's own view of "when this was captured" consistent with the stored row.
+     */
+    private static Timestamp sampledAtOrNow(Instant sampledAt) {
+        return Timestamp.from(sampledAt != null ? sampledAt : Instant.now());
+    }
+
+    /**
+     * Null-safe replacement for {@code rs.getTimestamp(col).toInstant()}.
+     * SQL NULL timestamps return {@code null} instead of tripping a {@link NullPointerException}.
+     */
+    private static Instant readInstant(ResultSet rs, String column) throws SQLException {
+        Timestamp ts = rs.getTimestamp(column);
+        return ts != null ? ts.toInstant() : null;
+    }
+
+    /**
      * Saves a system metrics snapshot for an instance to the history database.
      * <p>
      * Stores current metrics including connections, active queries, blocked queries,
@@ -53,7 +71,7 @@ public class HistoryRepository {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, instanceId);
-            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(2, sampledAtOrNow(metrics.getSampledAt()));
             stmt.setInt(3, metrics.getTotalConnections());
             stmt.setInt(4, metrics.getMaxConnections());
             stmt.setInt(5, metrics.getActiveQueries());
@@ -107,7 +125,7 @@ public class HistoryRepository {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, instanceId);
-            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(2, sampledAtOrNow(metrics.getSampledAt()));
             stmt.setString(3, metrics.getQueryId());
             stmt.setString(4, metrics.getQueryText());
             stmt.setLong(5, metrics.getTotalCalls());
@@ -164,7 +182,7 @@ public class HistoryRepository {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, instanceId);
-            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(2, sampledAtOrNow(metrics.getSampledAt()));
             stmt.setString(3, metrics.getDatabaseName());
             stmt.setInt(4, metrics.getNumBackends());
             stmt.setLong(5, metrics.getXactCommit());
@@ -237,7 +255,7 @@ public class HistoryRepository {
                 while (rs.next()) {
                     SystemMetricsHistory m = new SystemMetricsHistory();
                     m.setId(rs.getLong("id"));
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setTotalConnections(rs.getInt("total_connections"));
                     m.setMaxConnections(rs.getInt("max_connections"));
                     m.setActiveQueries(rs.getInt("active_queries"));
@@ -308,7 +326,7 @@ public class HistoryRepository {
                 while (rs.next()) {
                     QueryMetricsHistory m = new QueryMetricsHistory();
                     m.setId(rs.getLong("id"));
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setQueryId(rs.getString("query_id"));
                     m.setQueryText(rs.getString("query_text"));
                     m.setTotalCalls(rs.getLong("total_calls"));
@@ -383,7 +401,7 @@ public class HistoryRepository {
                 while (rs.next()) {
                     DatabaseMetricsHistory m = new DatabaseMetricsHistory();
                     m.setId(rs.getLong("id"));
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setDatabaseName(rs.getString("database_name"));
                     m.setNumBackends(rs.getInt("num_backends"));
                     m.setXactCommit(rs.getLong("xact_commit"));
@@ -451,7 +469,7 @@ public class HistoryRepository {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, instanceId);
-            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setTimestamp(2, sampledAtOrNow(metrics.getSampledAt()));
             stmt.setObject(3, metrics.getWalRecords());
             stmt.setObject(4, metrics.getWalFpi());
             stmt.setObject(5, metrics.getWalBytes());
@@ -509,7 +527,7 @@ public class HistoryRepository {
                 while (rs.next()) {
                     InfrastructureMetricsHistory m = new InfrastructureMetricsHistory();
                     m.setId(rs.getLong("id"));
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setWalRecords(getLongOrNull(rs, "wal_records"));
                     m.setWalFpi(getLongOrNull(rs, "wal_fpi"));
                     m.setWalBytes(getLongOrNull(rs, "wal_bytes"));
@@ -680,7 +698,7 @@ public class HistoryRepository {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     DatabaseMetricsHistory m = new DatabaseMetricsHistory();
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setNumBackends(rs.getInt("num_backends"));
                     m.setXactCommit(rs.getLong("xact_commit"));
                     m.setXactRollback(rs.getLong("xact_rollback"));
@@ -739,7 +757,7 @@ public class HistoryRepository {
                 while (rs.next()) {
                     SystemMetricsHistory m = new SystemMetricsHistory();
                     m.setId(rs.getLong("id"));
-                    m.setSampledAt(rs.getTimestamp("sampled_at").toInstant());
+                    m.setSampledAt(readInstant(rs, "sampled_at"));
                     m.setTotalConnections(rs.getInt("total_connections"));
                     m.setMaxConnections(rs.getInt("max_connections"));
                     m.setActiveQueries(rs.getInt("active_queries"));

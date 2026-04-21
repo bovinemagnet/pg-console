@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -74,7 +75,13 @@ public class SparklineService {
      * @return an SVG string representing the sparkline, or an empty sparkline if values is null or too small
      */
     public String generateSparkline(List<Double> values, int width, int height, String colour) {
-        if (values == null || values.size() < 2) {
+        if (values == null) {
+            return generateEmptySparkline(width, height);
+        }
+        // Gappy history data can contain nulls (e.g. a metric was unavailable for a sample);
+        // drop them so arithmetic and mapToDouble(Double::doubleValue) don't NPE.
+        values = values.stream().filter(Objects::nonNull).toList();
+        if (values.size() < 2) {
             return generateEmptySparkline(width, height);
         }
 

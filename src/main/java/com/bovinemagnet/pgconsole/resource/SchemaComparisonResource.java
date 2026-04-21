@@ -3,6 +3,7 @@ package com.bovinemagnet.pgconsole.resource;
 import com.bovinemagnet.pgconsole.config.InstanceConfig;
 import com.bovinemagnet.pgconsole.model.*;
 import com.bovinemagnet.pgconsole.service.*;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -318,7 +319,7 @@ public class SchemaComparisonResource {
                 sourceInstance, sourceSchema, destInstance, destSchema);
 
         return Response.ok(script.getFullScript())
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -412,7 +413,7 @@ public class SchemaComparisonResource {
         }
 
         return Response.ok(json)
-                .header("Content-Disposition", "attachment; filename=\"profile-" + id + ".json\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize("profile-" + id + ".json") + "\"")
                 .build();
     }
 
@@ -569,7 +570,7 @@ public class SchemaComparisonResource {
                 sourceInstance, sourceSchema, destInstance, destSchema);
 
         return Response.ok(html.toString())
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -619,7 +620,7 @@ public class SchemaComparisonResource {
                 sourceInstance, sourceSchema, destInstance, destSchema);
 
         return Response.ok(md.toString())
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .build();
     }
 
@@ -645,7 +646,7 @@ public class SchemaComparisonResource {
                 sourceInstance, sourceSchema, destInstance, destSchema);
 
         return Response.ok(pdfBytes)
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                 .header("Content-Type", "application/pdf")
                 .build();
     }

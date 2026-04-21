@@ -11,7 +11,7 @@
 -- ============================================================================
 
 -- System-level metrics sampled periodically
-CREATE TABLE pgconsole.system_metrics_history (
+CREATE TABLE IF NOT EXISTS pgconsole.system_metrics_history (
     id BIGSERIAL PRIMARY KEY,
     sampled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     instance_id TEXT NOT NULL DEFAULT 'default',
@@ -39,7 +39,7 @@ CREATE INDEX idx_system_metrics_instance_sampled
     ON pgconsole.system_metrics_history(instance_id, sampled_at DESC);
 
 -- Query metrics from pg_stat_statements sampled periodically
-CREATE TABLE pgconsole.query_metrics_history (
+CREATE TABLE IF NOT EXISTS pgconsole.query_metrics_history (
     id BIGSERIAL PRIMARY KEY,
     sampled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     instance_id TEXT NOT NULL DEFAULT 'default',
@@ -71,7 +71,7 @@ CREATE INDEX idx_query_metrics_instance_query
     ON pgconsole.query_metrics_history(instance_id, query_id, sampled_at DESC);
 
 -- Per-database metrics history
-CREATE TABLE pgconsole.database_metrics_history (
+CREATE TABLE IF NOT EXISTS pgconsole.database_metrics_history (
     id BIGSERIAL PRIMARY KEY,
     sampled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     instance_id TEXT NOT NULL DEFAULT 'default',
@@ -116,7 +116,7 @@ CREATE INDEX idx_database_metrics_instance_db
 -- Infrastructure metrics history table for WAL, checkpoint, and buffer statistics.
 -- WAL fields are nullable because pg_stat_wal only exists on PostgreSQL 14+.
 -- Checkpoint fields sourced from pg_stat_bgwriter (PG12-16) or pg_stat_checkpointer (PG17+).
-CREATE TABLE pgconsole.infrastructure_metrics_history (
+CREATE TABLE IF NOT EXISTS pgconsole.infrastructure_metrics_history (
     id BIGSERIAL PRIMARY KEY,
     sampled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     instance_id TEXT NOT NULL DEFAULT 'default',

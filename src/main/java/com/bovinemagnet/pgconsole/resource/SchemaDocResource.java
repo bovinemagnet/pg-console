@@ -7,6 +7,7 @@ import com.bovinemagnet.pgconsole.service.FeatureToggleService;
 import com.bovinemagnet.pgconsole.service.SchemaDocumentationService;
 import com.bovinemagnet.pgconsole.service.SchemaDocumentationService.DocumentationOptions;
 import com.bovinemagnet.pgconsole.service.SchemaDocumentationService.OutputFormat;
+import com.bovinemagnet.pgconsole.util.Filenames;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -203,7 +204,7 @@ public class SchemaDocResource {
 
             return Response.ok(documentation)
                     .type(contentType)
-                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Disposition", "attachment; filename=\"" + Filenames.sanitize(filename) + "\"")
                     .build();
         } else {
             return Response.ok(documentation).type(contentType).build();

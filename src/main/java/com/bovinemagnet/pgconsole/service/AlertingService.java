@@ -242,7 +242,8 @@ public class AlertingService {
                     return null;
                 });
 
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
+            // URI.create / HttpRequest builder rejected the supplied URL.
             LOG.errorf(e, "Failed to send webhook alert to %s", url);
         }
     }
