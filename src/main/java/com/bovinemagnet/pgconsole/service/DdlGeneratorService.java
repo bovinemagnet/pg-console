@@ -427,16 +427,18 @@ public class DdlGeneratorService {
 
     private String generateCreateSequence(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE SEQUENCE %s %s",
-                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
+            // sourceDefinition is already a complete "CREATE SEQUENCE ...;" produced by
+            // generateSequenceDdl; wrapping it again would double-nest the DDL (M38).
+            return diff.getSourceDefinition();
         }
         return String.format("CREATE SEQUENCE %s", quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateEnumType(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE TYPE %s AS ENUM (%s)",
-                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
+            // sourceDefinition is already a complete "CREATE TYPE ... AS ENUM (...);"
+            // produced by generateEnumTypeDdl; emit it as-is (M38).
+            return diff.getSourceDefinition();
         }
         return String.format("CREATE TYPE %s AS ENUM ('values')",
                 quoteQualified(targetSchema, diff.getObjectName()));
@@ -600,7 +602,12 @@ public class DdlGeneratorService {
             if (!col.isNullable()) {
                 colDef.append(" NOT NULL");
             }
-            if (col.getDefaultValue() != null && !col.getDefaultValue().isEmpty()) {
+            if (col.isGenerated() && col.getDefaultValue() != null && !col.getDefaultValue().isEmpty()) {
+                // A STORED generated column: the expression lives in defaultValue.
+                // Emitting it as a plain DEFAULT would silently drop the GENERATED
+                // semantics (M41).
+                colDef.append(" GENERATED ALWAYS AS (").append(col.getDefaultValue()).append(") STORED");
+            } else if (col.getDefaultValue() != null && !col.getDefaultValue().isEmpty()) {
                 colDef.append(" DEFAULT ").append(col.getDefaultValue());
             }
             if (col.getIdentity() != null) {
