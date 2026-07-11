@@ -104,8 +104,8 @@ public class ActiveAlertRepository {
                  AND t.tier_order = a.current_escalation_tier + 1
             WHERE a.resolved = FALSE
               AND a.acknowledged = FALSE
-              AND a.last_notification_at + (t.delay_minutes * INTERVAL '1 minute') <= NOW()
-            ORDER BY a.last_notification_at
+              AND COALESCE(a.last_notification_at, a.fired_at) + (t.delay_minutes * INTERVAL '1 minute') <= NOW()
+            ORDER BY COALESCE(a.last_notification_at, a.fired_at)
             """;
 
         List<ActiveAlert> alerts = new ArrayList<>();

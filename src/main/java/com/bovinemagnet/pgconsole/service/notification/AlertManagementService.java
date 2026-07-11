@@ -14,7 +14,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.jboss.logging.Logger;
 
 /**
@@ -392,9 +391,16 @@ public class AlertManagementService {
 		LOG.infof("Cleanup completed: %d old alerts, %d expired silences deleted", deletedAlerts, deletedSilences);
 	}
 
+	/**
+	 * Derives a deterministic deduplication key from the alert condition.
+	 * <p>
+	 * The key must be stable across firings of the same condition so
+	 * {@code findByAlertId} can match an existing active alert. A random
+	 * suffix (the previous behaviour) made every fire unique, defeating
+	 * deduplication and producing an alert storm.
+	 */
 	private String generateAlertId(String alertType, String instanceName) {
-		String base = alertType + "-" + (instanceName != null ? instanceName : "global");
-		return base + "-" + UUID.randomUUID().toString().substring(0, 8);
+		return alertType + "-" + (instanceName != null ? instanceName : "global");
 	}
 
 	/**

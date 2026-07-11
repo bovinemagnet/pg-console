@@ -62,6 +62,21 @@ public abstract class AbstractNotificationSender implements NotificationSender {
 	 * @param response the HTTP response
 	 * @return success result
 	 */
+	/**
+	 * Creates a success result for a no-op send that never made an HTTP call
+	 * (e.g. a PagerDuty resolution when auto-resolve is disabled). Avoids the
+	 * NPE that arises from passing a null {@link HttpResponse} to the
+	 * response-taking overload.
+	 *
+	 * @param channel the notification channel
+	 * @param alert the alert (may be null)
+	 * @return a success result with no response code
+	 */
+	protected NotificationResult createSuccessResult(NotificationChannel channel, ActiveAlert alert) {
+		return NotificationResult.success(channel.getId(), channel.getName(), channel.getChannelType(), alert != null ? alert.getAlertId() : "test")
+			.withAlertDetails(alert != null ? alert.getAlertType() : "TEST", alert != null ? alert.getAlertSeverity() : "INFO", alert != null ? alert.getAlertMessage() : "Test notification", alert != null ? alert.getInstanceName() : "test");
+	}
+
 	protected NotificationResult createSuccessResult(NotificationChannel channel, ActiveAlert alert, HttpResponse<String> response) {
 		// Deliberately do NOT echo the remote response body back to the caller: for
 		// an SSRF-style probe that would leak internal service responses. Only the

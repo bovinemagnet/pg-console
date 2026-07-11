@@ -126,18 +126,41 @@ public class NotificationDispatcher {
 	public List<NotificationResult> dispatchToChannels(ActiveAlert alert, List<Long> channelIds) {
 		List<NotificationResult> results = new ArrayList<>();
 
+		// Escalation must honour the same alert-level suppression as dispatch():
+		// a silenced or maintenance-window alert must not page on every tier.
+		if (isInMaintenanceWindow(alert)) {
+			LOG.debugf("Escalation for alert %s suppressed by maintenance window", alert.getAlertId());
+			return results;
+		}
+		if (isSilenced(alert)) {
+			LOG.debugf("Escalation for alert %s suppressed by silence rule", alert.getAlertId());
+			return results;
+		}
+
 		for (Long channelId : channelIds) {
 			channelRepository
 				.findById(channelId)
 				.ifPresent(channel -> {
-					if (channel.isEnabled()) {
-						NotificationResult result = sendToChannel(channel, alert);
-						results.add(result);
-						historyRepository.save(result);
+					if (!channel.isEnabled()) {
+						return;
+					}
+					// Per-channel filters and rate limits apply to escalation too.
+					if (!channelMatchesAlert(channel, alert)) {
+						return;
+					}
+					if (isRateLimited(channel)) {
+						LOG.warnf("Channel %s rate limited, skipping escalation for alert %s", channel.getName(), alert.getAlertId());
+						results.add(createRateLimitedResult(channel, alert));
+						return;
+					}
 
-						if (result.isSuccess()) {
-							channelRepository.updateLastUsed(channel.getId());
-						}
+					NotificationResult result = sendToChannel(channel, alert);
+					results.add(result);
+					historyRepository.save(result);
+					trackSend(channel.getId());
+
+					if (result.isSuccess()) {
+						channelRepository.updateLastUsed(channel.getId());
 					}
 				});
 		}
@@ -168,11 +191,22 @@ public class NotificationDispatcher {
 		for (NotificationChannel channel : channels) {
 			if (!channel.isEnabled()) continue;
 
-			NotificationSender sender = getSender(channel.getChannelType());
-			if (sender != null) {
-				NotificationResult result = sender.sendResolution(channel, alert);
-				results.add(result);
-				historyRepository.save(result);
+			if (channel.isTestMode()) {
+				LOG.infof("Channel %s in test mode; resolution for alert %s logged, not sent", channel.getName(), alert.getAlertId());
+				continue;
+			}
+
+			// Guard each channel so one failing sender (e.g. a PagerDuty no-op)
+			// cannot abort resolution for the remaining channels or 500 the request.
+			try {
+				NotificationSender sender = getSender(channel.getChannelType());
+				if (sender != null) {
+					NotificationResult result = sender.sendResolution(channel, alert);
+					results.add(result);
+					historyRepository.save(result);
+				}
+			} catch (Exception e) {
+				LOG.errorf(e, "Failed to send resolution to channel %s", channel.getName());
 			}
 		}
 
@@ -279,6 +313,13 @@ public class NotificationDispatcher {
 	}
 
 	private NotificationResult sendToChannel(NotificationChannel channel, ActiveAlert alert) {
+		// Test-mode channels are logged only, never actually sent.
+		if (channel.isTestMode()) {
+			LOG.infof("Channel %s in test mode; alert %s logged, not sent", channel.getName(), alert.getAlertId());
+			return NotificationResult.success(channel.getId(), channel.getName(), channel.getChannelType(), alert.getAlertId())
+				.withAlertDetails(alert.getAlertType(), alert.getAlertSeverity(), alert.getAlertMessage(), alert.getInstanceName());
+		}
+
 		NotificationSender sender = getSender(channel.getChannelType());
 		if (sender == null) {
 			LOG.errorf("No sender found for channel type: %s", channel.getChannelType());
