@@ -119,7 +119,7 @@ public class SlackNotificationSender extends AbstractNotificationSender {
 			text.append("<!channel> ");
 		}
 
-		text.append(getSeverityEmoji(alert.getAlertSeverity())).append(" *").append(escapeJson(alert.getAlertType())).append("*").append(" [").append(alert.getAlertSeverity()).append("]\\n").append(escapeJson(alert.getAlertMessage()));
+		text.append(getSeverityEmoji(alert.getAlertSeverity())).append(" *").append(escapeJson(alert.getAlertType())).append("*").append(" [").append(escapeJson(alert.getAlertSeverity())).append("]\\n").append(escapeJson(alert.getAlertMessage()));
 
 		if (alert.getInstanceName() != null) {
 			text.append("\\n_Instance: ").append(escapeJson(alert.getInstanceName())).append("_");
@@ -158,7 +158,7 @@ public class SlackNotificationSender extends AbstractNotificationSender {
 
 		// Section with alert details
 		payload.append("{\"type\":\"section\",\"fields\":[");
-		payload.append("{\"type\":\"mrkdwn\",\"text\":\"*Severity:*\\n").append(alert.getAlertSeverity()).append("\"},");
+		payload.append("{\"type\":\"mrkdwn\",\"text\":\"*Severity:*\\n").append(escapeJson(alert.getAlertSeverity())).append("\"},");
 		payload.append("{\"type\":\"mrkdwn\",\"text\":\"*Instance:*\\n").append(escapeJson(alert.getInstanceName() != null ? alert.getInstanceName() : "N/A")).append("\"},");
 		payload.append("{\"type\":\"mrkdwn\",\"text\":\"*Duration:*\\n").append(alert.getDurationFormatted()).append("\"},");
 		payload.append("{\"type\":\"mrkdwn\",\"text\":\"*Status:*\\n").append(alert.getStatusText()).append("\"}");

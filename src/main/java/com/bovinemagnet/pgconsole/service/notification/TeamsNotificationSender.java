@@ -115,7 +115,7 @@ public class TeamsNotificationSender extends AbstractNotificationSender {
 		// Facts container
 		payload.append("{\"type\":\"Container\",\"items\":[");
 		payload.append("{\"type\":\"FactSet\",\"facts\":[");
-		payload.append("{\"title\":\"Severity\",\"value\":\"").append(alert.getAlertSeverity()).append("\"},");
+		payload.append("{\"title\":\"Severity\",\"value\":\"").append(escapeJson(alert.getAlertSeverity())).append("\"},");
 		payload.append("{\"title\":\"Instance\",\"value\":\"").append(escapeJson(alert.getInstanceName() != null ? alert.getInstanceName() : "N/A")).append("\"},");
 		payload.append("{\"title\":\"Duration\",\"value\":\"").append(alert.getDurationFormatted()).append("\"},");
 		payload.append("{\"title\":\"Status\",\"value\":\"").append(alert.getStatusText()).append("\"},");

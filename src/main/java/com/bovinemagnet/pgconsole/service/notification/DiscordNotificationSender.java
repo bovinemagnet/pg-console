@@ -116,12 +116,12 @@ public class DiscordNotificationSender extends AbstractNotificationSender {
 				content.append("@everyone ");
 			} else if (config.getMentionRoleIds() != null && !config.getMentionRoleIds().isEmpty()) {
 				for (String roleId : config.getMentionRoleIds()) {
-					content.append("<@&").append(roleId).append("> ");
+					content.append("<@&").append(escapeJson(roleId)).append("> ");
 				}
 			}
 		}
 
-		content.append(getSeverityEmoji(alert.getAlertSeverity())).append(" **").append(escapeJson(alert.getAlertType())).append("** [").append(alert.getAlertSeverity()).append("]\\n").append(escapeJson(alert.getAlertMessage()));
+		content.append(getSeverityEmoji(alert.getAlertSeverity())).append(" **").append(escapeJson(alert.getAlertType())).append("** [").append(escapeJson(alert.getAlertSeverity())).append("]\\n").append(escapeJson(alert.getAlertMessage()));
 
 		if (alert.getInstanceName() != null) {
 			content.append("\\n*Instance:* ").append(escapeJson(alert.getInstanceName()));
@@ -156,7 +156,7 @@ public class DiscordNotificationSender extends AbstractNotificationSender {
 				content.append("@everyone ");
 			} else if (config.getMentionRoleIds() != null && !config.getMentionRoleIds().isEmpty()) {
 				for (String roleId : config.getMentionRoleIds()) {
-					content.append("<@&").append(roleId).append("> ");
+					content.append("<@&").append(escapeJson(roleId)).append("> ");
 				}
 			}
 		}
@@ -179,7 +179,7 @@ public class DiscordNotificationSender extends AbstractNotificationSender {
 
 		// Fields
 		payload.append("\"fields\":[");
-		payload.append("{\"name\":\"Severity\",\"value\":\"").append(alert.getAlertSeverity()).append("\",\"inline\":true},");
+		payload.append("{\"name\":\"Severity\",\"value\":\"").append(escapeJson(alert.getAlertSeverity())).append("\",\"inline\":true},");
 		payload.append("{\"name\":\"Instance\",\"value\":\"").append(escapeJson(alert.getInstanceName() != null ? alert.getInstanceName() : "N/A")).append("\",\"inline\":true},");
 		payload.append("{\"name\":\"Duration\",\"value\":\"").append(alert.getDurationFormatted()).append("\",\"inline\":true},");
 		payload.append("{\"name\":\"Status\",\"value\":\"").append(alert.getStatusText()).append("\",\"inline\":true}");

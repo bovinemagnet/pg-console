@@ -2650,13 +2650,9 @@ public class DashboardResource {
      * @return escaped CSV value, or empty string if input is null
      */
     private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        // If value contains comma, newline, or quote, wrap in quotes and escape existing quotes
-        if (value.contains(",") || value.contains("\n") || value.contains("\"")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
+        // Delegates to CsvCell, which also neutralises leading =/+/-/@ so a
+        // client-supplied application_name/user/query cannot inject a spreadsheet
+        // formula when the export is opened in Excel/Sheets.
+        return com.bovinemagnet.pgconsole.util.CsvCell.escape(value);
     }
 }

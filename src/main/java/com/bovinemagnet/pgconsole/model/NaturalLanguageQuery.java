@@ -301,15 +301,25 @@ public class NaturalLanguageQuery {
             return "/";
         }
         StringBuilder url = new StringBuilder(matchedIntent.getTargetEndpoint());
-        url.append("?instance=").append(instance);
+        // URL-encode all query values: the instance param is user-controlled and
+        // is later reflected into the page, so an unencoded value like
+        // "><img src=x onerror=...> would otherwise become live markup (XSS).
+        url.append("?instance=").append(encode(instance));
 
         if (extractedParameters != null) {
             for (Map.Entry<String, String> entry : extractedParameters.entrySet()) {
-                url.append("&").append(entry.getKey()).append("=").append(entry.getValue());
+                url.append("&").append(encode(entry.getKey())).append("=").append(encode(entry.getValue()));
             }
         }
 
         return url.toString();
+    }
+
+    private static String encode(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
