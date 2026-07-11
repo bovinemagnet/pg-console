@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.system_metrics_history (
     total_database_size_bytes BIGINT
 );
 
-CREATE INDEX idx_system_metrics_instance_sampled
+CREATE INDEX IF NOT EXISTS idx_system_metrics_instance_sampled
     ON pgconsole.system_metrics_history(instance_id, sampled_at DESC);
 
 -- Query metrics from pg_stat_statements sampled periodically
@@ -65,9 +65,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.query_metrics_history (
     temp_blks_written BIGINT
 );
 
-CREATE INDEX idx_query_metrics_instance_sampled
+CREATE INDEX IF NOT EXISTS idx_query_metrics_instance_sampled
     ON pgconsole.query_metrics_history(instance_id, sampled_at DESC);
-CREATE INDEX idx_query_metrics_instance_query
+CREATE INDEX IF NOT EXISTS idx_query_metrics_instance_query
     ON pgconsole.query_metrics_history(instance_id, query_id, sampled_at DESC);
 
 -- Per-database metrics history
@@ -108,9 +108,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.database_metrics_history (
     database_size_bytes BIGINT
 );
 
-CREATE INDEX idx_database_metrics_instance_sampled
+CREATE INDEX IF NOT EXISTS idx_database_metrics_instance_sampled
     ON pgconsole.database_metrics_history(instance_id, sampled_at DESC);
-CREATE INDEX idx_database_metrics_instance_db
+CREATE INDEX IF NOT EXISTS idx_database_metrics_instance_db
     ON pgconsole.database_metrics_history(instance_id, database_name, sampled_at DESC);
 
 -- Infrastructure metrics history table for WAL, checkpoint, and buffer statistics.
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.infrastructure_metrics_history (
     buffers_backend BIGINT
 );
 
-CREATE INDEX idx_infra_metrics_instance_sampled
+CREATE INDEX IF NOT EXISTS idx_infra_metrics_instance_sampled
     ON pgconsole.infrastructure_metrics_history(instance_id, sampled_at DESC);
 
 -- ============================================================================
@@ -288,8 +288,8 @@ CREATE TABLE IF NOT EXISTS pgconsole.notification_channel (
     test_mode BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-CREATE INDEX idx_notification_channel_type ON pgconsole.notification_channel(channel_type);
-CREATE INDEX idx_notification_channel_enabled ON pgconsole.notification_channel(enabled) WHERE enabled = TRUE;
+CREATE INDEX IF NOT EXISTS idx_notification_channel_type ON pgconsole.notification_channel(channel_type);
+CREATE INDEX IF NOT EXISTS idx_notification_channel_enabled ON pgconsole.notification_channel(enabled) WHERE enabled = TRUE;
 
 -- Escalation policies
 CREATE TABLE IF NOT EXISTS pgconsole.escalation_policy (
@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.escalation_tier (
     UNIQUE(policy_id, tier_order)
 );
 
-CREATE INDEX idx_escalation_tier_policy ON pgconsole.escalation_tier(policy_id);
+CREATE INDEX IF NOT EXISTS idx_escalation_tier_policy ON pgconsole.escalation_tier(policy_id);
 
 -- Maintenance windows (suppress alerts during maintenance)
 CREATE TABLE IF NOT EXISTS pgconsole.maintenance_window (
@@ -331,7 +331,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.maintenance_window (
     CONSTRAINT valid_window CHECK (end_time > start_time)
 );
 
-CREATE INDEX idx_maintenance_window_active ON pgconsole.maintenance_window(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_maintenance_window_active ON pgconsole.maintenance_window(start_time, end_time);
 
 -- Alert acknowledgements
 CREATE TABLE IF NOT EXISTS pgconsole.alert_acknowledgement (
@@ -344,8 +344,8 @@ CREATE TABLE IF NOT EXISTS pgconsole.alert_acknowledgement (
     UNIQUE(alert_id)
 );
 
-CREATE INDEX idx_alert_ack_alert ON pgconsole.alert_acknowledgement(alert_id);
-CREATE INDEX idx_alert_ack_expires ON pgconsole.alert_acknowledgement(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_alert_ack_alert ON pgconsole.alert_acknowledgement(alert_id);
+CREATE INDEX IF NOT EXISTS idx_alert_ack_expires ON pgconsole.alert_acknowledgement(expires_at) WHERE expires_at IS NOT NULL;
 
 -- Alert silences (pattern-based suppression)
 CREATE TABLE IF NOT EXISTS pgconsole.alert_silence (
@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.alert_silence (
     CONSTRAINT valid_silence CHECK (end_time > start_time)
 );
 
-CREATE INDEX idx_alert_silence_active ON pgconsole.alert_silence(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_alert_silence_active ON pgconsole.alert_silence(start_time, end_time);
 
 -- Notification history (audit log of all notifications)
 CREATE TABLE IF NOT EXISTS pgconsole.notification_history (
@@ -382,10 +382,10 @@ CREATE TABLE IF NOT EXISTS pgconsole.notification_history (
     dedup_key TEXT -- For PagerDuty deduplication
 );
 
-CREATE INDEX idx_notification_history_channel ON pgconsole.notification_history(channel_id);
-CREATE INDEX idx_notification_history_alert ON pgconsole.notification_history(alert_id);
-CREATE INDEX idx_notification_history_time ON pgconsole.notification_history(sent_at DESC);
-CREATE INDEX idx_notification_history_success ON pgconsole.notification_history(success) WHERE success = FALSE;
+CREATE INDEX IF NOT EXISTS idx_notification_history_channel ON pgconsole.notification_history(channel_id);
+CREATE INDEX IF NOT EXISTS idx_notification_history_alert ON pgconsole.notification_history(alert_id);
+CREATE INDEX IF NOT EXISTS idx_notification_history_time ON pgconsole.notification_history(sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notification_history_success ON pgconsole.notification_history(success) WHERE success = FALSE;
 
 -- Active alerts tracking (for escalation)
 CREATE TABLE IF NOT EXISTS pgconsole.active_alert (
@@ -405,9 +405,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.active_alert (
     metadata JSONB DEFAULT '{}'
 );
 
-CREATE INDEX idx_active_alert_id ON pgconsole.active_alert(alert_id);
-CREATE INDEX idx_active_alert_unresolved ON pgconsole.active_alert(resolved, acknowledged) WHERE resolved = FALSE;
-CREATE INDEX idx_active_alert_escalation ON pgconsole.active_alert(escalation_policy_id, current_escalation_tier) WHERE resolved = FALSE;
+CREATE INDEX IF NOT EXISTS idx_active_alert_id ON pgconsole.active_alert(alert_id);
+CREATE INDEX IF NOT EXISTS idx_active_alert_unresolved ON pgconsole.active_alert(resolved, acknowledged) WHERE resolved = FALSE;
+CREATE INDEX IF NOT EXISTS idx_active_alert_escalation ON pgconsole.active_alert(escalation_policy_id, current_escalation_tier) WHERE resolved = FALSE;
 
 -- Email digest queue
 CREATE TABLE IF NOT EXISTS pgconsole.email_digest_queue (
@@ -423,7 +423,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.email_digest_queue (
     processed_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_email_digest_pending ON pgconsole.email_digest_queue(recipient, processed) WHERE processed = FALSE;
+CREATE INDEX IF NOT EXISTS idx_email_digest_pending ON pgconsole.email_digest_queue(recipient, processed) WHERE processed = FALSE;
 
 -- Insert default escalation policy
 INSERT INTO pgconsole.escalation_policy (name, description, enabled, repeat_count)
@@ -463,9 +463,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.metric_baseline (
     UNIQUE(instance_id, metric_name, metric_category, hour_of_day, day_of_week)
 );
 
-CREATE INDEX idx_metric_baseline_instance
+CREATE INDEX IF NOT EXISTS idx_metric_baseline_instance
     ON pgconsole.metric_baseline(instance_id, metric_name);
-CREATE INDEX idx_metric_baseline_category
+CREATE INDEX IF NOT EXISTS idx_metric_baseline_category
     ON pgconsole.metric_baseline(instance_id, metric_category);
 
 -- Detected anomalies
@@ -501,11 +501,11 @@ CREATE TABLE IF NOT EXISTS pgconsole.detected_anomaly (
     alert_id BIGINT
 );
 
-CREATE INDEX idx_detected_anomaly_instance_time
+CREATE INDEX IF NOT EXISTS idx_detected_anomaly_instance_time
     ON pgconsole.detected_anomaly(instance_id, detected_at DESC);
-CREATE INDEX idx_detected_anomaly_severity
+CREATE INDEX IF NOT EXISTS idx_detected_anomaly_severity
     ON pgconsole.detected_anomaly(severity, detected_at DESC);
-CREATE INDEX idx_detected_anomaly_unresolved
+CREATE INDEX IF NOT EXISTS idx_detected_anomaly_unresolved
     ON pgconsole.detected_anomaly(instance_id) WHERE resolved_at IS NULL;
 
 -- Forecasts for various metrics
@@ -534,7 +534,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.metric_forecast (
     UNIQUE(instance_id, metric_name, forecast_date)
 );
 
-CREATE INDEX idx_metric_forecast_instance
+CREATE INDEX IF NOT EXISTS idx_metric_forecast_instance
     ON pgconsole.metric_forecast(instance_id, metric_name, forecast_date);
 
 -- Capacity thresholds for alerting on forecasts
@@ -602,11 +602,11 @@ CREATE TABLE IF NOT EXISTS pgconsole.unified_recommendation (
     effectiveness_rating TEXT CHECK (effectiveness_rating IN ('EXCELLENT', 'GOOD', 'NEUTRAL', 'POOR'))
 );
 
-CREATE INDEX idx_unified_recommendation_instance
+CREATE INDEX IF NOT EXISTS idx_unified_recommendation_instance
     ON pgconsole.unified_recommendation(instance_id, status, priority_score DESC);
-CREATE INDEX idx_unified_recommendation_severity
+CREATE INDEX IF NOT EXISTS idx_unified_recommendation_severity
     ON pgconsole.unified_recommendation(severity, priority_score DESC);
-CREATE INDEX idx_unified_recommendation_source
+CREATE INDEX IF NOT EXISTS idx_unified_recommendation_source
     ON pgconsole.unified_recommendation(source, created_at DESC);
 
 -- Configuration tuning suggestions
@@ -636,7 +636,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.config_tuning_suggestion (
     requires_restart BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-CREATE INDEX idx_config_tuning_instance
+CREATE INDEX IF NOT EXISTS idx_config_tuning_instance
     ON pgconsole.config_tuning_suggestion(instance_id, category);
 
 -- ============================================================================
@@ -691,7 +691,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.nl_query_history (
     queried_by TEXT
 );
 
-CREATE INDEX idx_nl_query_history_time
+CREATE INDEX IF NOT EXISTS idx_nl_query_history_time
     ON pgconsole.nl_query_history(queried_at DESC);
 
 -- ============================================================================
@@ -805,11 +805,11 @@ CREATE TABLE IF NOT EXISTS pgconsole.runbook_execution (
     notes TEXT
 );
 
-CREATE INDEX idx_runbook_execution_instance
+CREATE INDEX IF NOT EXISTS idx_runbook_execution_instance
     ON pgconsole.runbook_execution(instance_id, started_at DESC);
-CREATE INDEX idx_runbook_execution_status
+CREATE INDEX IF NOT EXISTS idx_runbook_execution_status
     ON pgconsole.runbook_execution(status) WHERE status = 'IN_PROGRESS';
-CREATE INDEX idx_runbook_execution_database
+CREATE INDEX IF NOT EXISTS idx_runbook_execution_database
     ON pgconsole.runbook_execution(database_name) WHERE database_name IS NOT NULL;
 
 -- ============================================================================
@@ -851,9 +851,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.scheduled_maintenance (
     created_by TEXT
 );
 
-CREATE INDEX idx_scheduled_maintenance_instance
+CREATE INDEX IF NOT EXISTS idx_scheduled_maintenance_instance
     ON pgconsole.scheduled_maintenance(instance_id, enabled);
-CREATE INDEX idx_scheduled_maintenance_next_run
+CREATE INDEX IF NOT EXISTS idx_scheduled_maintenance_next_run
     ON pgconsole.scheduled_maintenance(next_run_at) WHERE enabled = TRUE;
 
 -- Maintenance execution history
@@ -883,9 +883,9 @@ CREATE TABLE IF NOT EXISTS pgconsole.maintenance_execution (
     post_table_size BIGINT
 );
 
-CREATE INDEX idx_maintenance_execution_instance
+CREATE INDEX IF NOT EXISTS idx_maintenance_execution_instance
     ON pgconsole.maintenance_execution(instance_id, started_at DESC);
-CREATE INDEX idx_maintenance_execution_task
+CREATE INDEX IF NOT EXISTS idx_maintenance_execution_task
     ON pgconsole.maintenance_execution(scheduled_maintenance_id, started_at DESC);
 
 -- Activity patterns for intelligent scheduling
@@ -913,7 +913,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.activity_pattern (
     UNIQUE(instance_id, day_of_week, hour_of_day)
 );
 
-CREATE INDEX idx_activity_pattern_instance
+CREATE INDEX IF NOT EXISTS idx_activity_pattern_instance
     ON pgconsole.activity_pattern(instance_id, maintenance_suitability DESC);
 
 -- ============================================================================
@@ -952,7 +952,7 @@ CREATE TABLE IF NOT EXISTS pgconsole.insight_summary (
     UNIQUE(instance_id, calculated_at)
 );
 
-CREATE INDEX idx_insight_summary_instance
+CREATE INDEX IF NOT EXISTS idx_insight_summary_instance
     ON pgconsole.insight_summary(instance_id, calculated_at DESC);
 
 -- ============================================================================

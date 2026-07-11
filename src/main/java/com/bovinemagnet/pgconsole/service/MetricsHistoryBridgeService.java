@@ -495,7 +495,41 @@ public class MetricsHistoryBridgeService {
         long sizeCount = windowData.stream().filter(m -> m.getTotalDatabaseSizeBytes() != null).count();
         agg.setAvgDatabaseSizeBytes(sizeCount > 0 ? avgSize / sizeCount : null);
 
+        // Rate metrics (M20): system_metrics_history has no commit/tuple counters, so
+        // derive the five rates from the cumulative pg_stat_database counters in
+        // database_metrics_history as (last - first) / elapsed seconds over the window.
+        List<DatabaseMetricsHistory> dbWindow = historyRepository
+                .getAggregatedDatabaseMetricsHistory(instanceId, hours).stream()
+                .filter(m -> !m.getSampledAt().isBefore(start) && !m.getSampledAt().isAfter(end))
+                .toList();
+        if (dbWindow.size() >= 2) {
+            DatabaseMetricsHistory first = dbWindow.get(0);
+            DatabaseMetricsHistory last = dbWindow.get(dbWindow.size() - 1);
+            double seconds = Duration.between(first.getSampledAt(), last.getSampledAt()).toSeconds();
+            if (seconds > 0) {
+                agg.setAvgCommitRate(rate(first.getXactCommit(), last.getXactCommit(), seconds));
+                agg.setAvgRollbackRate(rate(first.getXactRollback(), last.getXactRollback(), seconds));
+                agg.setAvgInsertRate(rate(nz(first.getTupInserted()), nz(last.getTupInserted()), seconds));
+                agg.setAvgUpdateRate(rate(nz(first.getTupUpdated()), nz(last.getTupUpdated()), seconds));
+                agg.setAvgDeleteRate(rate(nz(first.getTupDeleted()), nz(last.getTupDeleted()), seconds));
+            }
+        }
+
         return agg;
+    }
+
+    /**
+     * Computes a per-second rate from two cumulative counter readings. A negative
+     * delta (a stats reset between samples) yields 0 rather than a nonsensical
+     * negative rate.
+     */
+    private static double rate(long first, long last, double seconds) {
+        long delta = last - first;
+        return delta > 0 ? delta / seconds : 0.0;
+    }
+
+    private static long nz(Long value) {
+        return value == null ? 0L : value;
     }
 
     /**

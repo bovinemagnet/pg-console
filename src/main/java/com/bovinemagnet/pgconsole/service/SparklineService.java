@@ -99,9 +99,9 @@ public class SparklineService {
             double y = height - (normalizedValue * (height - 2)) - 1; // Leave 1px margin
 
             if (i == 0) {
-                path.append("M ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
+                path.append("M ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
             } else {
-                path.append(" L ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
+                path.append(" L ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
             }
         }
 
@@ -109,7 +109,7 @@ public class SparklineService {
         double lastX = (values.size() - 1) * step;
         double lastY = height - ((values.get(values.size() - 1) - min) / range * (height - 2)) - 1;
 
-        return String.format(
+        return String.format(java.util.Locale.ROOT, 
             "<svg width=\"%d\" height=\"%d\" class=\"sparkline\" xmlns=\"http://www.w3.org/2000/svg\">" +
             "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" +
             "<circle cx=\"%.2f\" cy=\"%.2f\" r=\"2\" fill=\"%s\"/>" +
@@ -153,17 +153,17 @@ public class SparklineService {
             double y = height - (normalizedValue * (height - 2)) - 1;
 
             if (i == 0) {
-                linePath.append("M ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
-                areaPath.append(" L ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
+                linePath.append("M ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
+                areaPath.append(" L ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
             } else {
-                linePath.append(" L ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
-                areaPath.append(" L ").append(String.format("%.2f", x)).append(" ").append(String.format("%.2f", y));
+                linePath.append(" L ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
+                areaPath.append(" L ").append(String.format(java.util.Locale.ROOT, "%.2f", x)).append(" ").append(String.format(java.util.Locale.ROOT, "%.2f", y));
             }
         }
 
         areaPath.append(" L ").append(width).append(" ").append(height).append(" Z");
 
-        return String.format(
+        return String.format(java.util.Locale.ROOT, 
             "<svg width=\"%d\" height=\"%d\" class=\"sparkline\" xmlns=\"http://www.w3.org/2000/svg\">" +
             "<path d=\"%s\" fill=\"%s\" fill-opacity=\"0.2\"/>" +
             "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" +
@@ -184,7 +184,7 @@ public class SparklineService {
      * @return an SVG string representing an empty sparkline placeholder
      */
     public String generateEmptySparkline(int width, int height) {
-        return String.format(
+        return String.format(java.util.Locale.ROOT, 
             "<svg width=\"%d\" height=\"%d\" class=\"sparkline sparkline-empty\" xmlns=\"http://www.w3.org/2000/svg\">" +
             "<line x1=\"0\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#6c757d\" stroke-width=\"1\" stroke-dasharray=\"2,2\" opacity=\"0.5\"/>" +
             "</svg>",

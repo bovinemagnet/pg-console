@@ -97,9 +97,11 @@ public class ForecastingService {
             for (int day = 1; day <= forecastDays; day++) {
                 LocalDate forecastDate = today.plusDays(day);
 
-                // Calculate forecast value using the regression line
-                // x is days from the start of training period
-                double x = dataPoints.size() + day;
+                // Calculate forecast value using the regression line. x is elapsed
+                // days since the first training sample — the same scale the regression
+                // was fit on — so the forecast starts at the true next day rather than
+                // extrapolating an extra day (M24).
+                double x = java.time.temporal.ChronoUnit.DAYS.between(dataPoints.get(0).date(), forecastDate);
                 double forecastValue = regression.slope * x + regression.intercept;
 
                 // Calculate confidence interval (using standard error)
@@ -288,11 +290,19 @@ public class ForecastingService {
             stmt.setString(1, instanceName);
 
             try (ResultSet rs = stmt.executeQuery()) {
-                int index = 0;
+                // x is elapsed days since the first sample, not the row index: using
+                // the row index would compress gaps in the series and distort the
+                // regression slope (M24).
+                LocalDate firstDate = null;
                 while (rs.next()) {
                     java.sql.Date date = rs.getDate("day");
                     double value = rs.getDouble("value");
-                    dataPoints.add(new DataPoint(index++, date.toLocalDate(), value));
+                    LocalDate localDate = date.toLocalDate();
+                    if (firstDate == null) {
+                        firstDate = localDate;
+                    }
+                    int x = (int) java.time.temporal.ChronoUnit.DAYS.between(firstDate, localDate);
+                    dataPoints.add(new DataPoint(x, localDate, value));
                 }
             }
 
