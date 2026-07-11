@@ -33,6 +33,10 @@ public class LogRedactionService {
     private static final Pattern JDBC_PASSWORD_PATTERN =
         Pattern.compile("(password=)([^&;\\s]+)", Pattern.CASE_INSENSITIVE);
 
+    // scheme://user:password@host — redact the userinfo password (M05)
+    private static final Pattern URI_USERINFO_PATTERN =
+        Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*://)([^:@/\\s]+):([^@/\\s]+)@", Pattern.CASE_INSENSITIVE);
+
     private static final Pattern JSON_SENSITIVE_PATTERN =
         Pattern.compile("\"(password|secret|token|key|credential|auth|apikey|api_key|bearer|jwt)\"\\s*:\\s*\"([^\"]+)\"",
             Pattern.CASE_INSENSITIVE);
@@ -160,7 +164,10 @@ public class LogRedactionService {
      */
     private String redactConnectionStrings(String message) {
         String replacement = loggingConfig.redactReplacement();
-        return JDBC_PASSWORD_PATTERN.matcher(message).replaceAll("$1" + replacement);
+        String result = JDBC_PASSWORD_PATTERN.matcher(message).replaceAll("$1" + Matcher.quoteReplacement(replacement));
+        // Also redact URI userinfo (scheme://user:pass@host), keeping the username.
+        result = URI_USERINFO_PATTERN.matcher(result).replaceAll("$1$2:" + Matcher.quoteReplacement(replacement) + "@");
+        return result;
     }
 
     /**
@@ -222,8 +229,18 @@ public class LogRedactionService {
     private String redactPii(String message) {
         String result = message;
 
-        // Mask email addresses (keep domain)
-        result = EMAIL_PATTERN.matcher(result).replaceAll("[email]@$0".split("@")[1]);
+        // Mask email addresses, keeping the domain. (The previous
+        // "[email]@$0".split("@")[1] evaluated to the literal "$0" and replaced
+        // each email with itself — M04.)
+        Matcher emailMatcher = EMAIL_PATTERN.matcher(result);
+        StringBuffer eb = new StringBuffer();
+        while (emailMatcher.find()) {
+            String email = emailMatcher.group();
+            String domain = email.substring(email.indexOf('@') + 1);
+            emailMatcher.appendReplacement(eb, Matcher.quoteReplacement("[email]@" + domain));
+        }
+        emailMatcher.appendTail(eb);
+        result = eb.toString();
 
         // Mask phone numbers (keep last 4 digits)
         Matcher phoneMatcher = PHONE_PATTERN.matcher(result);
@@ -259,11 +276,13 @@ public class LogRedactionService {
      * @param jdbcUrl the JDBC URL to sanitise
      * @return sanitised URL with password removed
      */
-    public String sanitiseJdbcUrl(String jdbcUrl) {
+    public static String sanitiseJdbcUrl(String jdbcUrl) {
         if (jdbcUrl == null) {
             return null;
         }
-        return JDBC_PASSWORD_PATTERN.matcher(jdbcUrl).replaceAll("$1[REDACTED]");
+        String result = JDBC_PASSWORD_PATTERN.matcher(jdbcUrl).replaceAll("$1[REDACTED]");
+        // Also mask userinfo-style credentials (jdbc:postgresql://user:pass@host).
+        return URI_USERINFO_PATTERN.matcher(result).replaceAll("$1$2:[REDACTED]@");
     }
 
     /**

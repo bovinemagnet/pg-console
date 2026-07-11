@@ -161,7 +161,7 @@ public class HealthCheckCommand implements Runnable {
 			if (conn.isValid(5)) {
 				printPassed("Connectivity", "Connected successfully");
 				if (verbose) {
-					System.out.println("    URL: " + conn.getMetaData().getURL());
+					System.out.println("    URL: " + com.bovinemagnet.pgconsole.logging.LogRedactionService.sanitiseJdbcUrl(conn.getMetaData().getURL()));
 					System.out.println("    User: " + conn.getMetaData().getUserName());
 				}
 			} else {

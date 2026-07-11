@@ -234,7 +234,7 @@ public class NotificationResource {
     @Path("/api/channels")
     @Produces(MediaType.APPLICATION_JSON)
     public List<NotificationChannel> listChannels() {
-        return channelRepository.findAll();
+        return channelRepository.findAll().stream().map(this::maskSecrets).toList();
     }
 
     @GET
@@ -242,8 +242,44 @@ public class NotificationResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getChannel(@PathParam("id") Long id) {
         return channelRepository.findById(id)
-            .map(channel -> Response.ok(channel).build())
+            .map(channel -> Response.ok(maskSecrets(channel)).build())
             .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    /**
+     * Masks the secret-bearing fields (webhook URLs, PagerDuty routing key) on a
+     * channel before it is serialised to an API response, so credentials are not
+     * exfiltrable via the channels API (M01). Mutates the freshly-queried entity,
+     * never a shared/cached instance.
+     */
+    private NotificationChannel maskSecrets(NotificationChannel channel) {
+        if (channel == null) {
+            return null;
+        }
+        if (channel.getSlackConfig() != null) {
+            channel.getSlackConfig().setWebhookUrl(maskSecret(channel.getSlackConfig().getWebhookUrl()));
+        }
+        if (channel.getTeamsConfig() != null) {
+            channel.getTeamsConfig().setWebhookUrl(maskSecret(channel.getTeamsConfig().getWebhookUrl()));
+        }
+        if (channel.getDiscordConfig() != null) {
+            channel.getDiscordConfig().setWebhookUrl(maskSecret(channel.getDiscordConfig().getWebhookUrl()));
+        }
+        if (channel.getPagerDutyConfig() != null) {
+            channel.getPagerDutyConfig().setRoutingKey(maskSecret(channel.getPagerDutyConfig().getRoutingKey()));
+        }
+        return channel;
+    }
+
+    /**
+     * Reduces a secret to a non-reversible hint: {@code ****} plus the last four
+     * characters, or {@code ****} when too short to reveal safely.
+     */
+    private static String maskSecret(String secret) {
+        if (secret == null || secret.isBlank()) {
+            return secret;
+        }
+        return secret.length() <= 4 ? "****" : "****" + secret.substring(secret.length() - 4);
     }
 
     @POST
