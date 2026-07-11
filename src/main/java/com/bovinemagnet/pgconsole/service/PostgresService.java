@@ -1449,16 +1449,28 @@ public class PostgresService {
 
 		StringBuilder planText = new StringBuilder();
 
-		try (Connection conn = getDataSource(instanceName).getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(explainCmd.toString())) {
-			while (rs.next()) {
-				String line = rs.getString(1);
-				plan.addPlanLine(line);
-				if (planText.length() > 0) {
-					planText.append("\n");
-				}
-				planText.append(line);
+		try (Connection conn = getDataSource(instanceName).getConnection()) {
+			// Defence in depth: even EXPLAIN ANALYZE of an allowlisted query runs in a
+			// read-only transaction with a statement timeout, so any DML that slips past
+			// isExplainSafe (e.g. inside a function) cannot commit or run unbounded.
+			conn.setAutoCommit(false);
+			try (Statement guard = conn.createStatement()) {
+				guard.execute("SET TRANSACTION READ ONLY");
+				guard.execute("SET LOCAL statement_timeout = '30s'");
 			}
-			plan.setPlanText(planText.toString());
+			try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(explainCmd.toString())) {
+				while (rs.next()) {
+					String line = rs.getString(1);
+					plan.addPlanLine(line);
+					if (planText.length() > 0) {
+						planText.append("\n");
+					}
+					planText.append(line);
+				}
+				plan.setPlanText(planText.toString());
+			} finally {
+				conn.rollback();
+			}
 		} catch (SQLException e) {
 			LOG.warnf("Failed to explain query for %s: %s", instanceName, e.getMessage());
 			plan.setError("Failed to generate explain plan: " + e.getMessage());
@@ -1476,21 +1488,28 @@ public class PostgresService {
 	 * @param upperQuery the SQL query in uppercase with leading whitespace removed
 	 * @return true if the query starts with SELECT, WITH, or VALUES; false otherwise
 	 */
-	private boolean isExplainSafe(String upperQuery) {
-		// Remove leading whitespace and check first keyword
-		String cleaned = upperQuery.replaceAll("^\\s+", "");
+	boolean isExplainSafe(String query) {
+		if (query == null) {
+			return false;
+		}
+		// Normalise: uppercase and strip leading whitespace so the check is
+		// independent of how the caller passes the query.
+		String cleaned = query.toUpperCase().replaceAll("^\\s+", "");
 
-		// Allow SELECT, WITH, and VALUES
-		if (cleaned.startsWith("SELECT") || cleaned.startsWith("WITH") || cleaned.startsWith("VALUES")) {
+		// VALUES and plain SELECT cannot perform top-level DML.
+		if (cleaned.matches("(?s)^(SELECT|VALUES)\\b.*")) {
 			return true;
 		}
 
-		// Check for common DML that we should block
-		if (cleaned.startsWith("INSERT") || cleaned.startsWith("UPDATE") || cleaned.startsWith("DELETE") || cleaned.startsWith("DROP") || cleaned.startsWith("CREATE") || cleaned.startsWith("ALTER") || cleaned.startsWith("TRUNCATE")) {
-			return false;
+		// WITH (CTE) is allowed only when the body contains no data-modifying
+		// statement. A writable CTE (WITH d AS (DELETE ... RETURNING ...) ...)
+		// is executed by EXPLAIN ANALYZE, so it must be rejected here. Word
+		// boundaries ensure column names like DELETED_AT do not trip the guard.
+		if (cleaned.matches("(?s)^WITH\\b.*")) {
+			return !cleaned.matches("(?s).*\\b(INSERT|UPDATE|DELETE|MERGE)\\b.*");
 		}
 
-		// Default to false for safety
+		// Everything else (INSERT/UPDATE/DELETE/DROP/CREATE/ALTER/TRUNCATE/...) is unsafe.
 		return false;
 	}
 

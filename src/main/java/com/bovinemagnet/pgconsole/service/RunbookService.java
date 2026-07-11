@@ -2,6 +2,7 @@ package com.bovinemagnet.pgconsole.service;
 
 import com.bovinemagnet.pgconsole.model.Runbook;
 import com.bovinemagnet.pgconsole.model.RunbookExecution;
+import com.bovinemagnet.pgconsole.util.SqlMaintenanceVerbs;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -468,6 +469,13 @@ public class RunbookService {
                 break;
 
             case SQL_TEMPLATE:
+                // A SQL_TEMPLATE step runs SQL, so it must be explicitly marked
+                // auto-executable and must not require confirmation.
+                if (!step.isAutoExecute() || step.isRequiresConfirmation()) {
+                    output.append("Skipped: step is not marked auto-executable");
+                    break;
+                }
+
                 // Handle SQL templates with table_name parameter
                 String sql = step.getAction();
                 if (sql.contains("{table_name}")) {
@@ -480,6 +488,13 @@ public class RunbookService {
                         for (var rec : recommendations) {
                             String tableFqn = rec.getSchemaName() + "." + rec.getTableName();
                             String execSql = sql.replace("{table_name}", tableFqn);
+
+                            // Only allow non-destructive maintenance verbs to run unattended.
+                            if (!SqlMaintenanceVerbs.isAllowed(execSql)) {
+                                output.append("Refused (not an allowed maintenance verb): ")
+                                      .append(execSql).append("\n");
+                                continue;
+                            }
 
                             try (Connection conn = ds.getConnection();
                                  Statement stmt = conn.createStatement()) {
@@ -499,6 +514,8 @@ public class RunbookService {
                         }
                         output.insert(0, "Processed " + executed + " table(s):\n");
                     }
+                } else if (!SqlMaintenanceVerbs.isAllowed(sql)) {
+                    output.append("Refused (not an allowed maintenance verb): ").append(sql);
                 } else {
                     // Execute as-is
                     try (Connection conn = ds.getConnection();

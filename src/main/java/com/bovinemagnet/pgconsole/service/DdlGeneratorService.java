@@ -61,6 +61,14 @@ public class DdlGeneratorService {
         script.setSourceSchema(result.getSourceSchema());
         script.setDestinationSchema(result.getDestinationSchema());
 
+        // Never emit DDL — least of all destructive DROPs — from a comparison whose
+        // schema extraction did not fully succeed. A partial extraction makes present
+        // objects look missing/extra, so the script would be wrong and dangerous.
+        if (!result.isSuccess()) {
+            LOG.warnf("Skipping migration script: comparison did not succeed (%s)", result.getErrorMessage());
+            return script;
+        }
+
         int order = 0;
 
         // Generate statements for each difference
@@ -129,32 +137,32 @@ public class DdlGeneratorService {
      */
     private MigrationScript.MigrationStatement generateDropStatement(ObjectDifference diff, String targetSchema) {
         String ddl = switch (diff.getObjectType()) {
-            case TABLE -> String.format("DROP TABLE IF EXISTS %s.%s CASCADE", targetSchema, diff.getObjectName());
+            case TABLE -> String.format("DROP TABLE IF EXISTS %s CASCADE", quoteQualified(targetSchema, diff.getObjectName()));
             case COLUMN -> {
                 String[] parts = diff.getObjectName().split("\\.");
-                yield String.format("ALTER TABLE %s.%s DROP COLUMN IF EXISTS %s",
-                        targetSchema, parts[0], parts[1]);
+                yield String.format("ALTER TABLE %s DROP COLUMN IF EXISTS %s",
+                        quoteQualified(targetSchema, parts[0]), quoteIdent(parts[1]));
             }
-            case INDEX -> String.format("DROP INDEX IF EXISTS %s.%s", targetSchema, diff.getObjectName());
+            case INDEX -> String.format("DROP INDEX IF EXISTS %s", quoteQualified(targetSchema, diff.getObjectName()));
             case CONSTRAINT_PRIMARY, CONSTRAINT_FOREIGN, CONSTRAINT_UNIQUE, CONSTRAINT_CHECK -> {
                 String[] parts = diff.getObjectName().split("\\.");
-                yield String.format("ALTER TABLE %s.%s DROP CONSTRAINT IF EXISTS %s",
-                        targetSchema, parts[0], parts[1]);
+                yield String.format("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s",
+                        quoteQualified(targetSchema, parts[0]), quoteIdent(parts[1]));
             }
-            case VIEW -> String.format("DROP VIEW IF EXISTS %s.%s CASCADE", targetSchema, diff.getObjectName());
-            case MATERIALIZED_VIEW -> String.format("DROP MATERIALIZED VIEW IF EXISTS %s.%s CASCADE",
-                    targetSchema, diff.getObjectName());
-            case FUNCTION -> String.format("DROP FUNCTION IF EXISTS %s.%s CASCADE", targetSchema, diff.getObjectName());
-            case PROCEDURE -> String.format("DROP PROCEDURE IF EXISTS %s.%s CASCADE", targetSchema, diff.getObjectName());
+            case VIEW -> String.format("DROP VIEW IF EXISTS %s CASCADE", quoteQualified(targetSchema, diff.getObjectName()));
+            case MATERIALIZED_VIEW -> String.format("DROP MATERIALIZED VIEW IF EXISTS %s CASCADE",
+                    quoteQualified(targetSchema, diff.getObjectName()));
+            case FUNCTION -> String.format("DROP FUNCTION IF EXISTS %s CASCADE", quoteQualified(targetSchema, diff.getObjectName()));
+            case PROCEDURE -> String.format("DROP PROCEDURE IF EXISTS %s CASCADE", quoteQualified(targetSchema, diff.getObjectName()));
             case TRIGGER -> {
                 String[] parts = diff.getObjectName().split("\\.");
-                yield String.format("DROP TRIGGER IF EXISTS %s ON %s.%s",
-                        parts[1], targetSchema, parts[0]);
+                yield String.format("DROP TRIGGER IF EXISTS %s ON %s",
+                        quoteIdent(parts[1]), quoteQualified(targetSchema, parts[0]));
             }
-            case SEQUENCE -> String.format("DROP SEQUENCE IF EXISTS %s.%s CASCADE", targetSchema, diff.getObjectName());
-            case TYPE_ENUM, TYPE_COMPOSITE, TYPE_DOMAIN -> String.format("DROP TYPE IF EXISTS %s.%s CASCADE",
-                    targetSchema, diff.getObjectName());
-            case EXTENSION -> String.format("DROP EXTENSION IF EXISTS %s CASCADE", diff.getObjectName());
+            case SEQUENCE -> String.format("DROP SEQUENCE IF EXISTS %s CASCADE", quoteQualified(targetSchema, diff.getObjectName()));
+            case TYPE_ENUM, TYPE_COMPOSITE, TYPE_DOMAIN -> String.format("DROP TYPE IF EXISTS %s CASCADE",
+                    quoteQualified(targetSchema, diff.getObjectName()));
+            case EXTENSION -> String.format("DROP EXTENSION IF EXISTS %s CASCADE", quoteIdent(diff.getObjectName()));
         };
 
         return MigrationScript.MigrationStatement.builder()
@@ -203,10 +211,10 @@ public class DdlGeneratorService {
         String tableName = diff.getObjectName();
 
         return switch (attr.getAttributeName()) {
-            case "comment" -> String.format("COMMENT ON TABLE %s.%s IS '%s'",
-                    targetSchema, tableName, escapeString(attr.getSourceValue()));
-            case "owner" -> String.format("ALTER TABLE %s.%s OWNER TO %s",
-                    targetSchema, tableName, attr.getSourceValue());
+            case "comment" -> String.format("COMMENT ON TABLE %s IS '%s'",
+                    quoteQualified(targetSchema, tableName), escapeString(attr.getSourceValue()));
+            case "owner" -> String.format("ALTER TABLE %s OWNER TO %s",
+                    quoteQualified(targetSchema, tableName), quoteIdent(attr.getSourceValue()));
             default -> null;
         };
     }
@@ -216,25 +224,27 @@ public class DdlGeneratorService {
         String tableName = parts[0];
         String columnName = parts[1];
 
+        String qualifiedTable = quoteQualified(targetSchema, tableName);
+        String quotedColumn = quoteIdent(columnName);
         return switch (attr.getAttributeName()) {
-            case "dataType" -> String.format("ALTER TABLE %s.%s ALTER COLUMN %s TYPE %s",
-                    targetSchema, tableName, columnName, attr.getSourceValue());
+            case "dataType" -> String.format("ALTER TABLE %s ALTER COLUMN %s TYPE %s",
+                    qualifiedTable, quotedColumn, attr.getSourceValue());
             case "nullable" -> {
                 boolean nullable = Boolean.parseBoolean(attr.getSourceValue());
-                yield String.format("ALTER TABLE %s.%s ALTER COLUMN %s %s NOT NULL",
-                        targetSchema, tableName, columnName, nullable ? "DROP" : "SET");
+                yield String.format("ALTER TABLE %s ALTER COLUMN %s %s NOT NULL",
+                        qualifiedTable, quotedColumn, nullable ? "DROP" : "SET");
             }
             case "defaultValue" -> {
                 if (attr.getSourceValue() == null || attr.getSourceValue().isEmpty()) {
-                    yield String.format("ALTER TABLE %s.%s ALTER COLUMN %s DROP DEFAULT",
-                            targetSchema, tableName, columnName);
+                    yield String.format("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT",
+                            qualifiedTable, quotedColumn);
                 } else {
-                    yield String.format("ALTER TABLE %s.%s ALTER COLUMN %s SET DEFAULT %s",
-                            targetSchema, tableName, columnName, attr.getSourceValue());
+                    yield String.format("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s",
+                            qualifiedTable, quotedColumn, attr.getSourceValue());
                 }
             }
-            case "comment" -> String.format("COMMENT ON COLUMN %s.%s.%s IS '%s'",
-                    targetSchema, tableName, columnName, escapeString(attr.getSourceValue()));
+            case "comment" -> String.format("COMMENT ON COLUMN %s.%s IS '%s'",
+                    qualifiedTable, quotedColumn, escapeString(attr.getSourceValue()));
             default -> null;
         };
     }
@@ -242,8 +252,8 @@ public class DdlGeneratorService {
     private String generateAlterView(ObjectDifference diff, String targetSchema) {
         // Views must be recreated
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE OR REPLACE VIEW %s.%s AS\n%s",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE OR REPLACE VIEW %s AS\n%s",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
         return null;
     }
@@ -265,10 +275,10 @@ public class DdlGeneratorService {
 
             for (String label : sourceLabels) {
                 if (!destLabels.contains(label)) {
-                    sb.append(String.format("ALTER TYPE %s.%s ADD VALUE '%s'",
-                            targetSchema, diff.getObjectName(), label));
+                    sb.append(String.format("ALTER TYPE %s ADD VALUE '%s'",
+                            quoteQualified(targetSchema, diff.getObjectName()), escapeString(label)));
                     if (prevLabel != null) {
-                        sb.append(String.format(" AFTER '%s'", prevLabel));
+                        sb.append(String.format(" AFTER '%s'", escapeString(prevLabel)));
                     }
                     sb.append(";\n");
                 }
@@ -299,8 +309,8 @@ public class DdlGeneratorService {
         }
 
         // Otherwise generate basic CREATE TABLE
-        return String.format("CREATE TABLE %s.%s (\n    -- columns to be defined\n)",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE TABLE %s (\n    -- columns to be defined\n)",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateAddColumn(ObjectDifference diff, String targetSchema) {
@@ -309,8 +319,8 @@ public class DdlGeneratorService {
         String columnName = parts[1];
 
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("ALTER TABLE %s.%s ADD COLUMN %s",
-                targetSchema, tableName, columnName));
+        sb.append(String.format("ALTER TABLE %s ADD COLUMN %s",
+                quoteQualified(targetSchema, tableName), quoteIdent(columnName)));
 
         // Add data type if available from source definition
         if (diff.getSourceDefinition() != null) {
@@ -328,7 +338,7 @@ public class DdlGeneratorService {
             return diff.getSourceDefinition().replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS");
         }
         return String.format("CREATE INDEX IF NOT EXISTS %s ON %s.table_name (columns)",
-                diff.getObjectName(), targetSchema);
+                quoteIdent(diff.getObjectName()), quoteIdent(targetSchema));
     }
 
     private String generateAddPrimaryKey(ObjectDifference diff, String targetSchema) {
@@ -337,11 +347,11 @@ public class DdlGeneratorService {
         String constraintName = parts[1];
 
         if (diff.getSourceDefinition() != null) {
-            return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s %s",
-                    targetSchema, tableName, constraintName, diff.getSourceDefinition());
+            return String.format("ALTER TABLE %s ADD CONSTRAINT %s %s",
+                    quoteQualified(targetSchema, tableName), quoteIdent(constraintName), diff.getSourceDefinition());
         }
-        return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s PRIMARY KEY (columns)",
-                targetSchema, tableName, constraintName);
+        return String.format("ALTER TABLE %s ADD CONSTRAINT %s PRIMARY KEY (columns)",
+                quoteQualified(targetSchema, tableName), quoteIdent(constraintName));
     }
 
     private String generateAddForeignKey(ObjectDifference diff, String targetSchema) {
@@ -350,11 +360,11 @@ public class DdlGeneratorService {
         String constraintName = parts[1];
 
         if (diff.getSourceDefinition() != null) {
-            return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s %s",
-                    targetSchema, tableName, constraintName, diff.getSourceDefinition());
+            return String.format("ALTER TABLE %s ADD CONSTRAINT %s %s",
+                    quoteQualified(targetSchema, tableName), quoteIdent(constraintName), diff.getSourceDefinition());
         }
-        return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s FOREIGN KEY (columns) REFERENCES table(columns)",
-                targetSchema, tableName, constraintName);
+        return String.format("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (columns) REFERENCES table(columns)",
+                quoteQualified(targetSchema, tableName), quoteIdent(constraintName));
     }
 
     private String generateAddUniqueConstraint(ObjectDifference diff, String targetSchema) {
@@ -363,11 +373,11 @@ public class DdlGeneratorService {
         String constraintName = parts[1];
 
         if (diff.getSourceDefinition() != null) {
-            return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s %s",
-                    targetSchema, tableName, constraintName, diff.getSourceDefinition());
+            return String.format("ALTER TABLE %s ADD CONSTRAINT %s %s",
+                    quoteQualified(targetSchema, tableName), quoteIdent(constraintName), diff.getSourceDefinition());
         }
-        return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s UNIQUE (columns)",
-                targetSchema, tableName, constraintName);
+        return String.format("ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (columns)",
+                quoteQualified(targetSchema, tableName), quoteIdent(constraintName));
     }
 
     private String generateAddCheckConstraint(ObjectDifference diff, String targetSchema) {
@@ -376,29 +386,29 @@ public class DdlGeneratorService {
         String constraintName = parts[1];
 
         if (diff.getSourceDefinition() != null) {
-            return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s %s",
-                    targetSchema, tableName, constraintName, diff.getSourceDefinition());
+            return String.format("ALTER TABLE %s ADD CONSTRAINT %s %s",
+                    quoteQualified(targetSchema, tableName), quoteIdent(constraintName), diff.getSourceDefinition());
         }
-        return String.format("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK (expression)",
-                targetSchema, tableName, constraintName);
+        return String.format("ALTER TABLE %s ADD CONSTRAINT %s CHECK (expression)",
+                quoteQualified(targetSchema, tableName), quoteIdent(constraintName));
     }
 
     private String generateCreateView(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE VIEW %s.%s AS\n%s",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE VIEW %s AS\n%s",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE VIEW %s.%s AS\n    SELECT -- query here",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE VIEW %s AS\n    SELECT -- query here",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateMaterialisedView(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE MATERIALIZED VIEW %s.%s AS\n%s",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE MATERIALIZED VIEW %s AS\n%s",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE MATERIALIZED VIEW %s.%s AS\n    SELECT -- query here",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE MATERIALIZED VIEW %s AS\n    SELECT -- query here",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateFunction(ObjectDifference diff) {
@@ -417,41 +427,41 @@ public class DdlGeneratorService {
 
     private String generateCreateSequence(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE SEQUENCE %s.%s %s",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE SEQUENCE %s %s",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE SEQUENCE %s.%s", targetSchema, diff.getObjectName());
+        return String.format("CREATE SEQUENCE %s", quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateEnumType(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE TYPE %s.%s AS ENUM (%s)",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE TYPE %s AS ENUM (%s)",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE TYPE %s.%s AS ENUM ('values')",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE TYPE %s AS ENUM ('values')",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateCompositeType(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE TYPE %s.%s AS (%s)",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE TYPE %s AS (%s)",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE TYPE %s.%s AS (attributes)",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE TYPE %s AS (attributes)",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateDomain(ObjectDifference diff, String targetSchema) {
         if (diff.getSourceDefinition() != null) {
-            return String.format("CREATE DOMAIN %s.%s AS %s",
-                    targetSchema, diff.getObjectName(), diff.getSourceDefinition());
+            return String.format("CREATE DOMAIN %s AS %s",
+                    quoteQualified(targetSchema, diff.getObjectName()), diff.getSourceDefinition());
         }
-        return String.format("CREATE DOMAIN %s.%s AS base_type",
-                targetSchema, diff.getObjectName());
+        return String.format("CREATE DOMAIN %s AS base_type",
+                quoteQualified(targetSchema, diff.getObjectName()));
     }
 
     private String generateCreateExtension(ObjectDifference diff) {
-        return String.format("CREATE EXTENSION IF NOT EXISTS %s", diff.getObjectName());
+        return String.format("CREATE EXTENSION IF NOT EXISTS %s", quoteIdent(diff.getObjectName()));
     }
 
     /**
@@ -527,6 +537,49 @@ public class DdlGeneratorService {
     }
 
     /**
+     * Quotes a SQL identifier, doubling any embedded double-quote and wrapping
+     * the whole name in double quotes.
+     * <p>
+     * This makes mixed-case and reserved-word identifiers valid, and prevents a
+     * hostile identifier (e.g. {@code x"; DROP TABLE audit;--}) from being
+     * laundered into executable SQL when a DBA runs the generated migration.
+     *
+     * @param identifier the raw identifier (may be null)
+     * @return the safely quoted identifier, or an empty quoted string for null
+     */
+    private String quoteIdent(String identifier) {
+        if (identifier == null) {
+            return "\"\"";
+        }
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    /**
+     * Quotes a possibly schema-qualified identifier of the form {@code schema.name}
+     * by quoting each dot-separated part independently.
+     *
+     * @param schema the schema name
+     * @param name the object name
+     * @return {@code "schema"."name"}
+     */
+    private String quoteQualified(String schema, String name) {
+        return quoteIdent(schema) + "." + quoteIdent(name);
+    }
+
+    /**
+     * Quotes each column name in a list and joins them with commas.
+     *
+     * @param columns the column names
+     * @return a comma-separated list of quoted column identifiers
+     */
+    private String quoteColumnList(List<String> columns) {
+        if (columns == null) {
+            return "";
+        }
+        return columns.stream().map(this::quoteIdent).collect(Collectors.joining(", "));
+    }
+
+    /**
      * Generates DDL for creating a complete table with all its objects.
      *
      * @param table table schema
@@ -536,13 +589,13 @@ public class DdlGeneratorService {
     public String generateFullTableDdl(TableSchema table, String schemaName) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(String.format("CREATE TABLE %s.%s (\n", schemaName, table.getTableName()));
+        sb.append(String.format("CREATE TABLE %s (\n", quoteQualified(schemaName, table.getTableName())));
 
         // Columns
         List<String> columnDefs = new ArrayList<>();
         for (TableSchema.ColumnDefinition col : table.getColumns()) {
             StringBuilder colDef = new StringBuilder();
-            colDef.append("    ").append(col.getColumnName()).append(" ").append(col.getDataType());
+            colDef.append("    ").append(quoteIdent(col.getColumnName())).append(" ").append(col.getDataType());
 
             if (!col.isNullable()) {
                 colDef.append(" NOT NULL");
@@ -560,21 +613,21 @@ public class DdlGeneratorService {
         // Primary key inline
         if (table.getPrimaryKey() != null) {
             columnDefs.add(String.format("    CONSTRAINT %s PRIMARY KEY (%s)",
-                    table.getPrimaryKey().getConstraintName(),
-                    String.join(", ", table.getPrimaryKey().getColumns())));
+                    quoteIdent(table.getPrimaryKey().getConstraintName()),
+                    quoteColumnList(table.getPrimaryKey().getColumns())));
         }
 
         // Unique constraints inline
         for (TableSchema.UniqueConstraintDefinition uc : table.getUniqueConstraints()) {
             columnDefs.add(String.format("    CONSTRAINT %s UNIQUE (%s)",
-                    uc.getConstraintName(),
-                    String.join(", ", uc.getColumns())));
+                    quoteIdent(uc.getConstraintName()),
+                    quoteColumnList(uc.getColumns())));
         }
 
         // Check constraints inline
         for (TableSchema.CheckConstraintDefinition cc : table.getCheckConstraints()) {
             columnDefs.add(String.format("    CONSTRAINT %s %s",
-                    cc.getConstraintName(), cc.getExpression()));
+                    quoteIdent(cc.getConstraintName()), cc.getExpression()));
         }
 
         sb.append(String.join(",\n", columnDefs));
@@ -589,11 +642,11 @@ public class DdlGeneratorService {
 
         // Foreign keys (separate statements)
         for (TableSchema.ForeignKeyDefinition fk : table.getForeignKeys()) {
-            sb.append(String.format("\nALTER TABLE %s.%s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s)",
-                    schemaName, table.getTableName(), fk.getConstraintName(),
-                    String.join(", ", fk.getColumns()),
-                    fk.getReferencedSchema(), fk.getReferencedTable(),
-                    String.join(", ", fk.getReferencedColumns())));
+            sb.append(String.format("\nALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
+                    quoteQualified(schemaName, table.getTableName()), quoteIdent(fk.getConstraintName()),
+                    quoteColumnList(fk.getColumns()),
+                    quoteQualified(fk.getReferencedSchema(), fk.getReferencedTable()),
+                    quoteColumnList(fk.getReferencedColumns())));
 
             if (!"NO ACTION".equals(fk.getOnUpdate())) {
                 sb.append(" ON UPDATE ").append(fk.getOnUpdate());
@@ -613,15 +666,15 @@ public class DdlGeneratorService {
 
         // Comment
         if (table.getComment() != null && !table.getComment().isEmpty()) {
-            sb.append(String.format("\nCOMMENT ON TABLE %s.%s IS '%s';\n",
-                    schemaName, table.getTableName(), escapeString(table.getComment())));
+            sb.append(String.format("\nCOMMENT ON TABLE %s IS '%s';\n",
+                    quoteQualified(schemaName, table.getTableName()), escapeString(table.getComment())));
         }
 
         // Column comments
         for (TableSchema.ColumnDefinition col : table.getColumns()) {
             if (col.getComment() != null && !col.getComment().isEmpty()) {
-                sb.append(String.format("COMMENT ON COLUMN %s.%s.%s IS '%s';\n",
-                        schemaName, table.getTableName(), col.getColumnName(),
+                sb.append(String.format("COMMENT ON COLUMN %s.%s IS '%s';\n",
+                        quoteQualified(schemaName, table.getTableName()), quoteIdent(col.getColumnName()),
                         escapeString(col.getComment())));
             }
         }
@@ -659,7 +712,7 @@ public class DdlGeneratorService {
             sb.append("CREATE VIEW ");
         }
 
-        sb.append(schemaName).append(".").append(view.getViewName()).append(" AS\n");
+        sb.append(quoteQualified(schemaName, view.getViewName())).append(" AS\n");
         sb.append(view.getDefinition());
 
         if (!view.getDefinition().trim().endsWith(";")) {
@@ -681,8 +734,8 @@ public class DdlGeneratorService {
                 .map(l -> "'" + escapeString(l) + "'")
                 .collect(Collectors.joining(", "));
 
-        return String.format("CREATE TYPE %s.%s AS ENUM (%s);",
-                schemaName, type.getTypeName(), labels);
+        return String.format("CREATE TYPE %s AS ENUM (%s);",
+                quoteQualified(schemaName, type.getTypeName()), labels);
     }
 
     /**
@@ -694,7 +747,7 @@ public class DdlGeneratorService {
      */
     public String generateSequenceDdl(SequenceSchema seq, String schemaName) {
         StringBuilder sb = new StringBuilder();
-        sb.append("CREATE SEQUENCE ").append(schemaName).append(".").append(seq.getSequenceName());
+        sb.append("CREATE SEQUENCE ").append(quoteQualified(schemaName, seq.getSequenceName()));
 
         if (seq.getDataType() != null && !seq.getDataType().equals("bigint")) {
             sb.append(" AS ").append(seq.getDataType());

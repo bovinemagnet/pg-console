@@ -1,0 +1,77 @@
+name: Release JAR
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build release artifact with embedded docs (Quarkus uber-jar)
+        run: |
+          ./gradlew --no-daemon --stacktrace clean prepareReleaseArtifact \
+            -PincludeDocs -Dquarkus.package.jar.type=uber-jar
+
+      - name: Verify release artifact
+        id: jar
+        shell: bash
+        run: |
+          # prepareReleaseArtifact already copied the runnable uber-jar here.
+          JAR_FILE="build/release/pg-console.jar"
+
+          if [ ! -f "$JAR_FILE" ]; then
+            echo "Release jar not found at $JAR_FILE"
+            find build -maxdepth 4 -type f | sort
+            exit 1
+          fi
+
+          # Fail fast if the jar is not runnable (thin jars have no Main-Class).
+          if ! unzip -p "$JAR_FILE" META-INF/MANIFEST.MF | grep -q "Main-Class"; then
+            echo "Release jar has no Main-Class — not a runnable uber-jar"
+            exit 1
+          fi
+
+          echo "jar_file=$JAR_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum "${{ steps.jar.outputs.jar_file }}" > "${{ steps.jar.outputs.jar_file }}.sha256"
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: |
+            ${{ steps.jar.outputs.jar_file }}
+            ${{ steps.jar.outputs.jar_file }}.sha256
+          generate_release_notes: true
