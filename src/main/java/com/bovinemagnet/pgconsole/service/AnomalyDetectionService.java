@@ -149,6 +149,10 @@ public class AnomalyDetectionService {
                             || anomaly.getSeverity() == DetectedAnomaly.Severity.HIGH) {
                         fireAnomalyAlert(instanceName, anomaly);
                     }
+                } else {
+                    // Metric was evaluated and is back within the normal band:
+                    // auto-resolve any anomaly still open for it.
+                    resolveOpenAnomaliesForMetric(ds, instanceName, metric.name);
                 }
             }
 
@@ -665,6 +669,61 @@ public class AnomalyDetectionService {
     }
 
     private void saveAnomaly(DataSource ds, DetectedAnomaly anomaly) {
+        // Dedup: while a condition persists, refresh the existing open anomaly for
+        // this metric rather than inserting a new row on every detection run. Without
+        // this, detected_anomaly grows unbounded and re-fires alerts each cycle.
+        try (Connection conn = ds.getConnection()) {
+            Long openId = findOpenAnomalyId(conn, anomaly.getInstanceId(), anomaly.getMetricName());
+            if (openId != null) {
+                updateOpenAnomaly(conn, openId, anomaly);
+                anomaly.setId(openId);
+            } else {
+                insertAnomaly(conn, anomaly);
+            }
+        } catch (Exception e) {
+            LOG.debugf(e, "Error saving anomaly");
+        }
+    }
+
+    private Long findOpenAnomalyId(Connection conn, String instanceId, String metricName) throws SQLException {
+        String sql = """
+            SELECT id FROM pgconsole.detected_anomaly
+            WHERE instance_id = ? AND metric_name = ? AND resolved_at IS NULL
+            ORDER BY detected_at DESC LIMIT 1
+            """;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, instanceId);
+            stmt.setString(2, metricName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : null;
+            }
+        }
+    }
+
+    private void updateOpenAnomaly(Connection conn, long id, DetectedAnomaly anomaly) throws SQLException {
+        String sql = """
+            UPDATE pgconsole.detected_anomaly
+            SET detected_at = ?, anomaly_value = ?, baseline_mean = ?, baseline_stddev = ?,
+                deviation_sigma = ?, severity = ?, anomaly_type = ?, direction = ?,
+                root_cause_suggestion = ?
+            WHERE id = ?
+            """;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setTimestamp(1, Timestamp.from(anomaly.getDetectedAt()));
+            stmt.setDouble(2, anomaly.getAnomalyValue());
+            stmt.setDouble(3, anomaly.getBaselineMean());
+            stmt.setDouble(4, anomaly.getBaselineStddev());
+            stmt.setDouble(5, anomaly.getDeviationSigma());
+            stmt.setString(6, anomaly.getSeverity().name());
+            stmt.setString(7, anomaly.getAnomalyType().name());
+            stmt.setString(8, anomaly.getDirection().name());
+            stmt.setString(9, anomaly.getRootCauseSuggestion());
+            stmt.setLong(10, id);
+            stmt.executeUpdate();
+        }
+    }
+
+    private void insertAnomaly(Connection conn, DetectedAnomaly anomaly) throws SQLException {
         String sql = """
             INSERT INTO pgconsole.detected_anomaly
                 (instance_id, metric_name, metric_category, detected_at, anomaly_value,
@@ -673,10 +732,7 @@ public class AnomalyDetectionService {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
-
-        try (Connection conn = ds.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, anomaly.getInstanceId());
             stmt.setString(2, anomaly.getMetricName());
             stmt.setString(3, anomaly.getMetricCategory());
@@ -695,9 +751,27 @@ public class AnomalyDetectionService {
                     anomaly.setId(rs.getLong(1));
                 }
             }
+        }
+    }
 
-        } catch (Exception e) {
-            LOG.debugf(e, "Error saving anomaly");
+    /**
+     * Auto-resolves any open anomaly for a metric whose value has returned to
+     * within the normal band, so a cleared condition does not linger as an open
+     * anomaly forever.
+     */
+    private void resolveOpenAnomaliesForMetric(DataSource ds, String instanceId, String metricName) {
+        String sql = """
+            UPDATE pgconsole.detected_anomaly
+            SET resolved_at = NOW(), resolution_notes = 'Auto-resolved: metric returned to normal'
+            WHERE instance_id = ? AND metric_name = ? AND resolved_at IS NULL
+            """;
+        try (Connection conn = ds.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, instanceId);
+            stmt.setString(2, metricName);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            LOG.debugf(e, "Error auto-resolving anomalies for %s/%s", instanceId, metricName);
         }
     }
 

@@ -69,6 +69,13 @@ public class StopwatchRepository {
                 throw new RuntimeException("Failed to retrieve generated id for stopwatch session");
             }
         } catch (SQLException e) {
+            // 23505 = unique_violation: the partial unique index rejected a second
+            // concurrent 'running' session for this instance. Surface it as the same
+            // "already running" signal the service's pre-check produces.
+            if ("23505".equals(e.getSQLState())) {
+                throw new IllegalStateException(
+                        "An active stopwatch session already exists for instance '" + instanceId + "'", e);
+            }
             throw new RuntimeException("Failed to create stopwatch session for " + instanceId, e);
         }
     }

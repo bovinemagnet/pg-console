@@ -50,7 +50,7 @@ public class EscalationService {
 	 * This method is scheduled to run periodically and checks for
 	 * unacknowledged alerts that have exceeded their escalation delay.
 	 */
-	@Scheduled(every = "60s")
+	@Scheduled(every = "60s", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
 	public void processEscalations() {
 		List<ActiveAlert> alertsToEscalate = alertRepository.findDueForEscalation();
 

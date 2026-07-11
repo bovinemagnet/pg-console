@@ -66,7 +66,7 @@ public class PagerDutyNotificationSender extends AbstractNotificationSender {
 	public NotificationResult sendResolution(NotificationChannel channel, ActiveAlert alert) {
 		PagerDutyConfig config = channel.getPagerDutyConfig();
 		if (config == null || config.getRoutingKey() == null || !config.isAutoResolve()) {
-			return createSuccessResult(channel, alert, null);
+			return createSuccessResult(channel, alert);
 		}
 
 		try {
