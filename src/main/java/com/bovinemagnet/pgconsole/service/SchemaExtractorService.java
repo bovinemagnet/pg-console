@@ -81,6 +81,7 @@ public class SchemaExtractorService {
 
         } catch (SQLException e) {
             LOG.errorf("Failed to extract tables from %s.%s: %s", instanceName, schemaName, e.getMessage());
+            throw new SchemaExtractionException("Failed to extract tables from " + instanceName + "." + schemaName, e);
         }
 
         return tables;
@@ -447,6 +448,7 @@ public class SchemaExtractorService {
 
         } catch (SQLException e) {
             LOG.errorf("Failed to extract views from %s.%s: %s", instanceName, schemaName, e.getMessage());
+            throw new SchemaExtractionException("Failed to extract views from " + instanceName + "." + schemaName, e);
         }
 
         return views;
@@ -522,7 +524,7 @@ public class SchemaExtractorService {
         String sql = """
             SELECT p.proname AS function_name,
                    pg_get_function_identity_arguments(p.oid) AS arguments,
-                   pg_get_functiondef(p.oid) AS definition,
+                   CASE WHEN p.prokind IN ('f', 'p') THEN pg_get_functiondef(p.oid) END AS definition,
                    pg_get_function_result(p.oid) AS return_type,
                    l.lanname AS language,
                    p.prokind AS kind,
@@ -568,6 +570,7 @@ public class SchemaExtractorService {
 
         } catch (SQLException e) {
             LOG.errorf("Failed to extract functions from %s.%s: %s", instanceName, schemaName, e.getMessage());
+            throw new SchemaExtractionException("Failed to extract functions from " + instanceName + "." + schemaName, e);
         }
 
         return functions;
@@ -658,6 +661,7 @@ public class SchemaExtractorService {
 
         } catch (SQLException e) {
             LOG.errorf("Failed to extract sequences from %s.%s: %s", instanceName, schemaName, e.getMessage());
+            throw new SchemaExtractionException("Failed to extract sequences from " + instanceName + "." + schemaName, e);
         }
 
         return sequences;
@@ -705,6 +709,7 @@ public class SchemaExtractorService {
             types.addAll(extractRangeTypes(conn, schemaName));
         } catch (SQLException e) {
             LOG.errorf("Failed to extract types from %s.%s: %s", instanceName, schemaName, e.getMessage());
+            throw new SchemaExtractionException("Failed to extract types from " + instanceName + "." + schemaName, e);
         }
 
         return types;
@@ -1148,7 +1153,7 @@ public class SchemaExtractorService {
         String sql = """
             SELECT p.proname AS function_name,
                    pg_get_function_identity_arguments(p.oid) AS arguments,
-                   pg_get_functiondef(p.oid) AS definition,
+                   CASE WHEN p.prokind IN ('f', 'p') THEN pg_get_functiondef(p.oid) END AS definition,
                    pg_get_function_result(p.oid) AS return_type,
                    l.lanname AS language,
                    p.prokind AS kind,

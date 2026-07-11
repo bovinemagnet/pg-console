@@ -195,8 +195,7 @@ public class ResetStatsCommand implements Runnable {
 			try (Connection conn = ds.getConnection(); Statement stmt = conn.createStatement()) {
 				if (database != null && !database.isBlank()) {
 					// Reset for specific database
-					String sql = "SELECT pg_stat_statements_reset(NULL, " + "(SELECT oid FROM pg_database WHERE datname = '" + database + "'), NULL)";
-					stmt.execute(sql);
+					resetForDatabase(conn, database);
 					System.out.println("Statistics reset for database: " + database);
 				} else if (all) {
 					// Reset all
@@ -220,6 +219,25 @@ public class ResetStatsCommand implements Runnable {
 				System.out.println("or membership in the pg_read_all_stats role.");
 			}
 			System.exit(1);
+		}
+	}
+
+	/**
+	 * Resets pg_stat_statements counters for a single named database.
+	 * <p>
+	 * The database name is bound as a JDBC parameter rather than concatenated
+	 * into the SQL text, so a value containing a quote cannot alter the
+	 * statement (CVE-class SQL injection via {@code --database}).
+	 *
+	 * @param conn an open database connection
+	 * @param databaseName the target database name (bound, never interpolated)
+	 * @throws java.sql.SQLException if the reset fails
+	 */
+	static void resetForDatabase(Connection conn, String databaseName) throws java.sql.SQLException {
+		String sql = "SELECT pg_stat_statements_reset(NULL, (SELECT oid FROM pg_database WHERE datname = ?), NULL)";
+		try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setString(1, databaseName);
+			ps.execute();
 		}
 	}
 

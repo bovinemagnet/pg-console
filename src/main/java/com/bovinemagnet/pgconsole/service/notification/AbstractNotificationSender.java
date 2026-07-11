@@ -63,9 +63,11 @@ public abstract class AbstractNotificationSender implements NotificationSender {
 	 * @return success result
 	 */
 	protected NotificationResult createSuccessResult(NotificationChannel channel, ActiveAlert alert, HttpResponse<String> response) {
+		// Deliberately do NOT echo the remote response body back to the caller: for
+		// an SSRF-style probe that would leak internal service responses. Only the
+		// status code is retained.
 		return NotificationResult.success(channel.getId(), channel.getName(), channel.getChannelType(), alert != null ? alert.getAlertId() : "test")
 			.withResponseCode(response.statusCode())
-			.withResponseBody(truncateBody(response.body()))
 			.withAlertDetails(alert != null ? alert.getAlertType() : "TEST", alert != null ? alert.getAlertSeverity() : "INFO", alert != null ? alert.getAlertMessage() : "Test notification", alert != null ? alert.getInstanceName() : "test");
 	}
 
@@ -95,9 +97,10 @@ public abstract class AbstractNotificationSender implements NotificationSender {
 	 * @return failure result
 	 */
 	protected NotificationResult createFailureResult(NotificationChannel channel, ActiveAlert alert, HttpResponse<String> response) {
-		return NotificationResult.failure(channel.getId(), channel.getName(), channel.getChannelType(), alert != null ? alert.getAlertId() : "test", "HTTP " + response.statusCode() + ": " + truncateBody(response.body()))
+		// As with success, the remote body is not echoed back to the caller; only the
+		// HTTP status code is reported so an SSRF probe cannot read internal responses.
+		return NotificationResult.failure(channel.getId(), channel.getName(), channel.getChannelType(), alert != null ? alert.getAlertId() : "test", "HTTP " + response.statusCode())
 			.withResponseCode(response.statusCode())
-			.withResponseBody(truncateBody(response.body()))
 			.withAlertDetails(alert != null ? alert.getAlertType() : "TEST", alert != null ? alert.getAlertSeverity() : "INFO", alert != null ? alert.getAlertMessage() : "Test notification", alert != null ? alert.getInstanceName() : "test");
 	}
 
@@ -137,22 +140,6 @@ public abstract class AbstractNotificationSender implements NotificationSender {
 			case "LOW", "INFO" -> "🟢";
 			default -> "ℹ️";
 		};
-	}
-
-	/**
-	 * Truncates response body for storage.
-	 *
-	 * @param body response body
-	 * @return truncated body
-	 */
-	protected String truncateBody(String body) {
-		if (body == null) {
-			return null;
-		}
-		if (body.length() > 1000) {
-			return body.substring(0, 1000) + "...[truncated]";
-		}
-		return body;
 	}
 
 	/**

@@ -251,10 +251,9 @@ public class NotificationResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response createChannel(NotificationChannel channel) {
-        if (!dispatcher.validateChannelConfig(channel)) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                .entity("Invalid channel configuration")
-                .build();
+        Response invalid = validateChannel(channel);
+        if (invalid != null) {
+            return invalid;
         }
 
         NotificationChannel saved = channelRepository.save(channel);
@@ -270,9 +269,56 @@ public class NotificationResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
+        Response invalid = validateChannel(channel);
+        if (invalid != null) {
+            return invalid;
+        }
+
         channel.setId(id);
         NotificationChannel updated = channelRepository.update(channel);
         return Response.ok(updated).build();
+    }
+
+    /**
+     * Validates a channel's configuration before persisting it, on both create
+     * and update. For webhook-based channels the destination URL must be https
+     * and resolve to a public address, closing the SSRF hole.
+     *
+     * @param channel the channel to validate
+     * @return a BAD_REQUEST response describing the problem, or null if valid
+     */
+    private Response validateChannel(NotificationChannel channel) {
+        if (!dispatcher.validateChannelConfig(channel)) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                .entity("Invalid channel configuration")
+                .build();
+        }
+
+        String webhookUrl = webhookUrlOf(channel);
+        if (webhookUrl != null && !com.bovinemagnet.pgconsole.util.WebhookUrlValidator.isSafe(webhookUrl)) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                .entity("Webhook URL must be https and resolve to a public address")
+                .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts the outbound webhook URL for webhook-based channel types, or null
+     * for channel types (PagerDuty Events API, Email) that do not post to an
+     * arbitrary user-supplied URL.
+     */
+    private String webhookUrlOf(NotificationChannel channel) {
+        if (channel == null || channel.getChannelType() == null) {
+            return null;
+        }
+        return switch (channel.getChannelType()) {
+            case SLACK -> channel.getSlackConfig() != null ? channel.getSlackConfig().getWebhookUrl() : null;
+            case TEAMS -> channel.getTeamsConfig() != null ? channel.getTeamsConfig().getWebhookUrl() : null;
+            case DISCORD -> channel.getDiscordConfig() != null ? channel.getDiscordConfig().getWebhookUrl() : null;
+            default -> null;
+        };
     }
 
     @DELETE

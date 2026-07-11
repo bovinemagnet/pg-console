@@ -77,6 +77,14 @@ public class CrossDatabaseConnectionService {
      * @throws SQLException if connection cannot be established
      */
     public Connection getConnectionToDatabase(String instanceName, String databaseName) throws SQLException {
+        // Allowlist validation: the database name selects the connection target, so it
+        // cannot be a bind parameter. Splicing it into the JDBC URL unchecked would allow
+        // injection of arbitrary connection properties (socketFactory, loggerFile, etc.),
+        // which is an RCE/SSRF/file-write vector. Only accept names the server reports.
+        if (databaseName == null || !listDatabases(instanceName).contains(databaseName)) {
+            throw new SQLException("Unknown or inaccessible database: " + databaseName);
+        }
+
         javax.sql.DataSource ds = dataSourceManager.getDataSource(instanceName);
 
         // Get connection properties from the datasource
