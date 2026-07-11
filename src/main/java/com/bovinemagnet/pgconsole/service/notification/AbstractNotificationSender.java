@@ -143,16 +143,42 @@ public abstract class AbstractNotificationSender implements NotificationSender {
 	}
 
 	/**
-	 * Escapes special characters for JSON strings.
+	 * Escapes a string for safe inclusion inside a JSON string literal.
+	 * <p>
+	 * Escapes the structural characters (backslash, double-quote) and every
+	 * control character below {@code 0x20} as a {@code \\uXXXX} sequence. This
+	 * prevents an attacker-supplied field (e.g. an alert severity such as
+	 * {@code HIGH","text":"...}) from breaking out of its string and rewriting
+	 * the surrounding payload structure.
 	 *
-	 * @param text text to escape
-	 * @return escaped text
+	 * @param text text to escape (may be null)
+	 * @return escaped text, empty string for null
 	 */
 	protected String escapeJson(String text) {
 		if (text == null) {
 			return "";
 		}
-		return text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+		StringBuilder sb = new StringBuilder(text.length() + 8);
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			switch (c) {
+				case '\\' -> sb.append("\\\\");
+				case '"' -> sb.append("\\\"");
+				case '\n' -> sb.append("\\n");
+				case '\r' -> sb.append("\\r");
+				case '\t' -> sb.append("\\t");
+				case '\b' -> sb.append("\\b");
+				case '\f' -> sb.append("\\f");
+				default -> {
+					if (c < 0x20) {
+						sb.append(String.format("\\u%04x", (int) c));
+					} else {
+						sb.append(c);
+					}
+				}
+			}
+		}
+		return sb.toString();
 	}
 
 	/**

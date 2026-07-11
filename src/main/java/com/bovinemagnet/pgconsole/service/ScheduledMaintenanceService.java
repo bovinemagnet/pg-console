@@ -634,7 +634,7 @@ public class ScheduledMaintenanceService {
         }
 
         String target = task.getTargetTable() != null ?
-                String.format("\"%s\".\"%s\"", task.getTargetSchema(), task.getTargetTable()) :
+                quoteIdent(task.getTargetSchema()) + "." + quoteIdent(task.getTargetTable()) :
                 null;
 
         return switch (task.getTaskType()) {
@@ -645,13 +645,30 @@ public class ScheduledMaintenanceService {
                 if (target != null) {
                     yield "REINDEX TABLE " + target;
                 } else if (task.getTargetSchema() != null) {
-                    yield String.format("REINDEX SCHEMA \"%s\"", task.getTargetSchema());
+                    yield "REINDEX SCHEMA " + quoteIdent(task.getTargetSchema());
                 } else {
                     yield "REINDEX DATABASE";
                 }
             }
             case CLUSTER -> target != null ? "CLUSTER " + target : null;
         };
+    }
+
+    /**
+     * Quotes a SQL identifier, doubling any embedded double-quote.
+     * <p>
+     * Plain {@code String.format("\"%s\"", name)} is not injection-safe: a name
+     * containing a {@code "} breaks out of the quotes. Doubling embedded quotes
+     * follows {@code quote_ident} semantics so the identifier stays inert.
+     *
+     * @param identifier the raw identifier (may be null)
+     * @return the safely quoted identifier
+     */
+    private String quoteIdent(String identifier) {
+        if (identifier == null) {
+            return "\"\"";
+        }
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     private void updateTaskExecution(String instanceName, long taskId, String status, long durationMs) {
