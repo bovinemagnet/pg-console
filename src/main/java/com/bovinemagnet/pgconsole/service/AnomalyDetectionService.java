@@ -109,10 +109,12 @@ public class AnomalyDetectionService {
             // Get current metric values
             Map<String, Double> currentValues = getCurrentMetricValues(ds, instanceName);
 
-            // Get current time context for seasonal baselines
-            Calendar cal = Calendar.getInstance();
-            int currentHour = cal.get(Calendar.HOUR_OF_DAY);
-            int currentDay = cal.get(Calendar.DAY_OF_WEEK) - 1;  // Convert to 0-6
+            // Get current time context for seasonal baselines, in UTC to match the
+            // UTC-bucketed baselines (M22). Postgres EXTRACT(DOW) is 0=Sunday..6=Saturday,
+            // which equals Java's DayOfWeek value mod 7 (SUNDAY 7 % 7 = 0).
+            java.time.ZonedDateTime nowUtc = java.time.Instant.now().atZone(java.time.ZoneOffset.UTC);
+            int currentHour = nowUtc.getHour();
+            int currentDay = nowUtc.getDayOfWeek().getValue() % 7;
 
             for (MetricDefinition metric : MONITORED_METRICS) {
                 Double currentValue = currentValues.get(metric.name);
@@ -387,11 +389,14 @@ public class AnomalyDetectionService {
                 metric.name, metric.name, metric.name, days);
 
         // Add time filters for seasonal patterns (bound as parameters to avoid injection)
+        // Bucket by UTC so the hour/DOW filter aligns with the current-time context,
+        // which is also computed in UTC. Using the session timezone here would compare
+        // the current load against the wrong hour's baseline (M22).
         if (hour != null) {
-            sql += " AND EXTRACT(HOUR FROM sampled_at) = ?";
+            sql += " AND EXTRACT(HOUR FROM sampled_at AT TIME ZONE 'UTC') = ?";
         }
         if (dayOfWeek != null) {
-            sql += " AND EXTRACT(DOW FROM sampled_at) = ?";
+            sql += " AND EXTRACT(DOW FROM sampled_at AT TIME ZONE 'UTC') = ?";
         }
 
         try (Connection conn = ds.getConnection();
@@ -512,12 +517,16 @@ public class AnomalyDetectionService {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    values.put("total_connections", rs.getDouble("total_connections"));
-                    values.put("active_queries", rs.getDouble("active_queries"));
-                    values.put("blocked_queries", rs.getDouble("blocked_queries"));
-                    values.put("cache_hit_ratio", rs.getDouble("cache_hit_ratio"));
-                    values.put("longest_query_seconds", rs.getDouble("longest_query_seconds"));
-                    values.put("total_database_size_bytes", rs.getDouble("total_database_size_bytes"));
+                    // Only record non-NULL samples: getDouble() returns 0.0 for SQL NULL,
+                    // and a NULL cache_hit_ratio read as 0% against a ~99% baseline would
+                    // fire a false CRITICAL anomaly (M21). A skipped metric is simply not
+                    // evaluated this cycle.
+                    putIfNotNull(values, rs, "total_connections");
+                    putIfNotNull(values, rs, "active_queries");
+                    putIfNotNull(values, rs, "blocked_queries");
+                    putIfNotNull(values, rs, "cache_hit_ratio");
+                    putIfNotNull(values, rs, "longest_query_seconds");
+                    putIfNotNull(values, rs, "total_database_size_bytes");
                 }
             }
 
@@ -526,6 +535,17 @@ public class AnomalyDetectionService {
         }
 
         return values;
+    }
+
+    /**
+     * Puts a metric value into the map only when the column is non-NULL, so a
+     * SQL NULL is not silently coerced to 0.0 by {@link ResultSet#getDouble}.
+     */
+    private void putIfNotNull(Map<String, Double> values, ResultSet rs, String column) throws SQLException {
+        double v = rs.getDouble(column);
+        if (!rs.wasNull()) {
+            values.put(column, v);
+        }
     }
 
     private MetricBaseline findBestBaseline(DataSource ds, String instanceName,
