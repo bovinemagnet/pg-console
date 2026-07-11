@@ -404,12 +404,24 @@ public class MigrationScript {
         }
 
         /**
-         * Checks if this is a DROP statement.
+         * Checks whether this statement is destructive (drops an object or part
+         * of one).
+         * <p>
+         * Matches a leading {@code DROP} as well as {@code ALTER TABLE ... DROP
+         * COLUMN} / {@code DROP CONSTRAINT}, so that unticking "include DROP
+         * statements" also excludes the irreversible column/constraint drops that
+         * would otherwise cause silent data loss (M39).
          *
-         * @return true if DDL begins with DROP
+         * @return true if the DDL drops an object, column or constraint
          */
         public boolean isDropStatement() {
-            return ddl != null && ddl.trim().toUpperCase().startsWith("DROP");
+            if (ddl == null) {
+                return false;
+            }
+            String upper = ddl.trim().toUpperCase();
+            return upper.startsWith("DROP")
+                    || upper.contains("DROP COLUMN")
+                    || upper.contains("DROP CONSTRAINT");
         }
 
         /**

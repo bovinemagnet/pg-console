@@ -188,12 +188,15 @@ public class SchemaExtractorService {
      * Extracts foreign keys for a table.
      */
     private List<TableSchema.ForeignKeyDefinition> extractForeignKeys(Connection conn, String schemaName, String tableName) throws SQLException {
+        // Pair conkey/confkey positionally with unnest WITH ORDINALITY. Joining
+        // pg_attribute twice with = ANY(...) cross-joins the columns, so a
+        // composite FK would otherwise aggregate duplicated column lists (M37).
         String sql = """
             SELECT c.conname AS constraint_name,
-                   array_agg(a1.attname ORDER BY array_position(c.conkey, a1.attnum)) AS columns,
                    n2.nspname AS ref_schema,
                    t2.relname AS ref_table,
-                   array_agg(a2.attname ORDER BY array_position(c.confkey, a2.attnum)) AS ref_columns,
+                   array_agg(a1.attname ORDER BY k.ord) AS columns,
+                   array_agg(a2.attname ORDER BY k.ord) AS ref_columns,
                    c.confupdtype AS on_update,
                    c.confdeltype AS on_delete
             FROM pg_constraint c
@@ -201,8 +204,9 @@ public class SchemaExtractorService {
             JOIN pg_namespace n1 ON t1.relnamespace = n1.oid
             JOIN pg_class t2 ON c.confrelid = t2.oid
             JOIN pg_namespace n2 ON t2.relnamespace = n2.oid
-            JOIN pg_attribute a1 ON t1.oid = a1.attrelid AND a1.attnum = ANY(c.conkey)
-            JOIN pg_attribute a2 ON t2.oid = a2.attrelid AND a2.attnum = ANY(c.confkey)
+            JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(conkey, confkey, ord) ON true
+            JOIN pg_attribute a1 ON a1.attrelid = t1.oid AND a1.attnum = k.conkey
+            JOIN pg_attribute a2 ON a2.attrelid = t2.oid AND a2.attnum = k.confkey
             WHERE c.contype = 'f' AND n1.nspname = ? AND t1.relname = ?
             GROUP BY c.conname, n2.nspname, t2.relname, c.confupdtype, c.confdeltype
             """;
