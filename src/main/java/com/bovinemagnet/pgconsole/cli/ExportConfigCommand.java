@@ -151,8 +151,14 @@ public class ExportConfigCommand implements Runnable {
 				String value = config.getOptionalValue(name, String.class).orElse("");
 
 				// Mask sensitive values
-				if (!includeSensitive && isSensitiveProperty(name)) {
-					value = "********";
+				if (!includeSensitive) {
+					if (isSensitiveProperty(name)) {
+						value = "********";
+					} else {
+						// Key-name masking alone misses credentials embedded in values,
+						// e.g. a JDBC URL or DATABASE_URL with userinfo/password= (M03).
+						value = com.bovinemagnet.pgconsole.logging.LogRedactionService.sanitiseJdbcUrl(value);
+					}
 				}
 
 				entries.add(new ConfigEntry(name, value));

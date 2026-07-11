@@ -69,7 +69,7 @@ public class StartupBanner {
 		banner.append("║                                                                              ║\n");
 		banner.append("║   DATABASE                                                                   ║\n");
 		banner.append("║   ────────                                                                   ║\n");
-		banner.append(String.format("║     JDBC URL:  %-59s   ║%n", jdbcUrl));
+		banner.append(String.format("║     JDBC URL:  %-59s   ║%n", com.bovinemagnet.pgconsole.logging.LogRedactionService.sanitiseJdbcUrl(jdbcUrl)));
 		banner.append(String.format("║     User:      %-59s   ║%n", dbUser));
 		banner.append("║                                                                              ║\n");
 		banner.append("╠══════════════════════════════════════════════════════════════════════════════╣\n");
