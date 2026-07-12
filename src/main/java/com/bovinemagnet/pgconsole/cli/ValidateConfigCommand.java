@@ -156,15 +156,33 @@ public class ValidateConfigCommand implements Runnable {
 		System.out.println("===================================");
 		System.out.println();
 
+		// Quarkus has already booted and resolved its configuration before this
+		// command's run() executes, so setting quarkus.config.locations here would
+		// be a no-op. To actually validate the named file, load it explicitly into
+		// a standalone config rather than trusting the already-resolved one (M33).
+		Config config;
 		if (configFile != null) {
-			System.setProperty("quarkus.config.locations", configFile);
+			java.io.File file = new java.io.File(configFile);
+			if (!file.isFile()) {
+				System.err.println("Config file not found: " + configFile);
+				System.exit(1);
+				return;
+			}
+			try {
+				config = new io.smallrye.config.SmallRyeConfigBuilder()
+					.withSources(new io.smallrye.config.PropertiesConfigSource(file.toURI().toURL(), 250))
+					.build();
+			} catch (java.io.IOException e) {
+				System.err.println("Could not read config file: " + configFile);
+				System.exit(1);
+				return;
+			}
 			System.out.println("Validating: " + configFile);
 		} else {
+			config = ConfigProvider.getConfig();
 			System.out.println("Validating: default configuration");
 		}
 		System.out.println();
-
-		Config config = ConfigProvider.getConfig();
 
 		// Validate required properties
 		validateRequiredProperties(config);

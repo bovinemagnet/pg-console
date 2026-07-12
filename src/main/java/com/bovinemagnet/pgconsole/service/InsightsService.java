@@ -21,6 +21,11 @@ public class InsightsService {
 
     private static final Logger LOG = Logger.getLogger(InsightsService.class);
 
+    // Instances with a refresh currently running. refreshInsights is expensive
+    // (~192 percentile scans plus forecasting/detection), so concurrent clicks
+    // for the same instance coalesce instead of each monopolising the pool (M25).
+    private final Set<String> refreshInProgress = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     @Inject
     AnomalyDetectionService anomalyDetectionService;
 
@@ -242,6 +247,14 @@ public class InsightsService {
      * @param instanceName the PostgreSQL instance name
      */
     public void refreshInsights(String instanceName) {
+        // Coalesce concurrent refreshes for the same instance: if one is already
+        // running, this call is a no-op rather than launching a second full sweep
+        // that would compete for the same connection pool (M25).
+        if (!refreshInProgress.add(instanceName)) {
+            LOG.infof("Insights refresh already in progress for instance %s; skipping", instanceName);
+            return;
+        }
+
         LOG.infof("Refreshing insights for instance %s", instanceName);
 
         try {
@@ -258,7 +271,19 @@ public class InsightsService {
 
         } catch (Exception e) {
             LOG.errorf(e, "Error refreshing insights for instance %s", instanceName);
+        } finally {
+            refreshInProgress.remove(instanceName);
         }
+    }
+
+    /**
+     * Whether an insights refresh is currently running for the given instance.
+     *
+     * @param instanceName the PostgreSQL instance name
+     * @return true if a refresh is in progress
+     */
+    public boolean isRefreshInProgress(String instanceName) {
+        return refreshInProgress.contains(instanceName);
     }
 
     /**

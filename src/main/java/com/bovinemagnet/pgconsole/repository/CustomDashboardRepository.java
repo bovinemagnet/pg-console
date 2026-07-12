@@ -124,33 +124,42 @@ public class CustomDashboardRepository {
             RETURNING id, created_at, updated_at
             """;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, dashboard.getInstanceId());
-            stmt.setString(2, dashboard.getName());
-            stmt.setString(3, dashboard.getDescription());
-            stmt.setString(4, dashboard.getLayout() != null ? dashboard.getLayout() : "{}");
-            stmt.setString(5, dashboard.getCreatedBy());
-            stmt.setBoolean(6, dashboard.isDefault());
-            stmt.setBoolean(7, dashboard.isShared());
-            stmt.setArray(8, conn.createArrayOf("TEXT", dashboard.getTags().toArray()));
+        try (Connection conn = dataSource.getConnection()) {
+            // Insert the dashboard row and its widgets atomically (M15).
+            conn.setAutoCommit(false);
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, dashboard.getInstanceId());
+                stmt.setString(2, dashboard.getName());
+                stmt.setString(3, dashboard.getDescription());
+                stmt.setString(4, dashboard.getLayout() != null ? dashboard.getLayout() : "{}");
+                stmt.setString(5, dashboard.getCreatedBy());
+                stmt.setBoolean(6, dashboard.isDefault());
+                stmt.setBoolean(7, dashboard.isShared());
+                stmt.setArray(8, conn.createArrayOf("TEXT", dashboard.getTags().toArray()));
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    dashboard.setId(rs.getLong("id"));
-                    dashboard.setCreatedAt(rs.getObject("created_at", OffsetDateTime.class));
-                    dashboard.setUpdatedAt(rs.getObject("updated_at", OffsetDateTime.class));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        dashboard.setId(rs.getLong("id"));
+                        dashboard.setCreatedAt(rs.getObject("created_at", OffsetDateTime.class));
+                        dashboard.setUpdatedAt(rs.getObject("updated_at", OffsetDateTime.class));
+                    }
                 }
-            }
 
-            // Create widgets if any
-            if (dashboard.getWidgets() != null) {
-                for (CustomWidget widget : dashboard.getWidgets()) {
-                    widget.setDashboardId(dashboard.getId());
-                    createWidget(widget, conn);
+                // Create widgets if any
+                if (dashboard.getWidgets() != null) {
+                    for (CustomWidget widget : dashboard.getWidgets()) {
+                        widget.setDashboardId(dashboard.getId());
+                        createWidget(widget, conn);
+                    }
                 }
-            }
 
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to create dashboard: " + dashboard.getName(), e);
         }
@@ -320,18 +329,29 @@ public class CustomDashboardRepository {
         String deleteSql = "DELETE FROM pgconsole.custom_widget WHERE dashboard_id = ?";
 
         try (Connection conn = dataSource.getConnection()) {
-            // Delete existing widgets
-            try (PreparedStatement stmt = conn.prepareStatement(deleteSql)) {
-                stmt.setLong(1, dashboardId);
-                stmt.executeUpdate();
-            }
+            // The delete + N inserts must be atomic: a failure partway through would
+            // otherwise leave the dashboard with its widgets deleted and only some
+            // re-created (M15).
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement stmt = conn.prepareStatement(deleteSql)) {
+                    stmt.setLong(1, dashboardId);
+                    stmt.executeUpdate();
+                }
 
-            // Insert new widgets
-            int position = 0;
-            for (CustomWidget widget : widgets) {
-                widget.setDashboardId(dashboardId);
-                widget.setPosition(position++);
-                createWidget(widget, conn);
+                int position = 0;
+                for (CustomWidget widget : widgets) {
+                    widget.setDashboardId(dashboardId);
+                    widget.setPosition(position++);
+                    createWidget(widget, conn);
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to replace widgets for dashboard: " + dashboardId, e);

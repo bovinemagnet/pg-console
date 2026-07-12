@@ -31,6 +31,11 @@ public class LogLevelManager {
 
     private static final Logger LOG = Logger.getLogger(LogLevelManager.class);
 
+    // Sentinel recording that a logger had no explicit level (it inherited one).
+    // A ConcurrentHashMap cannot store a null value, so getLevel()==null must be
+    // represented explicitly; reverting to it restores inheritance (M34).
+    private static final Level INHERITED = new Level("INHERITED", Integer.MIN_VALUE) {};
+
     private final Map<String, Level> originalLevels = new ConcurrentHashMap<>();
     private final Map<String, Instant> temporaryLevelExpiry = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -104,9 +109,12 @@ public class LogLevelManager {
             Level level = parseLevel(levelName);
             java.util.logging.Logger logger = java.util.logging.Logger.getLogger(loggerName);
 
-            // Store original level for potential revert
+            // Store original level for potential revert. getLevel() is null when the
+            // logger inherits its level (the common case) — record the INHERITED
+            // sentinel rather than putting null into the ConcurrentHashMap.
             if (!originalLevels.containsKey(loggerName)) {
-                originalLevels.put(loggerName, logger.getLevel());
+                Level current = logger.getLevel();
+                originalLevels.put(loggerName, current != null ? current : INHERITED);
             }
 
             logger.setLevel(level);
@@ -153,8 +161,11 @@ public class LogLevelManager {
 
         if (originalLevel != null) {
             java.util.logging.Logger logger = java.util.logging.Logger.getLogger(loggerName);
-            logger.setLevel(originalLevel);
-            LOG.infof("Log level for '%s' reverted to %s", loggerName, originalLevel.getName());
+            // INHERITED means the logger had no explicit level; setLevel(null)
+            // restores inheritance from its parent.
+            logger.setLevel(originalLevel == INHERITED ? null : originalLevel);
+            LOG.infof("Log level for '%s' reverted to %s", loggerName,
+                originalLevel == INHERITED ? "inherited" : originalLevel.getName());
         }
     }
 
