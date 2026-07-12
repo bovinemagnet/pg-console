@@ -246,25 +246,31 @@ public class ExportConfigCommand implements Runnable {
 		out.println("# Generated: " + java.time.LocalDateTime.now());
 		out.println();
 
+		// Track the parent-key path already emitted so shared parents are printed
+		// once, not re-emitted per entry (which produced duplicate mapping keys and
+		// invalid YAML). Entries are sorted by name, so siblings are contiguous (M35).
+		String[] prevParents = new String[0];
 		for (ConfigEntry entry : entries) {
-			// Convert dotted property name to YAML structure
 			String[] parts = entry.name.split("\\.");
-			StringBuilder indent = new StringBuilder();
+			String[] parents = java.util.Arrays.copyOf(parts, parts.length - 1);
 
-			for (int i = 0; i < parts.length - 1; i++) {
-				out.println(indent + parts[i] + ":");
-				indent.append("  ");
+			int common = 0;
+			while (common < parents.length && common < prevParents.length
+					&& parents[common].equals(prevParents[common])) {
+				common++;
+			}
+			for (int i = common; i < parents.length; i++) {
+				out.println("  ".repeat(i) + parents[i] + ":");
 			}
 
 			String lastPart = parts[parts.length - 1];
 			String value = entry.value;
-
-			// Quote strings that might be interpreted as other types
 			if (needsQuoting(value)) {
 				value = "\"" + escapeYamlString(value) + "\"";
 			}
+			out.println("  ".repeat(parts.length - 1) + lastPart + ": " + value);
 
-			out.println(indent + lastPart + ": " + value);
+			prevParents = parents;
 		}
 	}
 
@@ -296,12 +302,7 @@ public class ExportConfigCommand implements Runnable {
 			// Convert property name to environment variable format
 			String envName = entry.name.toUpperCase().replace('.', '_').replace('-', '_');
 
-			String value = entry.value;
-			if (value.contains(" ") || value.contains("\"") || value.contains("'")) {
-				value = "\"" + value.replace("\"", "\\\"") + "\"";
-			}
-
-			out.println("export " + envName + "=" + value);
+			out.println("export " + envName + "=" + shellSingleQuote(entry.value));
 		}
 	}
 
@@ -363,7 +364,7 @@ public class ExportConfigCommand implements Runnable {
 	 * @return the escaped value suitable for quoted YAML strings
 	 */
 	private String escapeYamlString(String value) {
-		return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+		return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
 	}
 
 	/**
@@ -387,11 +388,25 @@ public class ExportConfigCommand implements Runnable {
 	 * @param value the value to check
 	 * @return {@code true} if the value should be quoted in YAML output, {@code false} otherwise
 	 */
+	/**
+	 * Single-quotes a value for safe use in a sourced shell script. Inside single
+	 * quotes the shell performs no expansion, so {@code $(...)}, backticks,
+	 * semicolons and spaces are inert; an embedded single quote is closed,
+	 * escaped and reopened with the {@code '\''} idiom (M36).
+	 *
+	 * @param value the raw value (may be null)
+	 * @return the single-quoted, shell-safe value
+	 */
+	static String shellSingleQuote(String value) {
+		String v = value == null ? "" : value;
+		return "'" + v.replace("'", "'\\''") + "'";
+	}
+
 	private boolean needsQuoting(String value) {
 		if (value.isEmpty()) return true;
 		if (value.equals("true") || value.equals("false")) return false;
 		if (value.matches("-?\\d+(\\.\\d+)?")) return false;
-		return value.contains(":") || value.contains("#") || value.startsWith(" ") || value.endsWith(" ") || value.contains("\"") || value.contains("'");
+		return value.contains(":") || value.contains("#") || value.startsWith(" ") || value.endsWith(" ") || value.contains("\"") || value.contains("'") || value.contains("\n") || value.contains("\r");
 	}
 
 	/**
