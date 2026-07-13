@@ -132,7 +132,7 @@ public class ReportService {
 
         // Header
         html.append("<h1>PostgreSQL Daily Summary Report</h1>");
-        html.append("<p><strong>Instance:</strong> ").append(instanceId).append("</p>");
+        html.append("<p><strong>Instance:</strong> ").append(escapeHtml(instanceId)).append("</p>");
         html.append("<p><strong>Generated:</strong> ")
             .append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
             .append("</p>");
@@ -143,14 +143,14 @@ public class ReportService {
             html.append("<h2>Database Overview</h2>");
             html.append("<table>");
             html.append("<tr><th>Metric</th><th>Value</th></tr>");
-            html.append("<tr><td>Version</td><td>").append(stats.getVersion()).append("</td></tr>");
+            html.append("<tr><td>Version</td><td>").append(escapeHtml(stats.getVersion())).append("</td></tr>");
             html.append("<tr><td>Connections</td><td>")
                 .append(stats.getActiveConnections()).append(" / ").append(stats.getMaxConnections())
                 .append("</td></tr>");
             html.append("<tr><td>Active Queries</td><td>").append(stats.getActiveQueries()).append("</td></tr>");
             html.append("<tr><td>Blocked Queries</td><td>").append(stats.getBlockedQueries()).append("</td></tr>");
-            html.append("<tr><td>Cache Hit Ratio</td><td>").append(stats.getCacheHitRatioFormatted()).append("</td></tr>");
-            html.append("<tr><td>Database Size</td><td>").append(stats.getDatabaseSize()).append("</td></tr>");
+            html.append("<tr><td>Cache Hit Ratio</td><td>").append(escapeHtml(stats.getCacheHitRatioFormatted())).append("</td></tr>");
+            html.append("<tr><td>Database Size</td><td>").append(escapeHtml(stats.getDatabaseSize())).append("</td></tr>");
             html.append("</table>");
 
             // Top slow queries
@@ -180,12 +180,13 @@ public class ReportService {
                 html.append("<h2>Index Recommendations</h2>");
                 html.append("<table>");
                 html.append("<tr><th>Type</th><th>Table</th><th>Recommendation</th></tr>");
+                int idxCount = 0;
                 for (var rec : indexRecs) {
-                    if (count++ >= 5) break;
+                    if (idxCount++ >= 5) break;
                     html.append("<tr>");
-                    html.append("<td>").append(rec.getTypeDisplay()).append("</td>");
-                    html.append("<td>").append(rec.getFullTableName()).append("</td>");
-                    html.append("<td>").append(rec.getRecommendation()).append("</td>");
+                    html.append("<td>").append(escapeHtml(rec.getTypeDisplay())).append("</td>");
+                    html.append("<td>").append(escapeHtml(rec.getFullTableName())).append("</td>");
+                    html.append("<td>").append(escapeHtml(rec.getRecommendation())).append("</td>");
                     html.append("</tr>");
                 }
                 html.append("</table>");
@@ -201,9 +202,9 @@ public class ReportService {
                 for (var rec : maintenanceRecs) {
                     if (count++ >= 5) break;
                     html.append("<tr>");
-                    html.append("<td>").append(rec.getFullTableName()).append("</td>");
-                    html.append("<td>").append(rec.getRecommendation()).append("</td>");
-                    html.append("<td>").append(rec.getSeverity()).append("</td>");
+                    html.append("<td>").append(escapeHtml(rec.getFullTableName())).append("</td>");
+                    html.append("<td>").append(escapeHtml(rec.getRecommendation())).append("</td>");
+                    html.append("<td>").append(escapeHtml(String.valueOf(rec.getSeverity()))).append("</td>");
                     html.append("</tr>");
                 }
                 html.append("</table>");
