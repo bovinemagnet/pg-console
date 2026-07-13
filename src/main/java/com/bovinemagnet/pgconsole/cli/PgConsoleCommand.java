@@ -225,7 +225,12 @@ public class PgConsoleCommand implements Runnable {
 	 */
 	@Override
 	public void run() {
-		// Apply CLI overrides as system properties before Quarkus starts
+		// NOTE (M33): with quarkus-picocli and no custom @QuarkusMain, the runtime
+		// (HTTP server, config) is already initialised before run() executes, so
+		// these system-property overrides do NOT change the running server — they
+		// are informational/best-effort only. To make --port etc. take effect they
+		// must be set before boot (a @QuarkusMain entry point) or passed as JVM
+		// system properties on the command line (-Dquarkus.http.port=...).
 		if (port != null) {
 			System.setProperty("quarkus.http.port", String.valueOf(port));
 		}

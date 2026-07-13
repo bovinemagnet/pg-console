@@ -130,25 +130,35 @@ public class EscalationPolicyRepository {
             RETURNING id, created_at, updated_at
             """;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = dataSource.getConnection()) {
+            // Policy insert + tier inserts must be atomic (M14).
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, policy.getName());
+                    stmt.setString(2, policy.getDescription());
+                    stmt.setBoolean(3, policy.isEnabled());
+                    stmt.setInt(4, policy.getRepeatCount());
 
-            stmt.setString(1, policy.getName());
-            stmt.setString(2, policy.getDescription());
-            stmt.setBoolean(3, policy.isEnabled());
-            stmt.setInt(4, policy.getRepeatCount());
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    policy.setId(rs.getLong("id"));
-                    policy.setCreatedAt(rs.getTimestamp("created_at").toInstant());
-                    policy.setUpdatedAt(rs.getTimestamp("updated_at").toInstant());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            policy.setId(rs.getLong("id"));
+                            policy.setCreatedAt(rs.getTimestamp("created_at").toInstant());
+                            policy.setUpdatedAt(rs.getTimestamp("updated_at").toInstant());
+                        }
+                    }
                 }
-            }
 
-            // Save tiers
-            for (EscalationTier tier : policy.getTiers()) {
-                saveTier(policy.getId(), tier);
+                for (EscalationTier tier : policy.getTiers()) {
+                    saveTier(conn, policy.getId(), tier);
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save escalation policy", e);
@@ -170,25 +180,37 @@ public class EscalationPolicyRepository {
             RETURNING updated_at
             """;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = dataSource.getConnection()) {
+            // Policy update + tier delete/re-insert must be atomic; a failure after
+            // the delete would otherwise leave the policy with zero tiers so it
+            // silently never escalates (M14).
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, policy.getName());
+                    stmt.setString(2, policy.getDescription());
+                    stmt.setBoolean(3, policy.isEnabled());
+                    stmt.setInt(4, policy.getRepeatCount());
+                    stmt.setLong(5, policy.getId());
 
-            stmt.setString(1, policy.getName());
-            stmt.setString(2, policy.getDescription());
-            stmt.setBoolean(3, policy.isEnabled());
-            stmt.setInt(4, policy.getRepeatCount());
-            stmt.setLong(5, policy.getId());
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    policy.setUpdatedAt(rs.getTimestamp("updated_at").toInstant());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            policy.setUpdatedAt(rs.getTimestamp("updated_at").toInstant());
+                        }
+                    }
                 }
-            }
 
-            // Delete existing tiers and re-save
-            deleteTiersByPolicyId(policy.getId());
-            for (EscalationTier tier : policy.getTiers()) {
-                saveTier(policy.getId(), tier);
+                deleteTiersByPolicyId(conn, policy.getId());
+                for (EscalationTier tier : policy.getTiers()) {
+                    saveTier(conn, policy.getId(), tier);
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to update escalation policy", e);
@@ -202,14 +224,23 @@ public class EscalationPolicyRepository {
      * @param id policy ID
      */
     public void delete(Long id) {
-        deleteTiersByPolicyId(id);
-
         String sql = "DELETE FROM pgconsole.escalation_policy WHERE id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setLong(1, id);
-            stmt.executeUpdate();
+        try (Connection conn = dataSource.getConnection()) {
+            // Delete tiers and the policy atomically (M14).
+            conn.setAutoCommit(false);
+            try {
+                deleteTiersByPolicyId(conn, id);
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setLong(1, id);
+                    stmt.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to delete escalation policy", e);
         }
@@ -239,16 +270,18 @@ public class EscalationPolicyRepository {
         return tiers;
     }
 
-    private void saveTier(Long policyId, EscalationTier tier) {
+    /**
+     * Inserts a tier on the given connection so it participates in the caller's
+     * transaction (M14).
+     */
+    private void saveTier(Connection conn, Long policyId, EscalationTier tier) throws SQLException {
         String sql = """
             INSERT INTO pgconsole.escalation_tier (policy_id, tier_order, delay_minutes, channel_ids)
             VALUES (?, ?, ?, ?)
             RETURNING id
             """;
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, policyId);
             stmt.setInt(2, tier.getTierOrder());
             stmt.setInt(3, tier.getDelayMinutes());
@@ -261,20 +294,18 @@ public class EscalationPolicyRepository {
                     tier.setPolicyId(policyId);
                 }
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to save escalation tier", e);
         }
     }
 
-    private void deleteTiersByPolicyId(Long policyId) {
+    /**
+     * Deletes a policy's tiers on the given connection so it participates in the
+     * caller's transaction (M14).
+     */
+    private void deleteTiersByPolicyId(Connection conn, Long policyId) throws SQLException {
         String sql = "DELETE FROM pgconsole.escalation_tier WHERE policy_id = ?";
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, policyId);
             stmt.executeUpdate();
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to delete escalation tiers", e);
         }
     }
 
