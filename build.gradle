@@ -52,6 +52,21 @@ dependencies {
     testImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 }
 
+// The Quarkus BOM (enforcedPlatform) manages only the core
+// org.testcontainers:testcontainers artifact, bumping it to a 2.x major while
+// the postgresql/junit-jupiter modules stay at ${testcontainersVersion}. That
+// skew is fatal: Testcontainers 2.x dropped the shaded commons-io package the
+// 1.x modules still link against, so the mismatched classpath throws
+// ClassNotFoundException at test-class load time. Pin the whole group to one
+// consistent version.
+configurations.all {
+    resolutionStrategy {
+        force "org.testcontainers:testcontainers:${testcontainersVersion}"
+        force "org.testcontainers:postgresql:${testcontainersVersion}"
+        force "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    }
+}
+
 group = 'com.bovinemagnet'
 
 // Default version for local/dev builds
@@ -112,7 +127,9 @@ tasks.register('integrationTest', Test) {
     }
 
     shouldRunAfter test
-    finalizedBy jacocoTestReport
+    // No finalizedBy jacocoTestReport here: coverage is driven by the unit `test`
+    // task, and the report's dependsOn test would otherwise drag the whole unit
+    // suite into a standalone `integrationTest` run (CI runs them as separate jobs).
 }
 
 // =============================================================================
@@ -131,6 +148,16 @@ tasks.register('e2eTest', Test) {
     }
 
     shouldRunAfter integrationTest
+}
+
+// The full suite of @QuarkusTest classes accumulates memory in the forked test
+// worker (each distinct @TestProfile restarts Quarkus in-JVM), exhausting the
+// default 512m heap (OutOfMemoryError: Java heap space). Give every Test task a
+// large heap. Note: do NOT set forkEvery here - recycling the worker mid-run
+// makes the JaCoCo -javaagent trip a native instrumentation assertion
+// (JPLISAgent.c "!errorOutstanding") on JVM shutdown and the worker hangs.
+tasks.withType(Test).configureEach {
+    maxHeapSize = '3g'
 }
 
 // =============================================================================
