@@ -127,7 +127,9 @@ tasks.register('integrationTest', Test) {
     }
 
     shouldRunAfter test
-    finalizedBy jacocoTestReport
+    // No finalizedBy jacocoTestReport here: coverage is driven by the unit `test`
+    // task, and the report's dependsOn test would otherwise drag the whole unit
+    // suite into a standalone `integrationTest` run (CI runs them as separate jobs).
 }
 
 // =============================================================================
