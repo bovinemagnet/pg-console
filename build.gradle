@@ -52,6 +52,21 @@ dependencies {
     testImplementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 }
 
+// The Quarkus BOM (enforcedPlatform) manages only the core
+// org.testcontainers:testcontainers artifact, bumping it to a 2.x major while
+// the postgresql/junit-jupiter modules stay at ${testcontainersVersion}. That
+// skew is fatal: Testcontainers 2.x dropped the shaded commons-io package the
+// 1.x modules still link against, so the mismatched classpath throws
+// ClassNotFoundException at test-class load time. Pin the whole group to one
+// consistent version.
+configurations.all {
+    resolutionStrategy {
+        force "org.testcontainers:testcontainers:${testcontainersVersion}"
+        force "org.testcontainers:postgresql:${testcontainersVersion}"
+        force "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    }
+}
+
 group = 'com.bovinemagnet'
 
 // Default version for local/dev builds
