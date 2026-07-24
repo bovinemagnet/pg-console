@@ -148,6 +148,16 @@ tasks.register('e2eTest', Test) {
     shouldRunAfter integrationTest
 }
 
+// The full suite of @QuarkusTest classes accumulates memory in the forked test
+// worker (each distinct @TestProfile restarts Quarkus in-JVM), exhausting the
+// default 512m heap (OutOfMemoryError: Java heap space). Give every Test task a
+// large heap. Note: do NOT set forkEvery here - recycling the worker mid-run
+// makes the JaCoCo -javaagent trip a native instrumentation assertion
+// (JPLISAgent.c "!errorOutstanding") on JVM shutdown and the worker hangs.
+tasks.withType(Test).configureEach {
+    maxHeapSize = '3g'
+}
+
 // =============================================================================
 // JaCoCo Code Coverage Configuration
 // =============================================================================
