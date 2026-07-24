@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # If your integration tests use Testcontainers, this is usually enough.
+      # If Docker is not available or needs tuning, add diagnostics here.
+      - name: Build + unit/integration tests + coverage
+        run: |
+          ./gradlew --no-daemon --stacktrace \
+            test integrationTest jacocoTestReport jacocoTestCoverageVerification
+        # If you still want to avoid failing on coverage temporarily, use:
+        # ./gradlew --no-daemon --stacktrace test integrationTest jacocoTestReport && \
+        # ./gradlew --no-daemon --stacktrace jacocoTestCoverageVerification || true
+
+      - name: Upload JUnit XML results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: |
+            build/test-results/test/**
+            build/test-results/integrationTest/**
+          if-no-files-found: ignore
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/test/**
+            build/reports/tests/integrationTest/**
+          if-no-files-found: ignore
+
+      - name: Upload JaCoCo reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: |
+            build/reports/jacoco/**
+          if-no-files-found: ignore
